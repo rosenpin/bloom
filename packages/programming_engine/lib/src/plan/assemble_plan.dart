@@ -13,7 +13,7 @@ import 'eligibility.dart';
 import 'plan.dart';
 import 'result.dart';
 
-const String currentEngineVersion = '1.0.0-plan-step-4';
+const String currentEngineVersion = '1.0.0-session-step-5';
 
 /// §8's DRAFT machine-affinity score, clamped to [0, 1].
 ///
@@ -537,7 +537,12 @@ final class _AssemblyContext {
       isEmphasis: isEmphasis,
       rotatesAcrossMesocycles: rotatesAcrossMesocycles,
       rotationCandidateIds: rotationCandidateIds,
-      orderedSwapCandidates: _swapCandidates(exercise, scheme, eligibleProfile),
+      orderedSwapCandidates: _swapCandidates(
+        exercise,
+        scheme,
+        eligibleProfile,
+        isEmphasis: isEmphasis,
+      ),
       doseByWeekKind: doses,
       repRange: range,
     );
@@ -599,8 +604,9 @@ final class _AssemblyContext {
   List<PlanSwapCandidate> _swapCandidates(
     Exercise from,
     RepScheme scheme,
-    Profile eligibleProfile,
-  ) {
+    Profile eligibleProfile, {
+    required bool isEmphasis,
+  }) {
     final result = <PlanSwapCandidate>[];
     for (final reason in SwapReason.values) {
       final edges =
@@ -621,7 +627,7 @@ final class _AssemblyContext {
           );
           continue;
         }
-        if (!_swapCompatible(from, target, scheme)) {
+        if (!_swapCompatible(from, target)) {
           _addWarning(
             EngineWarning(
               WarningCode.invalidSwapSkipped,
@@ -646,6 +652,11 @@ final class _AssemblyContext {
               loadStepOverride: target.loadStepOverride,
               reason: reason,
               rank: edge.rank,
+              patternRelation: edge.patternRelation,
+              doseByWeekKind: _dosesFor(target, scheme, isEmphasis: isEmphasis),
+              repRange: target.metricType == MetricType.timed
+                  ? null
+                  : config.rangeFor(target, scheme),
             ),
           );
         }
@@ -657,7 +668,7 @@ final class _AssemblyContext {
       )) {
         if (target.id == from.id ||
             included.contains(target.id) ||
-            !_swapCompatible(from, target, scheme)) {
+            !_swapCompatible(from, target)) {
           continue;
         }
         included.add(target.id);
@@ -676,6 +687,11 @@ final class _AssemblyContext {
             loadStepOverride: target.loadStepOverride,
             reason: reason,
             rank: fallbackRank++,
+            patternRelation: SwapPatternRelation.patternPreserving,
+            doseByWeekKind: _dosesFor(target, scheme, isEmphasis: isEmphasis),
+            repRange: target.metricType == MetricType.timed
+                ? null
+                : config.rangeFor(target, scheme),
           ),
         );
       }
@@ -683,16 +699,8 @@ final class _AssemblyContext {
     return result;
   }
 
-  bool _swapCompatible(Exercise from, Exercise to, RepScheme scheme) {
-    if (from.blockRole != to.blockRole ||
-        from.difficultyTier != to.difficultyTier) {
-      return false;
-    }
-    if (from.metricType == MetricType.timed ||
-        to.metricType == MetricType.timed) {
-      return from.metricType == to.metricType;
-    }
-    return config.rangeFor(from, scheme) == config.rangeFor(to, scheme);
+  bool _swapCompatible(Exercise from, Exercise to) {
+    return from.blockRole.swapRegionPurpose == to.blockRole.swapRegionPurpose;
   }
 
   BlockRole? _emphasisRole(PlanDayKind kind) {
@@ -985,7 +993,10 @@ String _contentCanonical(ContentCatalog catalog) {
     ]);
   }
   for (final edge in catalog.swapEdges) {
-    parts.add('${edge.fromId}:${edge.toId}:${edge.reason.name}:${edge.rank}');
+    parts.add(
+      '${edge.fromId}:${edge.toId}:${edge.reason.name}:${edge.rank}:'
+      '${edge.patternRelation.name}',
+    );
   }
   for (final role in BlockRole.values) {
     if (catalog.rotatingBlockRoles.contains(role)) {

@@ -86,6 +86,7 @@ final class ProgressionInput {
     this.history,
     this.bodyMass = Kg.zero,
     this.daysSinceLastSession = 0,
+    this.preSuggesterAdjustment,
   });
 
   final LoadProfile profile;
@@ -105,6 +106,57 @@ final class ProgressionInput {
 
   /// Days since her last completed session — injected, never read from a clock.
   final int daysSinceLastSession;
+
+  /// A session-resolve rule selected from the folded history before this
+  /// suggester is invoked. The load edge owns the actual equipment snapping.
+  final PreSuggesterAdjustment? preSuggesterAdjustment;
+}
+
+enum PreSuggesterAdjustmentKind { hold, fractionalDeload, stepUp }
+
+/// A higher-order session rule already selected by `resolveSession`.
+///
+/// Keeping its realization here preserves the architecture rule that equipment
+/// ladders and signed assisted-stack snapping live only in [LoadSuggester].
+final class PreSuggesterAdjustment {
+  const PreSuggesterAdjustment.hold(this.reason)
+    : kind = PreSuggesterAdjustmentKind.hold,
+      loadFraction = 1,
+      steps = 0,
+      strictlyLighter = false;
+
+  const PreSuggesterAdjustment.fractionalDeload({
+    required this.reason,
+    required this.loadFraction,
+    this.strictlyLighter = true,
+  }) : kind = PreSuggesterAdjustmentKind.fractionalDeload,
+       steps = 0;
+
+  const PreSuggesterAdjustment.stepUp({
+    required this.reason,
+    required this.steps,
+  }) : kind = PreSuggesterAdjustmentKind.stepUp,
+       loadFraction = 1,
+       strictlyLighter = false;
+
+  final PreSuggesterAdjustmentKind kind;
+  final ReasonCode reason;
+  final double loadFraction;
+  final int steps;
+  final bool strictlyLighter;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PreSuggesterAdjustment &&
+      other.kind == kind &&
+      other.reason == reason &&
+      other.loadFraction == loadFraction &&
+      other.steps == steps &&
+      other.strictlyLighter == strictlyLighter;
+
+  @override
+  int get hashCode =>
+      Object.hash(kind, reason, loadFraction, steps, strictlyLighter);
 }
 
 /// Which branch of §4 produced the decision. Lets invariant tests scope
@@ -271,6 +323,11 @@ final class _Pass {
 
     final base = _sanitizedBaseLoad(history.lastLoad);
     final targetReps = _sanitizedTargetReps(history.targetReps);
+
+    final preAdjustment = input.preSuggesterAdjustment;
+    if (preAdjustment != null) {
+      return _applyPreSuggesterAdjustment(preAdjustment, base, targetReps);
+    }
 
     // §6 layoff tiers, before progression.
     final tier = layoffTierFor(days, config);
@@ -630,6 +687,61 @@ final class _Pass {
     }
   }
 
+  LoadDecision _applyPreSuggesterAdjustment(
+    PreSuggesterAdjustment adjustment,
+    Kg base,
+    int targetReps,
+  ) {
+    why.add(adjustment.reason);
+    switch (adjustment.kind) {
+      case PreSuggesterAdjustmentKind.hold:
+        return _decision(
+          suggestion: _wrapLoad(base),
+          targetReps: targetReps,
+          regime: ProgressionRegime.normal,
+          externalLoad: base,
+        );
+      case PreSuggesterAdjustmentKind.stepUp:
+        final stepped = loads.shift(base, adjustment.steps);
+        if (stepped > base) {
+          why
+            ..add(ReasonCode.weightStep)
+            ..add(ReasonCode.repsReset);
+        }
+        return _decision(
+          suggestion: _wrapLoad(stepped),
+          targetReps: targetReps,
+          regime: ProgressionRegime.normal,
+          externalLoad: stepped,
+          base: base,
+        );
+      case PreSuggesterAdjustmentKind.fractionalDeload:
+        var fraction = adjustment.loadFraction;
+        if (!fraction.isFinite || fraction <= 0 || fraction >= 1) {
+          fraction = 1 - config.stallDeloadFraction;
+        }
+        final lastEffective = effectiveLoad.effective(base);
+        final desired = lastEffective.isPositive
+            ? effectiveLoad.external(lastEffective * fraction)
+            : base * fraction;
+        var reduced = loads.snapDown(desired);
+        if (adjustment.strictlyLighter && reduced >= base) {
+          reduced = loads.shift(base, -1);
+        }
+        if (reduced < base) why.add(ReasonCode.loadDecrease);
+        if (reduced.isCloseTo(loads.floor)) {
+          why.add(ReasonCode.atEquipmentFloor);
+        }
+        return _decision(
+          suggestion: _wrapLoad(reduced),
+          targetReps: targetReps,
+          regime: ProgressionRegime.normal,
+          externalLoad: reduced,
+          base: base,
+        );
+    }
+  }
+
   // ── Bodyweight and timed: no load to resolve ──────────────────────────────
 
   LoadDecision _repsOnly() {
@@ -644,6 +756,24 @@ final class _Pass {
     }
     final targetReps = _sanitizedTargetReps(history.targetReps);
     final lastReps = _sanitizedReps(history.lastReps);
+
+    final preAdjustment = input.preSuggesterAdjustment;
+    if (preAdjustment != null) {
+      why.add(preAdjustment.reason);
+      final next = switch (preAdjustment.kind) {
+        PreSuggesterAdjustmentKind.hold => targetReps,
+        PreSuggesterAdjustmentKind.fractionalDeload => range.min,
+        PreSuggesterAdjustmentKind.stepUp => window.clamp(
+          targetReps +
+              config.bodyweightRepStep * preAdjustment.steps.clamp(0, 1000),
+        ),
+      };
+      return _decision(
+        suggestion: RepOrDurationTarget.reps(next),
+        targetReps: next,
+        regime: ProgressionRegime.repsOnly,
+      );
+    }
 
     final tier = layoffTierFor(days, config);
     if (tier.changesLoad) {
@@ -722,6 +852,20 @@ final class _Pass {
     if (history == null) {
       why.add(ReasonCode.firstExposure);
       return _timedDecision(config.timedHoldFloor);
+    }
+
+    final preAdjustment = input.preSuggesterAdjustment;
+    if (preAdjustment != null) {
+      why.add(preAdjustment.reason);
+      final next = switch (preAdjustment.kind) {
+        PreSuggesterAdjustmentKind.hold => lastHold,
+        PreSuggesterAdjustmentKind.fractionalDeload => _shiftHold(lastHold, -1),
+        PreSuggesterAdjustmentKind.stepUp => _shiftHold(
+          lastHold,
+          preAdjustment.steps.clamp(0, 1000),
+        ),
+      };
+      return _timedDecision(next);
     }
 
     final tier = layoffTierFor(days, config);

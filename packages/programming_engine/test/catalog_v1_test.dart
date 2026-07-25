@@ -1,13 +1,12 @@
 import 'package:programming_engine/programming_engine.dart';
 import 'package:test/test.dart';
 
+import 'support/plan_fixtures.dart';
+
 void main() {
   final exercisesById = <String, Exercise>{
     for (final exercise in catalogV1.exercises) exercise.id: exercise,
   };
-  const config = ProgrammingConfig();
-  final compatibilityScheme = config.schemeFor(Goal.tonedAndDefined);
-
   test('EXERCISES.md has exactly 40 unique fixture rows', () {
     expect(catalogV1.exercises, hasLength(40));
     expect(exercisesById, hasLength(40));
@@ -41,23 +40,96 @@ void main() {
     }
   });
 
-  test('swap edges preserve block role, difficulty and rep compatibility', () {
+  test('swaps preserve region/session purpose', () {
     for (final edge in catalogV1.swapEdges) {
       final from = exercisesById[edge.fromId]!;
       final to = exercisesById[edge.toId]!;
-      expect(to.blockRole, from.blockRole, reason: '$edge role');
-      expect(to.difficultyTier, from.difficultyTier, reason: '$edge tier');
-      if (from.metricType == MetricType.timed ||
-          to.metricType == MetricType.timed) {
-        expect(to.metricType, from.metricType, reason: '$edge timed metric');
-      } else {
-        expect(
-          config.rangeFor(to, compatibilityScheme),
-          config.rangeFor(from, compatibilityScheme),
-          reason: '$edge rep range',
+      expect(
+        to.blockRole.swapRegionPurpose,
+        from.blockRole.swapRegionPurpose,
+        reason: '$edge',
+      );
+    }
+  });
+
+  test(
+    'cross-pattern edges are never top-ranked when a preserving edge exists',
+    () {
+      final grouped = <String, List<SwapEdge>>{};
+      for (final edge in catalogV1.swapEdges) {
+        (grouped['${edge.fromId}/${edge.reason.name}'] ??= <SwapEdge>[]).add(
+          edge,
         );
       }
-    }
+      for (final entry in grouped.entries) {
+        final preserving = entry.value.where(
+          (edge) =>
+              edge.patternRelation == SwapPatternRelation.patternPreserving,
+        );
+        if (preserving.isEmpty) continue;
+        final firstPreserving = preserving
+            .map((edge) => edge.rank)
+            .reduce((left, right) => left < right ? left : right);
+        for (final edge in entry.value.where(
+          (edge) => edge.patternRelation == SwapPatternRelation.crossPattern,
+        )) {
+          expect(
+            edge.rank,
+            greaterThan(firstPreserving),
+            reason: '${entry.key}: $edge',
+          );
+        }
+      }
+    },
+  );
+
+  test('the six revised cross-pattern candidates are restored and tagged', () {
+    const expected = <String>{
+      'barbell-deadlift->machine-leg-press',
+      'machine-back-extension->dumbbell-glute-bridge',
+      'machine-leg-extension->machine-leg-press',
+      'dumbbell-seated-overhead-press->dumbbell-lateral-raise',
+      'machine-leg-press->dumbbell-bulgarian-split-squat',
+      'dumbbell-row-unilateral->machine-seated-cable-row',
+    };
+    final actual = catalogV1.swapEdges
+        .where(
+          (edge) => edge.patternRelation == SwapPatternRelation.crossPattern,
+        )
+        .map((edge) => '${edge.fromId}->${edge.toId}')
+        .toSet();
+    expect(actual, expected);
+  });
+
+  test('assembly snapshots each swap target with its own dose', () {
+    final plan = successfulPlan(
+      const Profile(
+        ageBand: AgeBand.age18To29,
+        daysPerWeek: TrainingDaysPerWeek.three,
+        sessionMinutes: SessionMinutes.fortyFive,
+        goal: Goal.tonedAndDefined,
+        emphasis: Emphasis.glutes,
+        experienceTier: ProfileExperienceTier.newToIt,
+        gymComfort: GymComfort.low,
+        weeksTrained: 0,
+        mesocycleIndex: 1,
+      ),
+    );
+    final shoulderPress = plan.days
+        .expand((day) => day.exercises)
+        .firstWhere(
+          (exercise) => exercise.exerciseId == 'dumbbell-seated-overhead-press',
+        );
+    final lateralRaise = shoulderPress.orderedSwapCandidates.firstWhere(
+      (candidate) =>
+          candidate.exerciseId == 'dumbbell-lateral-raise' &&
+          candidate.patternRelation == SwapPatternRelation.crossPattern,
+    );
+    expect(lateralRaise.repRange, const RepRange(10, 15));
+    expect(
+      (lateralRaise.doseFor(MesocycleWeekKind.build)! as RepsDose).range,
+      const RepRange(10, 15),
+    );
   });
 
   test('swap ranks are unique per from id and reason', () {

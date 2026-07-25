@@ -720,6 +720,13 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
     uncomfortable: const ['bodyweight-squat', 'dumbbell-goblet-squat'],
     unavailable: const ['dumbbell-goblet-squat', 'bodyweight-squat'],
   ),
+  const SwapEdge(
+    fromId: 'machine-leg-press',
+    toId: 'dumbbell-bulgarian-split-squat',
+    reason: SwapReason.busy,
+    rank: 2,
+    patternRelation: SwapPatternRelation.crossPattern,
+  ),
   ..._edgesFor(
     'dumbbell-bulgarian-split-squat',
     busy: const ['bodyweight-reverse-lunge'],
@@ -768,6 +775,13 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
     uncomfortable: const ['machine-back-extension', 'cable-pull-through'],
     unavailable: const ['dumbbell-romanian-deadlift', 'machine-back-extension'],
   ),
+  const SwapEdge(
+    fromId: 'barbell-deadlift',
+    toId: 'machine-leg-press',
+    reason: SwapReason.intimidating,
+    rank: 2,
+    patternRelation: SwapPatternRelation.crossPattern,
+  ),
   ..._edgesFor(
     'cable-pull-through',
     busy: const ['dumbbell-romanian-deadlift', 'machine-back-extension'],
@@ -788,6 +802,13 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
     uncomfortable: const ['cable-pull-through', 'dumbbell-romanian-deadlift'],
     unavailable: const ['cable-pull-through', 'dumbbell-romanian-deadlift'],
   ),
+  const SwapEdge(
+    fromId: 'machine-back-extension',
+    toId: 'dumbbell-glute-bridge',
+    reason: SwapReason.unavailable,
+    rank: 2,
+    patternRelation: SwapPatternRelation.crossPattern,
+  ),
   ..._denseRoleEdges(const [
     'barbell-hip-thrust',
     'dumbbell-glute-bridge',
@@ -796,6 +817,25 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
     'cable-standing-glute-kickback',
     'machine-glute-kickback',
   ]),
+  const SwapEdge(
+    fromId: 'machine-leg-extension',
+    toId: 'machine-seated-hamstring-curl',
+    reason: SwapReason.unavailable,
+    rank: 0,
+  ),
+  const SwapEdge(
+    fromId: 'machine-leg-extension',
+    toId: 'machine-standing-calf-raises',
+    reason: SwapReason.unavailable,
+    rank: 1,
+  ),
+  const SwapEdge(
+    fromId: 'machine-leg-extension',
+    toId: 'machine-leg-press',
+    reason: SwapReason.unavailable,
+    rank: 2,
+    patternRelation: SwapPatternRelation.crossPattern,
+  ),
   ..._edgesFor(
     'dumbbell-bench-press',
     busy: const ['machine-chest-press', 'assisted-dip', 'bodyweight-push-up'],
@@ -879,6 +919,13 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
       'assisted-dip',
     ],
   ),
+  const SwapEdge(
+    fromId: 'dumbbell-seated-overhead-press',
+    toId: 'dumbbell-lateral-raise',
+    reason: SwapReason.uncomfortable,
+    rank: 2,
+    patternRelation: SwapPatternRelation.crossPattern,
+  ),
   ..._edgesFor(
     'bodyweight-push-up',
     busy: const ['machine-chest-press', 'assisted-dip', 'dumbbell-bench-press'],
@@ -928,6 +975,19 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
     intimidating: const ['machine-pulldown', 'machine-rear-deltoid-row'],
     uncomfortable: const ['machine-pulldown', 'machine-rear-deltoid-row'],
     unavailable: const ['machine-pulldown', 'machine-rear-deltoid-row'],
+  ),
+  const SwapEdge(
+    fromId: 'dumbbell-row-unilateral',
+    toId: 'machine-rear-deltoid-row',
+    reason: SwapReason.busy,
+    rank: 0,
+  ),
+  const SwapEdge(
+    fromId: 'dumbbell-row-unilateral',
+    toId: 'machine-seated-cable-row',
+    reason: SwapReason.busy,
+    rank: 1,
+    patternRelation: SwapPatternRelation.crossPattern,
   ),
   ..._edgesFor(
     'bodyweight-assisted-chin-up',

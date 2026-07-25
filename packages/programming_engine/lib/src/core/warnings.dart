@@ -66,9 +66,29 @@ enum WarningCode {
   /// A swap edge pointed at an absent or retired exercise and was skipped.
   danglingSwapSkipped,
 
-  /// A swap edge failed its role, difficulty, or rep-window compatibility guard
-  /// and was skipped.
+  /// A swap edge failed its region/session-purpose compatibility guard.
   invalidSwapSkipped,
+
+  /// An excluded planned exercise was replaced from its resolved swap list.
+  excludedExerciseSubstituted,
+
+  /// An exercise was excluded but no usable resolved swap remained, so the total
+  /// fallback kept the planned exercise.
+  excludedExerciseHadNoSwap,
+
+  /// A plan contained no day to resolve.
+  noPlanDayAvailable,
+
+  /// Every planned day for the calendar week was already completed. The total
+  /// fallback repeats the final day and reports this warning.
+  planWeekAlreadyComplete,
+
+  /// A resolved plan snapshot did not carry the requested week dose. A stable
+  /// fallback dose was used.
+  missingWeekDose,
+
+  /// A malformed mesocycle configuration was clamped to a usable value.
+  invalidMesocycleConfiguration,
 }
 
 final class EngineWarning {
@@ -85,6 +105,7 @@ final class EngineWarning {
   int get hashCode => Object.hash(code, detail);
 
   @override
-  String toString() =>
-      detail.isEmpty ? 'EngineWarning(${code.name})' : 'EngineWarning(${code.name}: $detail)';
+  String toString() => detail.isEmpty
+      ? 'EngineWarning(${code.name})'
+      : 'EngineWarning(${code.name}: $detail)';
 }

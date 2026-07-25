@@ -58,7 +58,25 @@ enum BlockRole {
       this == gluteIsolation ||
       this == legIsolation ||
       this == armShoulderIsolation;
+
+  /// The broad training purpose a §9 swap must preserve. The revised swap rule
+  /// deliberately permits changing the narrower movement pattern or block role.
+  SwapRegionPurpose get swapRegionPurpose => switch (this) {
+    lowerHinge ||
+    lowerSquat ||
+    gluteIsolation ||
+    legIsolation => SwapRegionPurpose.lowerBody,
+    upperPush ||
+    upperPull ||
+    armShoulderIsolation => SwapRegionPurpose.upperBody,
+    core => SwapRegionPurpose.core,
+    warmUp => SwapRegionPurpose.warmUp,
+    finisherCardio => SwapRegionPurpose.cardio,
+  };
 }
+
+/// The broad region/session purpose preserved by every §9 swap.
+enum SwapRegionPurpose { lowerBody, upperBody, core, warmUp, cardio }
 
 /// What a set of this exercise is measured in.
 enum MetricType {
@@ -178,7 +196,7 @@ enum JointAction {
   grip,
 }
 
-/// Eligibility tier. A swap must preserve this (§9).
+/// Eligibility tier.
 enum DifficultyTier { beginner, intermediate, advanced }
 
 /// How much lifting she has done before. Quiz-derived; ordered, so
@@ -388,7 +406,12 @@ final class ExerciseData implements Exercise {
   String toString() => 'ExerciseData($id)';
 }
 
-/// An edge in the swap graph: `(from_id, to_id, reason enum, rank int)`.
+/// Whether an authored swap keeps the narrower movement pattern or deliberately
+/// crosses it while preserving [SwapRegionPurpose].
+enum SwapPatternRelation { patternPreserving, crossPattern }
+
+/// An edge in the swap graph:
+/// `(from_id, to_id, reason enum, rank int, pattern relation)`.
 /// Ranks are unique per `(from, reason)` — ties would break determinism.
 final class SwapEdge {
   const SwapEdge({
@@ -396,12 +419,14 @@ final class SwapEdge {
     required this.toId,
     required this.reason,
     required this.rank,
+    this.patternRelation = SwapPatternRelation.patternPreserving,
   }) : assert(rank >= 0);
 
   final String fromId;
   final String toId;
   final SwapReason reason;
   final int rank;
+  final SwapPatternRelation patternRelation;
 
   @override
   bool operator ==(Object other) =>
@@ -409,13 +434,16 @@ final class SwapEdge {
       other.fromId == fromId &&
       other.toId == toId &&
       other.reason == reason &&
-      other.rank == rank;
+      other.rank == rank &&
+      other.patternRelation == patternRelation;
 
   @override
-  int get hashCode => Object.hash(fromId, toId, reason, rank);
+  int get hashCode => Object.hash(fromId, toId, reason, rank, patternRelation);
 
   @override
-  String toString() => 'SwapEdge($fromId -> $toId, ${reason.name}, #$rank)';
+  String toString() =>
+      'SwapEdge($fromId -> $toId, ${reason.name}, #$rank, '
+      '${patternRelation.name})';
 }
 
 /// A versioned, deterministic content snapshot. Exercise order is authorial:

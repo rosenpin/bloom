@@ -73,7 +73,8 @@ enum ReasonCode {
   /// Detected over history at session-resolve time.
   stallDeload,
 
-  /// Couldn't reach the bottom of the range on set 1 → −10% inside the session (§5).
+  /// Two consecutive "too hard" reports selected a −10% rebuild at resolve
+  /// time. Step 6 also uses this code for the immediate missed-bottom correction.
   reactiveDeload,
 
   // ── Layoff (§6) ────────────────────────────────────────────────────────────
@@ -117,7 +118,8 @@ enum ReasonCode {
   /// Session shortened: isolation dropped from the end, primaries kept.
   shortened,
 
-  /// A swap was applied; block role, rep range and difficulty tier preserved.
+  /// A swap was applied; region/session purpose was preserved, while the target
+  /// exercise retained its own dose and progression history.
   swapApplied,
 
   /// Pain was reported on this exercise: excluded until she says otherwise.

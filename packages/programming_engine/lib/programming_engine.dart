@@ -7,8 +7,8 @@
 ///
 /// Built in the order `ENGINE.md` prescribes. Landed so far: the event vocabulary
 /// and core types, `ProgrammingConfig` with the content interfaces, and the §4
-/// progression decision logic, followed by deterministic plan assembly.
-/// `resolveSession` and `advanceSession` come next.
+/// progression decision logic, deterministic plan assembly, and session
+/// resolution. `advanceSession` comes next.
 library;
 
 // Config
@@ -29,12 +29,19 @@ export 'src/core/reason_code.dart';
 export 'src/core/units.dart';
 export 'src/core/warnings.dart';
 
+// Event-log history and its deterministic fold
+export 'src/history/history_fold.dart';
+export 'src/history/training_history.dart';
+
 // Plan time (§5b, §8, §9)
 export 'src/plan/assemble_plan.dart';
 export 'src/plan/eligibility.dart';
 export 'src/plan/plan.dart';
 export 'src/plan/result.dart';
 export 'src/profile/profile.dart';
+
+// Session-resolve time
+export 'src/session/resolve_session.dart';
 
 // Progression (§4, §6)
 export 'src/progression/effective_load.dart';

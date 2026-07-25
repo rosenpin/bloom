@@ -56,7 +56,7 @@ final class PlanWeek {
 }
 
 final class PlanSwapCandidate implements LoadProfile {
-  const PlanSwapCandidate({
+  PlanSwapCandidate({
     required this.exerciseId,
     required this.name,
     required this.blockRole,
@@ -70,7 +70,12 @@ final class PlanSwapCandidate implements LoadProfile {
     required this.loadStepOverride,
     required this.reason,
     required this.rank,
-  });
+    required this.patternRelation,
+    required Map<MesocycleWeekKind, Dose> doseByWeekKind,
+    required this.repRange,
+  }) : doseByWeekKind = Map<MesocycleWeekKind, Dose>.unmodifiable(
+         doseByWeekKind,
+       );
 
   final String exerciseId;
   final String name;
@@ -91,6 +96,14 @@ final class PlanSwapCandidate implements LoadProfile {
   final Kg? loadStepOverride;
   final SwapReason reason;
   final int rank;
+  final SwapPatternRelation patternRelation;
+
+  /// The target exercise keeps its own prescription world. A cross-pattern swap
+  /// never inherits the source exercise's rep window.
+  final Map<MesocycleWeekKind, Dose> doseByWeekKind;
+  final RepRange? repRange;
+
+  Dose? doseFor(MesocycleWeekKind kind) => doseByWeekKind[kind];
 
   @override
   bool operator ==(Object other) =>
@@ -107,7 +120,13 @@ final class PlanSwapCandidate implements LoadProfile {
       other.bwContribution == bwContribution &&
       other.loadStepOverride == loadStepOverride &&
       other.reason == reason &&
-      other.rank == rank;
+      other.rank == rank &&
+      other.patternRelation == patternRelation &&
+      const MapEquality<MesocycleWeekKind, Dose>().equals(
+        other.doseByWeekKind,
+        doseByWeekKind,
+      ) &&
+      other.repRange == repRange;
 
   @override
   int get hashCode => Object.hash(
@@ -124,6 +143,13 @@ final class PlanSwapCandidate implements LoadProfile {
     loadStepOverride,
     reason,
     rank,
+    patternRelation,
+    Object.hashAll(
+      MesocycleWeekKind.values.map(
+        (kind) => Object.hash(kind, doseByWeekKind[kind]),
+      ),
+    ),
+    repRange,
   );
 }
 
@@ -309,6 +335,12 @@ final class Plan {
   final List<PlanDay> days;
   final List<EngineWarning> warnings;
 
+  /// Stable reference stored on session-record persistence rows without
+  /// retaining the whole plan document.
+  String get reference =>
+      '${stamps.engineVersion}|${stamps.configHash}|${stamps.contentHash}|'
+      '${stamps.profileHash}|m$mesocycleIndex';
+
   /// Stable semantic bytes for persistence checks and determinism tests.
   String toCanonicalString() {
     final output = StringBuffer()
@@ -350,7 +382,10 @@ final class Plan {
                       '${candidate.resistanceEquipment.name}.'
                       '${candidate.supportEquipment.name}.'
                       '${candidate.bwContribution}.'
-                      '${candidate.loadStepOverride?.value ?? 'null'}',
+                      '${candidate.loadStepOverride?.value ?? 'null'}.'
+                      '${candidate.patternRelation.name}.'
+                      '${candidate.repRange ?? 'timed'}.'
+                      '${MesocycleWeekKind.values.map((kind) => '${kind.name}=${candidate.doseFor(kind) == null ? 'missing' : _doseText(candidate.doseFor(kind)!)}').join(';')}',
                 )
                 .join(','),
           );
