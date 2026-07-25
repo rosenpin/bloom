@@ -41,6 +41,8 @@ dependencies:
   path_provider: ^2.1.6
   package_info_plus: ^10.2.1
   sqlite3: ^3.5.0
+  go_router: ^17.3.0
+  shared_preferences: ^2.5.5
 
   programming_engine:
     path: ../packages/programming_engine
@@ -75,6 +77,16 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  fonts:
+    - family: YoungSerif
+      fonts:
+        - asset: assets/fonts/YoungSerif-Regular.ttf
+    - family: WixMadeforText
+      fonts:
+        - asset: assets/fonts/WixMadeforText.ttf
+        - asset: assets/fonts/WixMadeforText-Italic.ttf
+          style: italic
 
   # To add assets to your application, add an assets section, like this:
   # assets:
