@@ -44,7 +44,8 @@ void main() {
         extraSetOnEmphasis: false,
       ),
       (
-        rule: 'Build curves: 3–4 × 8–12 with +1 set on the emphasis area, '
+        rule:
+            'Build curves: 3–4 × 8–12 with +1 set on the emphasis area, '
             'leave 1–2 reps, 90s',
         goal: Goal.buildCurves,
         minSets: 3,
@@ -55,7 +56,8 @@ void main() {
         extraSetOnEmphasis: true,
       ),
       (
-        rule: 'Feel healthier: 2–3 × 10–12, comfortable, never near failure, 60s',
+        rule:
+            'Feel healthier: 2–3 × 10–12, comfortable, never near failure, 60s',
         goal: Goal.feelHealthier,
         minSets: 2,
         maxSets: 3,
@@ -82,15 +84,17 @@ void main() {
       for (final goal in Goal.values) {
         expect(config.repSchemes[goal], isNotNull, reason: goal.name);
       }
-      const bare = ProgrammingConfig(repSchemes: {
-        Goal.tonedAndDefined: RepScheme(
-          minSets: 3,
-          maxSets: 3,
-          range: RepRange(10, 12),
-          effort: EffortTarget.rpe7,
-          rest: Duration(seconds: 75),
-        ),
-      });
+      const bare = ProgrammingConfig(
+        repSchemes: {
+          Goal.tonedAndDefined: RepScheme(
+            minSets: 3,
+            maxSets: 3,
+            range: RepRange(10, 12),
+            effort: EffortTarget.rpe7,
+            rest: Duration(seconds: 75),
+          ),
+        },
+      );
       expect(bare.schemeFor(Goal.stronger).range, const RepRange(10, 12));
     });
 
@@ -98,7 +102,10 @@ void main() {
       final dose = config.schemeFor(Goal.buildCurves).openingDose();
       expect(dose.targetReps, 8);
       expect(dose.sets, 4);
-      expect(config.schemeFor(Goal.buildCurves).openingDose(isEmphasis: true).sets, 5);
+      expect(
+        config.schemeFor(Goal.buildCurves).openingDose(isEmphasis: true).sets,
+        5,
+      );
     });
   });
 
@@ -171,11 +178,14 @@ void main() {
       expect(config.weekKind(12), MesocycleWeekKind.deload);
     });
 
-    test('the deload is meaningfully lighter and the easier week is not a stop', () {
-      expect(config.deloadWeekLoadFraction, lessThan(0.9));
-      expect(config.easierWeekSetsDelta, lessThan(0));
-      expect(config.easierWeekRpeDelta, lessThan(0));
-    });
+    test(
+      'the deload is meaningfully lighter and the easier week is not a stop',
+      () {
+        expect(config.deloadWeekLoadFraction, lessThan(0.9));
+        expect(config.easierWeekSetsDelta, lessThan(0));
+        expect(config.easierWeekRpeDelta, lessThan(0));
+      },
+    );
   });
 
   group('§4 guardrail constants', () {
@@ -195,58 +205,173 @@ void main() {
       expect(config.calibrationMaxSteps, 2);
     });
 
-    test('§7 the probe: 8 reps, max 2 test sets, +2 steps, 5 clean reps minimum', () {
-      expect(config.calibrationProbeReps, 8);
-      expect(config.calibrationMaxTestSets, 2);
-      expect(config.calibrationProbeStepJump, 2);
-      expect(config.calibrationMinCleanReps, 5);
-    });
+    test(
+      '§7 the probe: 8 reps, max 2 test sets, +2 steps, 5 clean reps minimum',
+      () {
+        expect(config.calibrationProbeReps, 8);
+        expect(config.calibrationMaxTestSets, 2);
+        expect(config.calibrationProbeStepJump, 2);
+        expect(config.calibrationMinCleanReps, 5);
+      },
+    );
 
     test('§7 RESOLVED lower-body machines probe at +50–100% per test set', () {
       expect(config.lowerBodyMachineProbeJumpMin, 0.50);
       expect(config.lowerBodyMachineProbeJumpMax, 1.00);
     });
 
-    test('§5 stall and reactive deload numbers are pinned for resolveSession', () {
-      expect(config.stallSessions, 3);
-      expect(config.stallDeloadFraction, 0.10);
-      expect(config.missedBottomDropFraction, 0.10);
-      expect(config.lowEnergyLoadFraction, 0.90);
-    });
+    test(
+      '§5 stall and reactive deload numbers are pinned for resolveSession',
+      () {
+        expect(config.stallSessions, 3);
+        expect(config.stallDeloadFraction, 0.10);
+        expect(config.missedBottomDropFraction, 0.10);
+        expect(config.lowEnergyLoadFraction, 0.90);
+      },
+    );
 
     test('§8 assembly numbers', () {
       expect(config.exerciseCountByMinutes, {30: 4, 45: 6, 60: 8});
       expect(config.warmUpMinutes, 5);
-      expect(config.machineLeanAge, 50);
       expect(config.seatedPreferenceAge, 60);
     });
   });
 
+  group('§8 machine-affinity spectrum', () {
+    Profile profile({
+      AgeBand age = AgeBand.age18To29,
+      ProfileExperienceTier experience = ProfileExperienceTier.newToIt,
+      GymComfort comfort = GymComfort.low,
+    }) => Profile(
+      ageBand: age,
+      daysPerWeek: TrainingDaysPerWeek.three,
+      sessionMinutes: SessionMinutes.fortyFive,
+      goal: Goal.tonedAndDefined,
+      emphasis: Emphasis.balanced,
+      experienceTier: experience,
+      gymComfort: comfort,
+      weeksTrained: 0,
+      mesocycleIndex: 1,
+    );
+
+    test('all DRAFT score contributions are pinned in ProgrammingConfig', () {
+      expect(config.machineAffinityNewToIt, 0.5);
+      expect(config.machineAffinityBeenAWhile, 0.3);
+      expect(config.machineAffinityTrainsRegularly, 0.1);
+      expect(config.machineAffinityAge50To59, 0.3);
+      expect(config.machineAffinityAge60Plus, 0.4);
+      expect(config.machineAffinityLowComfort, 0.2);
+      expect(config.machineAffinityMostlyFineComfort, 0.1);
+      expect(config.machineAffinityTotallyAtHomeComfort, 0);
+      expect(config.machineAffinityForcedAge, 50);
+    });
+
+    test('experience + age + comfort is additive and clamped to 0–1', () {
+      expect(machineAffinityFor(profile(), config), 0.7);
+      expect(
+        machineAffinityFor(
+          profile(
+            age: AgeBand.age50To59,
+            experience: ProfileExperienceTier.beenAWhile,
+            comfort: GymComfort.mostlyFine,
+          ),
+          config,
+        ),
+        closeTo(0.7, 1e-12),
+      );
+      expect(
+        machineAffinityFor(
+          profile(
+            age: AgeBand.age60Plus,
+            experience: ProfileExperienceTier.trainsRegularly,
+            comfort: GymComfort.totallyAtHome,
+          ),
+          config,
+        ),
+        0.5,
+      );
+      expect(
+        machineAffinityFor(
+          profile(),
+          const ProgrammingConfig(
+            machineAffinityNewToIt: 0.8,
+            machineAffinityLowComfort: 0.8,
+          ),
+        ),
+        1,
+      );
+    });
+
+    test('age 50+ plus new-to-it is forced to 1.0', () {
+      expect(
+        machineAffinityFor(
+          profile(age: AgeBand.age50To59, comfort: GymComfort.totallyAtHome),
+          config,
+        ),
+        1,
+      );
+      expect(
+        machineAffinityFor(
+          profile(age: AgeBand.age60Plus, comfort: GymComfort.totallyAtHome),
+          config,
+        ),
+        1,
+      );
+    });
+  });
+
+  test('Profile cannot express five training days per week', () {
+    expect(TrainingDaysPerWeek.values.map((days) => days.value), <int>[
+      2,
+      3,
+      4,
+    ]);
+    expect(TrainingDaysPerWeek.values.any((days) => days.value == 5), isFalse);
+  });
+
   group('§3 the two markets', () {
-    test('metric: 20 kg bar, 2.5/5 kg bar steps, 2 kg dumbbells, 5 kg pins', () {
-      final metric = config.loadTable(UnitSystem.metric);
-      expect(metric.barbellBar, const Kg(20));
-      expect(metric.barbellUpperStep, const Kg(2.5));
-      expect(metric.barbellLowerStep, const Kg(5));
-      expect(metric.dumbbellStep, const Kg(2));
-      expect(metric.machineStep, const Kg(5));
-      expect(metric.cableStep, const Kg(2.5));
-    });
+    test(
+      'metric: 20 kg bar, 2.5/5 kg bar steps, 2 kg dumbbells, 5 kg pins',
+      () {
+        final metric = config.loadTable(UnitSystem.metric);
+        expect(metric.barbellBar, const Kg(20));
+        expect(metric.barbellUpperStep, const Kg(2.5));
+        expect(metric.barbellLowerStep, const Kg(5));
+        expect(metric.dumbbellStep, const Kg(2));
+        expect(metric.machineStep, const Kg(5));
+        expect(metric.assistedStackMaxAssistance, const Kg(50));
+        expect(metric.assistedStackStep, const Kg(5));
+        expect(metric.cableStep, const Kg(2.5));
+      },
+    );
 
-    test('imperial: 45 lb bar, 5/10 lb bar steps, 5 lb dumbbells, 10 lb pins', () {
-      final imperial = config.loadTable(UnitSystem.imperial);
-      expect(imperial.barbellBar.inLb, closeTo(45, 1e-9));
-      expect(imperial.barbellUpperStep.inLb, closeTo(5, 1e-9));
-      expect(imperial.barbellLowerStep.inLb, closeTo(10, 1e-9));
-      expect(imperial.dumbbellStep.inLb, closeTo(5, 1e-9));
-      expect(imperial.machineStep.inLb, closeTo(10, 1e-9));
-      expect(imperial.cableStep.inLb, closeTo(5, 1e-9));
-    });
+    test(
+      'imperial: 45 lb bar, 5/10 lb bar steps, 5 lb dumbbells, 10 lb pins',
+      () {
+        final imperial = config.loadTable(UnitSystem.imperial);
+        expect(imperial.barbellBar.inLb, closeTo(45, 1e-9));
+        expect(imperial.barbellUpperStep.inLb, closeTo(5, 1e-9));
+        expect(imperial.barbellLowerStep.inLb, closeTo(10, 1e-9));
+        expect(imperial.dumbbellStep.inLb, closeTo(5, 1e-9));
+        expect(imperial.machineStep.inLb, closeTo(10, 1e-9));
+        expect(imperial.assistedStackMaxAssistance.inLb, closeTo(110, 1e-9));
+        expect(imperial.assistedStackStep.inLb, closeTo(10, 1e-9));
+        expect(imperial.cableStep.inLb, closeTo(5, 1e-9));
+      },
+    );
   });
 
-  test('the shipped config is const and shared, so a decision is reproducible', () {
-    expect(const ProgrammingConfig().maxChangeFraction,
-        const ProgrammingConfig().maxChangeFraction);
-    expect(identical(const ProgrammingConfig(), const ProgrammingConfig()), isTrue);
-  });
+  test(
+    'the shipped config is const and shared, so a decision is reproducible',
+    () {
+      expect(
+        const ProgrammingConfig().maxChangeFraction,
+        const ProgrammingConfig().maxChangeFraction,
+      );
+      expect(
+        identical(const ProgrammingConfig(), const ProgrammingConfig()),
+        isTrue,
+      );
+    },
+  );
 }

@@ -35,6 +35,12 @@ void main() {
         firstRungs: [5, 10, 15, 20],
       ),
       (
+        rule: 'metric assisted stack: −50 kg floor, +5 kg toward zero',
+        exercise: assistedPullUp,
+        unitSystem: UnitSystem.metric,
+        firstRungs: [-50, -45, -40, -35, -30],
+      ),
+      (
         rule: 'metric cable: 2.5 kg pins',
         exercise: cablePushdown,
         unitSystem: UnitSystem.metric,
@@ -71,6 +77,12 @@ void main() {
         firstRungs: [10, 20, 30, 40],
       ),
       (
+        rule: 'lb assisted stack: −110 lb floor, +10 lb toward zero',
+        exercise: assistedPullUp,
+        unitSystem: UnitSystem.imperial,
+        firstRungs: [-110, -100, -90, -80],
+      ),
+      (
         rule: 'lb barbell lower body: 45 lb bar, +10 lb total',
         exercise: barbellSquat,
         unitSystem: UnitSystem.imperial,
@@ -90,7 +102,10 @@ void main() {
         final toKg = ladder.unitSystem.isMetric
             ? (double value) => Kg(value)
             : (double value) => Kg(value * kgPerLb);
-        expect(loads.floor.value, closeTo(toKg(ladder.firstRungs.first).value, 1e-9));
+        expect(
+          loads.floor.value,
+          closeTo(toKg(ladder.firstRungs.first).value, 1e-9),
+        );
         for (var i = 0; i < ladder.firstRungs.length; i++) {
           final expected = toKg(ladder.firstRungs[i]);
           expect(
@@ -98,7 +113,11 @@ void main() {
             closeTo(expected.value, 1e-9),
             reason: 'rung $i of ${ladder.rule}',
           );
-          expect(loads.isRepresentable(expected), isTrue, reason: '${expected.value}');
+          expect(
+            loads.isRepresentable(expected),
+            isTrue,
+            reason: '${expected.value}',
+          );
         }
       });
     }
@@ -135,7 +154,11 @@ void main() {
     test('snapDown never rounds up (§4.5)', () {
       for (final value in <double>[2, 2.1, 3.9, 4, 5.99, 11.4, 13.99]) {
         final snapped = dumbbells.snapDown(Kg(value));
-        expect(snapped.value, lessThanOrEqualTo(value + 1e-9), reason: '$value');
+        expect(
+          snapped.value,
+          lessThanOrEqualTo(value + 1e-9),
+          reason: '$value',
+        );
         expect(dumbbells.isRepresentable(snapped), isTrue, reason: '$value');
       }
       expect(dumbbells.snapDown(const Kg(13.9)), const Kg(12));
@@ -147,11 +170,14 @@ void main() {
       expect(dumbbells.shift(const Kg(4), -10), const Kg(2));
     });
 
-    test('non-finite input is answered with the floor rather than an exception', () {
-      expect(dumbbells.snapDown(const Kg(double.nan)), dumbbells.floor);
-      expect(dumbbells.snapDown(const Kg(double.infinity)), dumbbells.floor);
-      expect(dumbbells.isRepresentable(const Kg(double.nan)), isFalse);
-    });
+    test(
+      'non-finite input is answered with the floor rather than an exception',
+      () {
+        expect(dumbbells.snapDown(const Kg(double.nan)), dumbbells.floor);
+        expect(dumbbells.snapDown(const Kg(double.infinity)), dumbbells.floor);
+        expect(dumbbells.isRepresentable(const Kg(double.nan)), isFalse);
+      },
+    );
 
     test('shift and stepsBetween are inverses', () {
       for (final steps in <int>[-2, -1, 0, 1, 2, 5]) {
@@ -177,11 +203,37 @@ void main() {
       expect(rack.shift(const Kg(10), 3), const Kg(10));
       expect(rack.isRepresentable(const Kg(12)), isFalse);
     });
+
+    test(
+      'negative assistance snaps on the signed value and never exceeds zero',
+      () {
+        final loads = config.availableLoads(assistedPullUp, UnitSystem.metric);
+        expect(loads.floor, const Kg(-50));
+        expect(loads.snapDown(const Kg(-27)), const Kg(-30));
+        expect(loads.snapUp(const Kg(-27)), const Kg(-25));
+        expect(loads.shift(const Kg(-30), 1), const Kg(-25));
+        expect(loads.shift(const Kg(-30), -1), const Kg(-35));
+        expect(loads.stepsBetween(const Kg(-30), const Kg(-20)), 2);
+        expect(loads.snapDown(const Kg(12)), Kg.zero);
+        expect(loads.shift(Kg.zero, 1), Kg.zero);
+        expect(loads.isRepresentable(const Kg(-27)), isFalse);
+        expect(loads.isRepresentable(const Kg(-25)), isTrue);
+      },
+    );
   });
 
   group('an explicit inventory (a real dumbbell rack)', () {
     final rack = ExplicitLoads(const [
-      Kg(1), Kg(2), Kg(3), Kg(4), Kg(5), Kg(6), Kg(7.5), Kg(10), Kg(12.5), Kg(15),
+      Kg(1),
+      Kg(2),
+      Kg(3),
+      Kg(4),
+      Kg(5),
+      Kg(6),
+      Kg(7.5),
+      Kg(10),
+      Kg(12.5),
+      Kg(15),
     ]);
 
     test('the step size varies along the rack', () {

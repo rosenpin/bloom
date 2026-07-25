@@ -40,24 +40,24 @@ Row row({
   int? steps,
   List<ReasonCode> why = const [],
   void Function(LoadDecision)? also,
-}) =>
-    (
-      rule: rule,
-      input: input,
-      config: config,
-      load: load,
-      reps: reps,
-      steps: steps,
-      regime: regime,
-      why: why,
-      also: also,
-    );
+}) => (
+  rule: rule,
+  input: input,
+  config: config,
+  load: load,
+  reps: reps,
+  steps: steps,
+  regime: regime,
+  why: why,
+  also: also,
+);
 
 void main() {
   // ── §4.1 Calibration regime ────────────────────────────────────────────────
   final calibration = <Row>[
     row(
-      rule: '§4.1 reported ≤RPE4 jumps at least one equipment step, even when the '
+      rule:
+          '§4.1 reported ≤RPE4 jumps at least one equipment step, even when the '
           'formula asks for less than one pin',
       input: inputFor(
         legPress,
@@ -79,7 +79,8 @@ void main() {
       ],
     ),
     row(
-      rule: '§4.1 on light dumbbells the two-step allowance is a permission, not a '
+      rule:
+          '§4.1 on light dumbbells the two-step allowance is a permission, not a '
           'mandate: one step is what the formula asks for',
       input: inputFor(
         lateralRaise,
@@ -93,7 +94,10 @@ void main() {
       load: const Kg(6),
       reps: 8,
       steps: 1,
-      why: [ReasonCode.calibrationRegimeJump, ReasonCode.calibrationMinimumStep],
+      why: [
+        ReasonCode.calibrationRegimeJump,
+        ReasonCode.calibrationMinimumStep,
+      ],
     ),
     row(
       rule: '§4.1 calibration jumps stop at +15% / two steps',
@@ -129,10 +133,15 @@ void main() {
       load: const Kg(110),
       reps: 10,
       steps: 2,
-      why: [ReasonCode.cappedAtMaxChange, ReasonCode.weightStep, ReasonCode.repsReset],
+      why: [
+        ReasonCode.cappedAtMaxChange,
+        ReasonCode.weightStep,
+        ReasonCode.repsReset,
+      ],
     ),
     row(
-      rule: '§4.2 the cap is never tighter than one equipment step, so a step-up at '
+      rule:
+          '§4.2 the cap is never tighter than one equipment step, so a step-up at '
           'a light absolute load is always allowed',
       input: inputFor(
         lateralRaise,
@@ -153,7 +162,8 @@ void main() {
   // ── §4.3 Asymmetric down-rule ──────────────────────────────────────────────
   final downRule = <Row>[
     row(
-      rule: '§4.3 harder than target at target reps holds — a novice reporting RPE 8 '
+      rule:
+          '§4.3 harder than target at target reps holds — a novice reporting RPE 8 '
           'is probably over-reporting',
       input: inputFor(
         gobletSquat,
@@ -186,7 +196,8 @@ void main() {
       why: [ReasonCode.loadDecrease, ReasonCode.decreaseRoundedDown],
     ),
     row(
-      rule: '§4.3 + §5 missing the target reps licenses a decrease, and the cap makes '
+      rule:
+          '§4.3 + §5 missing the target reps licenses a decrease, and the cap makes '
           'it §5\'s −10%',
       input: inputFor(
         legPress,
@@ -203,7 +214,8 @@ void main() {
       why: [ReasonCode.cappedAtMaxChange, ReasonCode.loadDecrease],
     ),
     row(
-      rule: '§4.3 a decrease on a high-bw movement is bounded in *effective* terms, '
+      rule:
+          '§4.3 a decrease on a high-bw movement is bounded in *effective* terms, '
           'which is two dumbbell steps of external load',
       input: inputFor(
         gobletSquat,
@@ -228,7 +240,8 @@ void main() {
   // ── §4.4 Deadband ──────────────────────────────────────────────────────────
   final deadband = <Row>[
     row(
-      rule: '§4.4 a computed change under the deadband is ignored, and the progress '
+      rule:
+          '§4.4 a computed change under the deadband is ignored, and the progress '
           'falls to reps',
       // One rep or RPE point is worth 2.0–2.9% in our rep ranges, so the shipped 2%
       // deadband almost never binds on integer inputs. Widened here to pin the
@@ -269,7 +282,8 @@ void main() {
       why: [ReasonCode.incrementTooSmallForStep, ReasonCode.repsProgress],
     ),
     row(
-      rule: '§4.5 a load between steps rounds DOWN and adds ~1 rep per 3% shortfall',
+      rule:
+          '§4.5 a load between steps rounds DOWN and adds ~1 rep per 3% shortfall',
       input: inputFor(
         legPress,
         range: compoundRange,
@@ -290,7 +304,8 @@ void main() {
       ],
     ),
     row(
-      rule: '§4.5 at the top of the rep window at target effort: one step up, reps '
+      rule:
+          '§4.5 at the top of the rep window at target effort: one step up, reps '
           'reset to the bottom',
       input: inputFor(
         gobletSquat,
@@ -304,7 +319,11 @@ void main() {
       load: const Kg(14),
       reps: 10,
       steps: 1,
-      why: [ReasonCode.topOfRangeStepUp, ReasonCode.weightStep, ReasonCode.repsReset],
+      why: [
+        ReasonCode.topOfRangeStepUp,
+        ReasonCode.weightStep,
+        ReasonCode.repsReset,
+      ],
     ),
   ];
 
@@ -326,7 +345,8 @@ void main() {
       why: [ReasonCode.noFeedbackHold],
     ),
     row(
-      rule: '§4.7 "just right" still always moves — via reps when there is room',
+      rule:
+          '§4.7 "just right" still always moves — via reps when there is room',
       input: inputFor(
         gobletSquat,
         range: compoundRange,
@@ -349,7 +369,8 @@ void main() {
   // not an edge case.
   final otherTargets = <Row>[
     row(
-      rule: '§4.7 at a "Feel healthier" target (RPE 6) "just right" still moves: the '
+      rule:
+          '§4.7 at a "Feel healthier" target (RPE 6) "just right" still moves: the '
           'tap is answered against the week\'s target, so it means "I hit what you '
           'asked for", not "RPE 7"',
       input: inputFor(
@@ -370,7 +391,8 @@ void main() {
       why: [ReasonCode.asymmetricDownRuleHold, ReasonCode.repsProgress],
     ),
     row(
-      rule: '§4.7 at a RPE 6 target, "just right" at the top of the range still steps '
+      rule:
+          '§4.7 at a RPE 6 target, "just right" at the top of the range still steps '
           'the weight up',
       input: inputFor(
         gobletSquat,
@@ -388,7 +410,8 @@ void main() {
       why: [ReasonCode.topOfRangeStepUp, ReasonCode.weightStep],
     ),
     row(
-      rule: '§4.3 at a "Stronger" target (RPE 8), "harder than I\'d like" holds both '
+      rule:
+          '§4.3 at a "Stronger" target (RPE 8), "harder than I\'d like" holds both '
           'load and reps even though it is numerically on target — she just told us '
           'it was harder than she wanted',
       input: inputFor(
@@ -406,7 +429,8 @@ void main() {
       steps: 0,
     ),
     row(
-      rule: '§4.5 at a RPE 8 target, "just right" is *easier* than target, so the '
+      rule:
+          '§4.5 at a RPE 8 target, "just right" is *easier* than target, so the '
           'weight moves at the top of the range',
       input: inputFor(
         gobletSquat,
@@ -421,14 +445,19 @@ void main() {
       load: const Kg(14),
       reps: 6,
       steps: 1,
-      why: [ReasonCode.topOfRangeStepUp, ReasonCode.weightStep, ReasonCode.repsReset],
+      why: [
+        ReasonCode.topOfRangeStepUp,
+        ReasonCode.weightStep,
+        ReasonCode.repsReset,
+      ],
     ),
   ];
 
   // ── §4 Cold start, bodyweight and timed ────────────────────────────────────
   final coldStartAndMetrics = <Row>[
     row(
-      rule: '§4 cold start: first exposure to an exercise goes through the §7 probe '
+      rule:
+          '§4 cold start: first exposure to an exercise goes through the §7 probe '
           'at the equipment floor, 8 reps',
       input: inputFor(gobletSquat, range: compoundRange, noHistory: true),
       regime: ProgressionRegime.firstExposure,
@@ -468,7 +497,8 @@ void main() {
       also: (decision) => expect(decision.hold, const Duration(seconds: 35)),
     ),
     row(
-      rule: '§3 bodyweight: at the top of the window, add a variation rather than '
+      rule:
+          '§3 bodyweight: at the top of the window, add a variation rather than '
           'more reps',
       input: inputFor(
         pushUp,
@@ -563,6 +593,61 @@ void main() {
     ),
   ];
 
+  // ── Assisted stack: signed negative external load ─────────────────────────
+  final assistedStack = <Row>[
+    row(
+      rule: 'assisted stack: one progression step is +5 kg (less assistance)',
+      input: inputFor(
+        assistedPullUp,
+        range: compoundRange,
+        lastLoad: const Kg(-30),
+        lastReps: 12,
+        targetReps: 12,
+        reported: EffortLevel.justRight,
+      ),
+      regime: ProgressionRegime.normal,
+      load: const Kg(-25),
+      reps: 10,
+      steps: 1,
+      why: [ReasonCode.topOfRangeStepUp, ReasonCode.weightStep],
+    ),
+    row(
+      rule: 'assisted stack: a licensed decrease adds one assistance pin',
+      input: inputFor(
+        assistedPullUp,
+        range: compoundRange,
+        lastLoad: const Kg(-25),
+        lastReps: 6,
+        targetReps: 10,
+        reported: EffortLevel.tooHard,
+      ),
+      regime: ProgressionRegime.normal,
+      load: const Kg(-30),
+      reps: 10,
+      steps: -1,
+      why: [ReasonCode.loadDecrease, ReasonCode.decreaseRoundedDown],
+    ),
+    row(
+      rule: 'lb assisted stack: one progression step is +10 lb toward zero',
+      input: inputFor(
+        assistedPullUp,
+        range: compoundRange,
+        unitSystem: UnitSystem.imperial,
+        lastLoad: Kg(-60 * kgPerLb),
+        lastReps: 12,
+        targetReps: 12,
+        reported: EffortLevel.justRight,
+      ),
+      regime: ProgressionRegime.normal,
+      load: Kg(-50 * kgPerLb),
+      reps: 10,
+      steps: 1,
+      why: [ReasonCode.topOfRangeStepUp, ReasonCode.weightStep],
+      also: (decision) =>
+          expect(decision.externalLoad!.inLb, closeTo(-50, 1e-9)),
+    ),
+  ];
+
   // ── §3 Isolation and single-side work: wide range, bridged jumps ───────────
   final isolationRules = <Row>[
     row(
@@ -582,7 +667,8 @@ void main() {
       why: [ReasonCode.repsProgress],
     ),
     row(
-      rule: '§3.3 at 15 reps she is overdue: increase the weight and restart at 8',
+      rule:
+          '§3.3 at 15 reps she is overdue: increase the weight and restart at 8',
       input: inputFor(
         lateralRaise,
         range: isolationRange,
@@ -598,7 +684,8 @@ void main() {
       why: [ReasonCode.topOfRangeStepUp, ReasonCode.repsReset],
     ),
     row(
-      rule: '§3.4 a jump on isolation work offers the drop-set bridge back to the old '
+      rule:
+          '§3.4 a jump on isolation work offers the drop-set bridge back to the old '
           'weight for 4–5 reps',
       input: inputFor(
         lateralRaise,
@@ -655,7 +742,8 @@ void main() {
       reps: 10,
       steps: 1,
       why: [ReasonCode.topOfRangeStepUp],
-      also: (decision) => expect(decision.externalLoad!.inLb, closeTo(30, 1e-9)),
+      also: (decision) =>
+          expect(decision.externalLoad!.inLb, closeTo(30, 1e-9)),
     ),
     row(
       rule: 'lb market: the calibration-regime minimum step is one 5 lb rung',
@@ -695,7 +783,8 @@ void main() {
   // ── bw_contribution: the same +2 kg means different things ─────────────────
   final effectiveLoadRules = <Row>[
     row(
-      rule: 'ENGINE.md effective load: a 70 kg user on a goblet squat is guarded on '
+      rule:
+          'ENGINE.md effective load: a 70 kg user on a goblet squat is guarded on '
           '57.5 kg of load moved, not 12 kg',
       input: inputFor(
         gobletSquat,
@@ -715,7 +804,8 @@ void main() {
       why: [ReasonCode.cappedAtMaxChange, ReasonCode.weightStep],
     ),
     row(
-      rule: 'ENGINE.md effective load: bodyweight movements that take added load '
+      rule:
+          'ENGINE.md effective load: bodyweight movements that take added load '
           'report the added load only',
       input: inputFor(
         gluteBridgeAdded,
@@ -744,6 +834,7 @@ void main() {
     '§4.7 at other effort targets': otherTargets,
     '§4 cold start, bodyweight and timed': coldStartAndMetrics,
     '§3 weight increments': increments,
+    'assisted-stack signed progression': assistedStack,
     '§3 isolation and single-side work': isolationRules,
     '§3 lb market': lbMarket,
     'effective load (bw_contribution)': effectiveLoadRules,
@@ -753,8 +844,9 @@ void main() {
     group(section, () {
       for (final testRow in rows) {
         test(testRow.rule, () {
-          final decision =
-              LoadSuggester(testRow.config ?? config).suggest(testRow.input);
+          final decision = LoadSuggester(
+            testRow.config ?? config,
+          ).suggest(testRow.input);
           expect(decision.regime, testRow.regime, reason: 'regime: $decision');
           if (testRow.load != null) {
             expect(
@@ -764,12 +856,24 @@ void main() {
             );
           }
           if (testRow.reps != null) {
-            expect(decision.targetReps, testRow.reps, reason: 'reps: $decision');
+            expect(
+              decision.targetReps,
+              testRow.reps,
+              reason: 'reps: $decision',
+            );
           }
           if (testRow.steps != null) {
-            expect(decision.stepsMoved, testRow.steps, reason: 'steps: $decision');
+            expect(
+              decision.stepsMoved,
+              testRow.steps,
+              reason: 'steps: $decision',
+            );
           }
-          expect(decision.why, containsAll(testRow.why), reason: 'why: $decision');
+          expect(
+            decision.why,
+            containsAll(testRow.why),
+            reason: 'why: $decision',
+          );
           expect(decision.warnings, isEmpty, reason: 'warnings: $decision');
           testRow.also?.call(decision);
         });

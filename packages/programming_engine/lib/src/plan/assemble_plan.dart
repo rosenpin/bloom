@@ -15,6 +15,35 @@ import 'result.dart';
 
 const String currentEngineVersion = '1.0.0-plan-step-4';
 
+/// §8's DRAFT machine-affinity score, clamped to [0, 1].
+///
+/// The 50+ "new to it" edge is forced to 1.0 rather than merely reaching it by
+/// addition, so tuning any draft contribution cannot accidentally relax it.
+double machineAffinityFor(Profile profile, ProgrammingConfig config) {
+  if (profile.ageBand.minimumAge >= config.machineAffinityForcedAge &&
+      profile.experienceTier == ProfileExperienceTier.newToIt) {
+    return 1;
+  }
+
+  final experience = switch (profile.experienceTier) {
+    ProfileExperienceTier.newToIt => config.machineAffinityNewToIt,
+    ProfileExperienceTier.beenAWhile => config.machineAffinityBeenAWhile,
+    ProfileExperienceTier.trainsRegularly =>
+      config.machineAffinityTrainsRegularly,
+  };
+  final age = switch (profile.ageBand) {
+    AgeBand.age18To29 || AgeBand.age30To39 || AgeBand.age40To49 => 0,
+    AgeBand.age50To59 => config.machineAffinityAge50To59,
+    AgeBand.age60Plus => config.machineAffinityAge60Plus,
+  };
+  final comfort = switch (profile.gymComfort) {
+    GymComfort.low => config.machineAffinityLowComfort,
+    GymComfort.mostlyFine => config.machineAffinityMostlyFineComfort,
+    GymComfort.totallyAtHome => config.machineAffinityTotallyAtHomeComfort,
+  };
+  return (experience + age + comfort).clamp(0.0, 1.0);
+}
+
 Result<Plan> assemblePlan(
   Profile profile,
   ProgrammingConfig config,
@@ -184,52 +213,57 @@ final class _AssemblyContext {
     final dayExerciseIds = <String>{};
     final selected = <PlanExercise>[];
     final emphasisRole = _emphasisRole(kind);
+    final primarySlots = _primarySlots(kind, emphasisRole, primaryCount);
+    final isolationSlots = _isolationSlots(kind, emphasisRole, isolationCount);
+    final isolationFirst =
+        isolationSlots.isNotEmpty &&
+        isolationSlots.first.isEmphasis &&
+        isolationSlots.first.role == BlockRole.gluteIsolation;
 
-    if (emphasisRole != null) {
+    if (isolationFirst) {
+      final slot = isolationSlots.first;
       _addSlot(
         selected: selected,
         dayExerciseIds: dayExerciseIds,
         dayIndex: dayIndex,
-        role: emphasisRole,
+        role: slot.role,
         isEmphasis: true,
-        dropPriority: emphasisRole.isPrimary ? 0 : 1,
+        dropPriority: 1,
       );
     }
 
-    final primaryRoles = _primaryRoles(kind);
-    final earlyPrimaryCount = emphasisRole?.isPrimary ?? false ? 1 : 0;
-    final remainingPrimaries = primaryCount - earlyPrimaryCount;
-    for (
-      var index = 0;
-      index < remainingPrimaries && index < primaryRoles.length;
-      index++
-    ) {
+    final affinity = machineAffinityFor(profile, config);
+    final machinePrimaryTarget = (primarySlots.length * affinity).round();
+    final machineRequirements = _machineRequirements(
+      primarySlots,
+      machinePrimaryTarget,
+      dayExerciseIds,
+    );
+    for (var index = 0; index < primarySlots.length; index++) {
+      final slot = primarySlots[index];
       _addSlot(
         selected: selected,
         dayExerciseIds: dayExerciseIds,
         dayIndex: dayIndex,
-        role: primaryRoles[index],
-        isEmphasis: false,
+        role: slot.role,
+        isEmphasis: slot.isEmphasis,
         dropPriority: 0,
+        machineVariantRequired: machineRequirements[index],
       );
     }
 
-    final earlyIsolationCount = emphasisRole != null && !emphasisRole.isPrimary
-        ? 1
-        : 0;
-    final remainingIsolations = isolationCount - earlyIsolationCount;
-    final isolationRoles = _isolationRoles(kind, emphasisRole);
     for (
-      var index = 0;
-      index < remainingIsolations && index < isolationRoles.length;
+      var index = isolationFirst ? 1 : 0;
+      index < isolationSlots.length;
       index++
     ) {
+      final slot = isolationSlots[index];
       _addSlot(
         selected: selected,
         dayExerciseIds: dayExerciseIds,
         dayIndex: dayIndex,
-        role: isolationRoles[index],
-        isEmphasis: false,
+        role: slot.role,
+        isEmphasis: slot.isEmphasis,
         dropPriority: 10 + index,
       );
     }
@@ -252,11 +286,13 @@ final class _AssemblyContext {
     required BlockRole role,
     required bool isEmphasis,
     required int dropPriority,
+    bool? machineVariantRequired,
   }) {
     final pick = _pickExercise(
       dayIndex: dayIndex,
       role: role,
       dayExerciseIds: dayExerciseIds,
+      machineVariantRequired: machineVariantRequired,
     );
     if (pick == null) return;
     dayExerciseIds.add(pick.exercise.id);
@@ -272,26 +308,100 @@ final class _AssemblyContext {
     );
   }
 
+  /// Chooses which primary positions carry the machine quota. Prefer the exact
+  /// rounded target; if the eligible catalog cannot express it without a
+  /// same-day duplicate, use the nearest feasible mix. Within that constraint,
+  /// retain as many authored baseline picks as possible.
+  List<bool> _machineRequirements(
+    List<_Slot> slots,
+    int machineTarget,
+    Set<String> existingDayIds,
+  ) {
+    final baseline = _previewPrimaryIds(
+      slots,
+      List<bool?>.filled(slots.length, null),
+      existingDayIds,
+    );
+    List<bool>? best;
+    var bestDistance = slots.length + 1;
+    var bestChanges = slots.length + 1;
+    final patternCount = 1 << slots.length;
+    for (var mask = 0; mask < patternCount; mask++) {
+      final pattern = <bool>[
+        for (var index = 0; index < slots.length; index++)
+          mask & (1 << index) != 0,
+      ];
+      final preview = _previewPrimaryIds(
+        slots,
+        pattern.cast<bool?>(),
+        existingDayIds,
+      );
+      if (preview == null) continue;
+      final machineCount = pattern.where((value) => value).length;
+      final distance = (machineCount - machineTarget).abs();
+      var changes = 0;
+      if (baseline != null) {
+        for (var index = 0; index < preview.length; index++) {
+          if (preview[index] != baseline[index]) changes++;
+        }
+      }
+      if (best == null ||
+          distance < bestDistance ||
+          (distance == bestDistance && changes < bestChanges)) {
+        best = pattern;
+        bestDistance = distance;
+        bestChanges = changes;
+      }
+    }
+    return best ??
+        <bool>[
+          for (var index = 0; index < slots.length; index++)
+            index < machineTarget,
+        ];
+  }
+
+  List<String>? _previewPrimaryIds(
+    List<_Slot> slots,
+    List<bool?> requirements,
+    Set<String> existingDayIds,
+  ) {
+    final used = <String>{...existingDayIds};
+    final ids = <String>[];
+    for (var index = 0; index < slots.length; index++) {
+      final candidates = _orderedCandidates(slots[index].role, profile)
+          .where((exercise) => !used.contains(exercise.id))
+          .where(
+            (exercise) =>
+                requirements[index] == null ||
+                exercise.machineLeanOk == requirements[index],
+          )
+          .toList(growable: false);
+      if (candidates.isEmpty) return null;
+      final rotated = _rotated(candidates, slots[index].role);
+      final selected =
+          rotated
+              .where((exercise) => !_weekExerciseIds.contains(exercise.id))
+              .firstOrNull ??
+          rotated.first;
+      used.add(selected.id);
+      ids.add(selected.id);
+    }
+    return ids;
+  }
+
   _ExercisePick? _pickExercise({
     required int dayIndex,
     required BlockRole role,
     required Set<String> dayExerciseIds,
+    bool? machineVariantRequired,
   }) {
     final profiles = <({Profile profile, List<WarningCode> warningCodes})>[
       (profile: profile, warningCodes: const <WarningCode>[]),
       (
-        profile: profile.copyWith(gymComfort: GymComfort.totallyAtHome),
-        warningCodes: const <WarningCode>[WarningCode.gymComfortRelaxed],
-      ),
-      (
         profile: profile.copyWith(
-          gymComfort: GymComfort.totallyAtHome,
           experienceTier: ProfileExperienceTier.trainsRegularly,
         ),
-        warningCodes: const <WarningCode>[
-          WarningCode.gymComfortRelaxed,
-          WarningCode.experienceTierRelaxed,
-        ],
+        warningCodes: const <WarningCode>[WarningCode.experienceTierRelaxed],
       ),
     ];
 
@@ -302,10 +412,28 @@ final class _AssemblyContext {
           .toList(growable: false);
       if (candidates.isEmpty) continue;
 
-      final rotationCandidateIds = allCandidates
+      final preferred = machineVariantRequired == null
+          ? candidates
+          : candidates
+                .where(
+                  (exercise) =>
+                      exercise.machineLeanOk == machineVariantRequired,
+                )
+                .toList(growable: false);
+      final selectionPool = preferred.isEmpty ? candidates : preferred;
+      final allPreferred = machineVariantRequired == null
+          ? allCandidates
+          : allCandidates
+                .where(
+                  (exercise) =>
+                      exercise.machineLeanOk == machineVariantRequired,
+                )
+                .toList(growable: false);
+      final rotationPool = allPreferred.isEmpty ? allCandidates : allPreferred;
+      final rotationCandidateIds = rotationPool
           .map((exercise) => exercise.id)
           .toList(growable: false);
-      final rotated = _rotated(candidates, role);
+      final rotated = _rotated(selectionPool, role);
       var selected = rotated
           .where((exercise) => !_weekExerciseIds.contains(exercise.id))
           .firstOrNull;
@@ -357,10 +485,6 @@ final class _AssemblyContext {
 
   int _preferenceScore(Exercise exercise) {
     var score = 0;
-    final olderNovice =
-        profile.ageBand.minimumAge >= config.machineLeanAge &&
-        profile.experienceTier == ProfileExperienceTier.newToIt;
-    if (olderNovice && !exercise.machineLeanOk) score += 2;
     if (profile.ageBand.minimumAge >= config.seatedPreferenceAge &&
         !exercise.seatedVariant) {
       score += 1;
@@ -394,6 +518,9 @@ final class _AssemblyContext {
     final range = exercise.metricType == MetricType.timed
         ? null
         : config.rangeFor(exercise, scheme);
+    final rotatesAcrossMesocycles =
+        catalog.rotatingBlockRoles.contains(exercise.blockRole) &&
+        rotationCandidateIds.length >= 2;
     return PlanExercise(
       exerciseId: exercise.id,
       name: exercise.name,
@@ -408,9 +535,7 @@ final class _AssemblyContext {
       loadStepOverride: exercise.loadStepOverride,
       dropPriority: dropPriority,
       isEmphasis: isEmphasis,
-      rotatesAcrossMesocycles: catalog.rotatingBlockRoles.contains(
-        exercise.blockRole,
-      ),
+      rotatesAcrossMesocycles: rotatesAcrossMesocycles,
       rotationCandidateIds: rotationCandidateIds,
       orderedSwapCandidates: _swapCandidates(exercise, scheme, eligibleProfile),
       doseByWeekKind: doses,
@@ -612,7 +737,21 @@ final class _AssemblyContext {
     ],
   };
 
-  List<BlockRole> _isolationRoles(PlanDayKind kind, BlockRole? emphasisRole) {
+  List<_Slot> _primarySlots(
+    PlanDayKind kind,
+    BlockRole? emphasisRole,
+    int count,
+  ) => _slotsWithEmphasis(
+    _primaryRoles(kind),
+    emphasisRole?.isPrimary ?? false ? emphasisRole : null,
+    count,
+  );
+
+  List<_Slot> _isolationSlots(
+    PlanDayKind kind,
+    BlockRole? emphasisRole,
+    int count,
+  ) {
     final base = switch (kind) {
       PlanDayKind.lower || PlanDayKind.lowerGluteLed => const [
         BlockRole.legIsolation,
@@ -636,11 +775,19 @@ final class _AssemblyContext {
         BlockRole.gluteIsolation,
       ],
     };
-    if (emphasisRole == null || emphasisRole.isPrimary) return base;
-    return <BlockRole>[
-      emphasisRole,
-      ...base.where((role) => role != emphasisRole),
-      ...base.where((role) => role == emphasisRole),
+    final slots = _slotsWithEmphasis(
+      base,
+      emphasisRole != null && !emphasisRole.isPrimary ? emphasisRole : null,
+      count,
+    );
+    final gluteIndex = slots.indexWhere(
+      (slot) => slot.isEmphasis && slot.role == BlockRole.gluteIsolation,
+    );
+    if (gluteIndex <= 0) return slots;
+    return <_Slot>[
+      slots[gluteIndex],
+      ...slots.take(gluteIndex),
+      ...slots.skip(gluteIndex + 1),
     ];
   }
 
@@ -659,6 +806,31 @@ final class _ExercisePick {
   final Exercise exercise;
   final Profile eligibleProfile;
   final List<String> rotationCandidateIds;
+}
+
+typedef _Slot = ({BlockRole role, bool isEmphasis});
+
+List<_Slot> _slotsWithEmphasis(
+  List<BlockRole> base,
+  BlockRole? emphasisRole,
+  int count,
+) {
+  final roles = base.take(count).toList(growable: false);
+  final slots = <_Slot>[
+    for (final role in roles) (role: role, isEmphasis: false),
+  ];
+  if (emphasisRole == null || slots.isEmpty) return slots;
+
+  var replacement = -1;
+  for (var index = slots.length - 1; index >= 0; index--) {
+    if (slots[index].role != emphasisRole) {
+      replacement = index;
+      break;
+    }
+  }
+  if (replacement < 0) replacement = slots.length - 1;
+  slots[replacement] = (role: emphasisRole, isEmphasis: true);
+  return slots;
 }
 
 String _stableHash(String input) {
@@ -738,7 +910,15 @@ String _configCanonical(ProgrammingConfig config) {
       '$minutes:${config.exerciseCountByMinutes[minutes]}',
     '${config.warmUpMinutes}',
     '${config.olderWarmUpMinutes}',
-    '${config.machineLeanAge}',
+    '${config.machineAffinityNewToIt}',
+    '${config.machineAffinityBeenAWhile}',
+    '${config.machineAffinityTrainsRegularly}',
+    '${config.machineAffinityAge50To59}',
+    '${config.machineAffinityAge60Plus}',
+    '${config.machineAffinityLowComfort}',
+    '${config.machineAffinityMostlyFineComfort}',
+    '${config.machineAffinityTotallyAtHomeComfort}',
+    '${config.machineAffinityForcedAge}',
     '${config.seatedPreferenceAge}',
     for (final level in EffortLevel.values)
       '${level.name}:${config.reportedRpeByLevel[level]}:'
@@ -761,6 +941,8 @@ String _loadTableCanonical(EquipmentLoadTable table) => <double>[
   table.dumbbellStep.value,
   table.machineFloor.value,
   table.machineStep.value,
+  table.assistedStackMaxAssistance.value,
+  table.assistedStackStep.value,
   table.cableFloor.value,
   table.cableStep.value,
   table.addedLoadStep.value,

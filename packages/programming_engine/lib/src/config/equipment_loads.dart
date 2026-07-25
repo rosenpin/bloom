@@ -45,7 +45,11 @@ final class ArithmeticLoads implements AvailableLoads {
   /// constant expression, and this constructor has to stay usable in `const`
   /// config. A non-positive step is caught at use, where the suggester falls back
   /// to the family default and warns.
-  const ArithmeticLoads({required this.floor, required this.step, this.ceiling});
+  const ArithmeticLoads({
+    required this.floor,
+    required this.step,
+    this.ceiling,
+  });
 
   @override
   final Kg floor;
@@ -76,14 +80,16 @@ final class ArithmeticLoads implements AvailableLoads {
   @override
   Kg snapDown(Kg load) {
     if (!load.isFinite || load <= floor) return floor;
-    final rungs = ((load - floor).value / step.value + _tolerance).floorToDouble();
+    final rungs = ((load - floor).value / step.value + _tolerance)
+        .floorToDouble();
     return _cap(floor + step * rungs);
   }
 
   @override
   Kg snapUp(Kg load) {
     if (!load.isFinite || load <= floor) return floor;
-    final rungs = ((load - floor).value / step.value - _tolerance).ceilToDouble();
+    final rungs = ((load - floor).value / step.value - _tolerance)
+        .ceilToDouble();
     return _cap(floor + step * rungs);
   }
 
@@ -113,10 +119,13 @@ final class ArithmeticLoads implements AvailableLoads {
 /// break determinism.
 final class ExplicitLoads implements AvailableLoads {
   ExplicitLoads(Iterable<Kg> loads)
-      : _loads = List<Kg>.unmodifiable(
-          loads.toList(growable: false)..sort((a, b) => a.compareTo(b)),
-        ) {
-    assert(_loads.isNotEmpty, 'an equipment family with no loads cannot be used');
+    : _loads = List<Kg>.unmodifiable(
+        loads.toList(growable: false)..sort((a, b) => a.compareTo(b)),
+      ) {
+    assert(
+      _loads.isNotEmpty,
+      'an equipment family with no loads cannot be used',
+    );
   }
 
   final List<Kg> _loads;
@@ -162,7 +171,8 @@ final class ExplicitLoads implements AvailableLoads {
       _loads[(_indexAtOrBelow(load) + steps).clamp(0, _loads.length - 1)];
 
   @override
-  int stepsBetween(Kg from, Kg to) => _indexAtOrBelow(to) - _indexAtOrBelow(from);
+  int stepsBetween(Kg from, Kg to) =>
+      _indexAtOrBelow(to) - _indexAtOrBelow(from);
 
   int _indexAtOrBelow(Kg load) {
     if (!load.isFinite) return 0;
@@ -178,7 +188,8 @@ final class ExplicitLoads implements AvailableLoads {
   }
 
   @override
-  String toString() => 'ExplicitLoads(${_loads.map((l) => l.value).join(', ')}kg)';
+  String toString() =>
+      'ExplicitLoads(${_loads.map((l) => l.value).join(', ')}kg)';
 }
 
 /// One market's worth of equipment steps (§3 "Weight increments").
@@ -194,6 +205,8 @@ final class EquipmentLoadTable {
     required this.dumbbellStep,
     required this.machineFloor,
     required this.machineStep,
+    required this.assistedStackMaxAssistance,
+    required this.assistedStackStep,
     required this.cableFloor,
     required this.cableStep,
     required this.addedLoadStep,
@@ -220,6 +233,13 @@ final class EquipmentLoadTable {
   /// One pin. Varies by machine — [LoadProfile.loadStepOverride] wins when known.
   final Kg machineStep;
 
+  /// Magnitude of the largest available assistance. The actual external-load
+  /// floor is its negative; zero is the unassisted ceiling.
+  final Kg assistedStackMaxAssistance;
+
+  /// One assistance pin. Progression moves up by this amount, toward zero.
+  final Kg assistedStackStep;
+
   final Kg cableFloor;
   final Kg cableStep;
 
@@ -231,14 +251,17 @@ final class EquipmentLoadTable {
   /// the family step when the machine's real pin size is authored.
   AvailableLoads loadsFor(LoadProfile profile) {
     final override = profile.loadStepOverride;
-    final hasOverride = override != null && override.isFinite && override.isPositive;
+    final hasOverride =
+        override != null && override.isFinite && override.isPositive;
     switch (profile.resistanceEquipment) {
       case ResistanceEquipment.barbell:
         return ArithmeticLoads(
           floor: barbellBar,
           step: hasOverride
               ? override
-              : (profile.movementClass.isLowerBody ? barbellLowerStep : barbellUpperStep),
+              : (profile.movementClass.isLowerBody
+                    ? barbellLowerStep
+                    : barbellUpperStep),
         );
       case ResistanceEquipment.dumbbell:
         return ArithmeticLoads(
@@ -249,6 +272,12 @@ final class EquipmentLoadTable {
         return ArithmeticLoads(
           floor: hasOverride ? override : machineFloor,
           step: hasOverride ? override : machineStep,
+        );
+      case ResistanceEquipment.assistedStack:
+        return ArithmeticLoads(
+          floor: -assistedStackMaxAssistance,
+          step: hasOverride ? override : assistedStackStep,
+          ceiling: Kg.zero,
         );
       case ResistanceEquipment.cable:
         return ArithmeticLoads(
@@ -264,6 +293,8 @@ final class EquipmentLoadTable {
   }
 
   @override
-  String toString() => 'EquipmentLoadTable(bar ${barbellBar.value}kg, '
-      'db ${dumbbellStep.value}kg, machine ${machineStep.value}kg)';
+  String toString() =>
+      'EquipmentLoadTable(bar ${barbellBar.value}kg, '
+      'db ${dumbbellStep.value}kg, machine ${machineStep.value}kg, '
+      'assisted ${assistedStackStep.value}kg)';
 }

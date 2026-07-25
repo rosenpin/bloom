@@ -39,7 +39,7 @@ final class RepScheme {
     required this.effort,
     required this.rest,
     this.extraSetOnEmphasis = false,
-  })  : assert(minSets >= 1 && maxSets >= minSets);
+  }) : assert(minSets >= 1 && maxSets >= minSets);
 
   final int minSets;
   final int maxSets;
@@ -53,25 +53,27 @@ final class RepScheme {
   /// §2 RESOLVED: novices in their first 4 weeks are capped at 3 sets and 3+ RIR
   /// regardless of goal. Goal schemes unlock from week 5.
   RepScheme cappedForNovice(ProgrammingConfig config) => RepScheme(
-        minSets: minSets > config.noviceMaxSets ? config.noviceMaxSets : minSets,
-        maxSets: maxSets > config.noviceMaxSets ? config.noviceMaxSets : maxSets,
-        range: range,
-        effort: effort.rpe > config.noviceMaxRpe ? EffortTarget(config.noviceMaxRpe) : effort,
-        rest: rest,
-        // The +1 emphasis set is part of the unlocked goal scheme. Retaining it
-        // here would let a novice Build Curves dose reach 4 sets despite the
-        // explicit first-four-weeks cap of 3.
-        extraSetOnEmphasis: false,
-      );
+    minSets: minSets > config.noviceMaxSets ? config.noviceMaxSets : minSets,
+    maxSets: maxSets > config.noviceMaxSets ? config.noviceMaxSets : maxSets,
+    range: range,
+    effort: effort.rpe > config.noviceMaxRpe
+        ? EffortTarget(config.noviceMaxRpe)
+        : effort,
+    rest: rest,
+    // The +1 emphasis set is part of the unlocked goal scheme. Retaining it
+    // here would let a novice Build Curves dose reach 4 sets despite the
+    // explicit first-four-weeks cap of 3.
+    extraSetOnEmphasis: false,
+  );
 
   /// The opening dose for this scheme: top of the set count, bottom of the rep
   /// range (double progression climbs from there).
   RepsDose openingDose({bool isEmphasis = false}) => RepsDose(
-        sets: maxSets + (isEmphasis && extraSetOnEmphasis ? 1 : 0),
-        range: range,
-        effort: effort,
-        targetReps: range.min,
-      );
+    sets: maxSets + (isEmphasis && extraSetOnEmphasis ? 1 : 0),
+    range: range,
+    effort: effort,
+    targetReps: range.min,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -88,7 +90,8 @@ final class RepScheme {
       Object.hash(minSets, maxSets, range, effort, rest, extraSetOnEmphasis);
 
   @override
-  String toString() => 'RepScheme($minSets-${maxSets}x$range @$effort, '
+  String toString() =>
+      'RepScheme($minSets-${maxSets}x$range @$effort, '
       'rest ${rest.inSeconds}s)';
 }
 
@@ -145,7 +148,15 @@ final class ProgrammingConfig {
     this.exerciseCountByMinutes = const {30: 4, 45: 6, 60: 8},
     this.warmUpMinutes = 5,
     this.olderWarmUpMinutes = 7,
-    this.machineLeanAge = 50,
+    this.machineAffinityNewToIt = 0.5,
+    this.machineAffinityBeenAWhile = 0.3,
+    this.machineAffinityTrainsRegularly = 0.1,
+    this.machineAffinityAge50To59 = 0.3,
+    this.machineAffinityAge60Plus = 0.4,
+    this.machineAffinityLowComfort = 0.2,
+    this.machineAffinityMostlyFineComfort = 0.1,
+    this.machineAffinityTotallyAtHomeComfort = 0,
+    this.machineAffinityForcedAge = 50,
     this.seatedPreferenceAge = 60,
     this.reportedRpeByLevel = _defaultReportedRpe,
     this.rpeBandByLevel = _defaultRpeBands,
@@ -282,8 +293,32 @@ final class ProgrammingConfig {
   /// minutes is the v1 authored default and remains configurable.
   final int olderWarmUpMinutes;
 
-  /// Older novices (roughly 50+ *and* never trained) lean toward machine variants.
-  final int machineLeanAge;
+  /// DRAFT §8 scoring contribution for "new to it".
+  final double machineAffinityNewToIt;
+
+  /// DRAFT §8 scoring contribution for "been a while".
+  final double machineAffinityBeenAWhile;
+
+  /// DRAFT §8 scoring contribution for "trains regularly".
+  final double machineAffinityTrainsRegularly;
+
+  /// DRAFT §8 scoring contribution for ages 50–59.
+  final double machineAffinityAge50To59;
+
+  /// DRAFT §8 scoring contribution for ages 60+.
+  final double machineAffinityAge60Plus;
+
+  /// DRAFT §8 scoring contribution for low gym comfort.
+  final double machineAffinityLowComfort;
+
+  /// DRAFT §8 scoring contribution for "mostly fine" gym comfort.
+  final double machineAffinityMostlyFineComfort;
+
+  /// DRAFT §8 scoring contribution for "totally at home" gym comfort.
+  final double machineAffinityTotallyAtHomeComfort;
+
+  /// §8 forced edge: this age or older plus "new to it" has affinity 1.0.
+  final int machineAffinityForcedAge;
 
   /// 60+: longer warm-up, seated variants preferred where equivalent.
   final int seatedPreferenceAge;
@@ -309,8 +344,8 @@ final class ProgrammingConfig {
   /// Isolation and single-side work override the goal's rep range (§3).
   RepRange rangeFor(LoadProfile profile, RepScheme scheme) =>
       profile.movementClass.isIsolation || profile.laterality.isPerSide
-          ? isolationRange
-          : scheme.range;
+      ? isolationRange
+      : scheme.range;
 
   EquipmentLoadTable loadTable(UnitSystem unitSystem) =>
       unitSystem.isMetric ? metricLoads : imperialLoads;
@@ -390,6 +425,9 @@ final class ProgrammingConfig {
     dumbbellStep: Kg(2),
     machineFloor: Kg(5),
     machineStep: Kg(5),
+    // DRAFT assisted-stack defaults: 50 kg maximum, 5 kg pins.
+    assistedStackMaxAssistance: Kg(50),
+    assistedStackStep: Kg(5),
     cableFloor: Kg(2.5),
     cableStep: Kg(2.5),
     addedLoadStep: Kg(2),
@@ -405,6 +443,9 @@ final class ProgrammingConfig {
     dumbbellStep: Kg(5 * kgPerLb),
     machineFloor: Kg(10 * kgPerLb),
     machineStep: Kg(10 * kgPerLb),
+    // DRAFT assisted-stack defaults: 110 lb maximum, 10 lb pins.
+    assistedStackMaxAssistance: Kg(110 * kgPerLb),
+    assistedStackStep: Kg(10 * kgPerLb),
     cableFloor: Kg(5 * kgPerLb),
     cableStep: Kg(5 * kgPerLb),
     addedLoadStep: Kg(5 * kgPerLb),

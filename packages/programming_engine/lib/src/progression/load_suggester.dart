@@ -66,10 +66,12 @@ final class ExerciseSnapshot {
       other.lastHold == lastHold;
 
   @override
-  int get hashCode => Object.hash(lastLoad, lastReps, targetReps, reportedEffort, lastHold);
+  int get hashCode =>
+      Object.hash(lastLoad, lastReps, targetReps, reportedEffort, lastHold);
 
   @override
-  String toString() => 'ExerciseSnapshot(${lastLoad.value}kg x $lastReps '
+  String toString() =>
+      'ExerciseSnapshot(${lastLoad.value}kg x $lastReps '
       '(target $targetReps), ${reportedEffort?.name ?? 'no tap'})';
 }
 
@@ -169,7 +171,8 @@ final class LoadDecision {
   bool get loadChanged => stepsMoved != 0;
 
   @override
-  String toString() => 'LoadDecision($suggestion, $targetReps reps, '
+  String toString() =>
+      'LoadDecision($suggestion, $targetReps reps, '
       '${regime.name}, steps $stepsMoved, why [${why.map((r) => r.name).join(', ')}]'
       '${warnings.isEmpty ? '' : ', warnings $warnings'})';
 }
@@ -189,7 +192,7 @@ final class LoadSuggester {
 /// the public surface is [LoadSuggester.suggest].
 final class _Pass {
   _Pass(this.config, this.input)
-      : loads = config.availableLoads(input.profile, input.unitSystem);
+    : loads = config.availableLoads(input.profile, input.unitSystem);
 
   final ProgrammingConfig config;
   final ProgressionInput input;
@@ -211,11 +214,13 @@ final class _Pass {
   late final int days = _sanitizedDays();
 
   bool get isIsolationLike =>
-      input.profile.movementClass.isIsolation || input.profile.laterality.isPerSide;
+      input.profile.movementClass.isIsolation ||
+      input.profile.laterality.isPerSide;
 
   /// Where reps land when the load moves.
-  int get resetReps =>
-      isIsolationLike ? window.clamp(config.isolationRestartRange.min) : range.min;
+  int get resetReps => isIsolationLike
+      ? window.clamp(config.isolationRestartRange.min)
+      : range.min;
 
   /// Whether this report licenses *any* progress this session.
   ///
@@ -286,16 +291,39 @@ final class _Pass {
     final report = interpretEffort(level, config);
     final lastReps = _sanitizedReps(history.lastReps);
     final calibrating = isCalibrationReport(report, config);
-    final regime =
-        calibrating ? ProgressionRegime.calibration : ProgressionRegime.normal;
+    final regime = calibrating
+        ? ProgressionRegime.calibration
+        : ProgressionRegime.normal;
 
     final lastEffective = effectiveLoad.effective(base);
     if (!lastEffective.isPositive) {
+      if (input.profile.resistanceEquipment ==
+              ResistanceEquipment.assistedStack &&
+          calibrating) {
+        final stepped = loads.shift(base, 1);
+        why
+          ..add(ReasonCode.calibrationRegimeJump)
+          ..add(ReasonCode.calibrationMinimumStep);
+        if (stepped > base) {
+          why
+            ..add(ReasonCode.weightStep)
+            ..add(ReasonCode.repsReset);
+        }
+        return _decision(
+          suggestion: _wrapLoad(stepped),
+          targetReps: stepped > base ? resetReps : targetReps,
+          regime: regime,
+          externalLoad: stepped,
+          base: base,
+        );
+      }
       // Nothing to scale — a bodyweight-metric movement with no body mass known.
-      warnings.add(const EngineWarning(
-        WarningCode.invalidBodyMass,
-        'effective load is zero; holding',
-      ));
+      warnings.add(
+        const EngineWarning(
+          WarningCode.invalidBodyMass,
+          'effective load is zero; holding',
+        ),
+      );
       why.add(ReasonCode.deadbandHold);
       return _decision(
         suggestion: _wrapLoad(base),
@@ -313,9 +341,12 @@ final class _Pass {
     // A step's absolute size is the same in effective and external terms, so the
     // guardrails can work on a single delta.
     final oneStep = _stepAt(base);
-    final maxSteps = calibrating ? config.calibrationMaxSteps : config.maxStepsPerAdjustment;
-    final capFraction =
-        calibrating ? config.calibrationMaxIncreaseFraction : config.maxChangeFraction;
+    final maxSteps = calibrating
+        ? config.calibrationMaxSteps
+        : config.maxStepsPerAdjustment;
+    final capFraction = calibrating
+        ? config.calibrationMaxIncreaseFraction
+        : config.maxChangeFraction;
 
     var delta = desiredEffective - lastEffective;
     var capped = false;
@@ -351,7 +382,11 @@ final class _Pass {
 
     // §4.3 asymmetric down-rule.
     if (delta.isNegative &&
-        !licensesDecrease(effort: report, lastReps: lastReps, targetReps: targetReps)) {
+        !licensesDecrease(
+          effort: report,
+          lastReps: lastReps,
+          targetReps: targetReps,
+        )) {
       delta = Kg.zero;
       heldByDownRule = true;
       capped = false;
@@ -439,22 +474,25 @@ final class _Pass {
   }) {
     final snapped = loads.snapDown(desiredExternal);
     final increment = desiredExternal - base;
-    final realizable = snapped > base &&
+    final realizable =
+        snapped > base &&
         increment >= oneStep * config.minIncrementStepFraction;
 
     if (!realizable) {
       return _spendOnReps(
         base: base,
         targetReps: targetReps,
-        shortfallFraction: (desiredEffective - lastEffective).fractionOf(desiredEffective),
+        shortfallFraction: (desiredEffective - lastEffective).fractionOf(
+          desiredEffective,
+        ),
         regime: regime,
         incrementWasTooSmall: true,
       );
     }
 
     // Rounded down, never up: make up the shortfall in reps (~1 rep per 3%).
-    final shortfall =
-        (desiredEffective - effectiveLoad.effective(snapped)).fractionOf(desiredEffective);
+    final shortfall = (desiredEffective - effectiveLoad.effective(snapped))
+        .fractionOf(desiredEffective);
     final extraReps = (shortfall / config.loadFractionPerRep).floor();
     why.add(ReasonCode.weightStep);
     why.add(ReasonCode.repsReset);
@@ -508,7 +546,8 @@ final class _Pass {
     required bool incrementWasTooSmall,
   }) {
     if (targetReps < range.max) {
-      final compensating = (shortfallFraction / config.loadFractionPerRep).floor();
+      final compensating = (shortfallFraction / config.loadFractionPerRep)
+          .floor();
       final extraReps = compensating < 1 ? 1 : compensating;
       if (incrementWasTooSmall) why.add(ReasonCode.incrementTooSmallForStep);
       why.add(ReasonCode.repsProgress);
@@ -558,16 +597,30 @@ final class _Pass {
         );
       case LayoffTier.reduce:
       case LayoffTier.reCalibrate:
-        final reduced =
-            loads.snapDown(base * layoffLoadFraction(tier, config));
-        if (reduced.isCloseTo(loads.floor)) why.add(ReasonCode.atEquipmentFloor);
+        final fraction = layoffLoadFraction(tier, config);
+        // Assistance is signed, so multiplying external load directly would move
+        // −30 toward −27 and make the exercise harder after an absence. Reduce
+        // the effective load, then convert back to the signed external value.
+        final reducedTarget =
+            input.profile.resistanceEquipment ==
+                ResistanceEquipment.assistedStack
+            ? effectiveLoad.external(effectiveLoad.effective(base) * fraction)
+            : base * fraction;
+        final reduced = loads.snapDown(reducedTarget);
+        if (reduced.isCloseTo(loads.floor)) {
+          why.add(ReasonCode.atEquipmentFloor);
+        }
         // 28+ days: the compound lifts re-find their weights. Isolation and
         // machine work is safe to resume at −20% without a probe.
         final needsProbe =
-            tier == LayoffTier.reCalibrate && input.profile.movementClass.isCompound;
+            tier == LayoffTier.reCalibrate &&
+            input.profile.movementClass.isCompound;
         return _decision(
           suggestion: needsProbe
-              ? NeedsCalibration(floor: reduced, probeReps: config.calibrationProbeReps)
+              ? NeedsCalibration(
+                  floor: reduced,
+                  probeReps: config.calibrationProbeReps,
+                )
               : _wrapLoad(reduced),
           targetReps: needsProbe ? config.calibrationProbeReps : targetReps,
           regime: ProgressionRegime.layoff,
@@ -623,16 +676,19 @@ final class _Pass {
     final report = interpretEffort(level, config);
     if (!supportsProgress(report)) {
       // Harder than target: meet her where she is, never above the target.
-      final next = licensesDecrease(
-        effort: report,
-        lastReps: lastReps,
-        targetReps: targetReps,
-      )
+      final next =
+          licensesDecrease(
+            effort: report,
+            lastReps: lastReps,
+            targetReps: targetReps,
+          )
           ? window.clamp(lastReps)
           : targetReps;
-      why.add(next < targetReps
-          ? ReasonCode.loadDecrease
-          : ReasonCode.asymmetricDownRuleHold);
+      why.add(
+        next < targetReps
+            ? ReasonCode.loadDecrease
+            : ReasonCode.asymmetricDownRuleHold,
+      );
       return _decision(
         suggestion: RepOrDurationTarget.reps(next),
         targetReps: next,
@@ -710,11 +766,11 @@ final class _Pass {
   }
 
   LoadDecision _timedDecision(Duration hold) => _decision(
-        suggestion: RepOrDurationTarget.hold(hold),
-        targetReps: 1,
-        regime: ProgressionRegime.timed,
-        hold: hold,
-      );
+    suggestion: RepOrDurationTarget.hold(hold),
+    targetReps: 1,
+    regime: ProgressionRegime.timed,
+    hold: hold,
+  );
 
   // ── Plumbing ──────────────────────────────────────────────────────────────
 
@@ -722,8 +778,8 @@ final class _Pass {
   /// pure bodyweight suggestion is `BodyweightOnly()`.
   LoadSuggestion _wrapLoad(Kg load) =>
       input.profile.resistanceEquipment == ResistanceEquipment.bodyweight
-          ? BodyweightOnly(added: load)
-          : SuggestedLoad(load);
+      ? BodyweightOnly(added: load)
+      : SuggestedLoad(load);
 
   /// §3.4: after a jump on isolation or single-side work, offer the drop-set
   /// bridge back to the old weight.
@@ -777,17 +833,16 @@ final class _Pass {
     return RepRange(range.max, range.min);
   }
 
-  RepRange _prescribableWindow() => isIsolationLike &&
-          config.isolationRestartRange.min < range.min
+  RepRange _prescribableWindow() =>
+      isIsolationLike && config.isolationRestartRange.min < range.min
       ? RepRange(config.isolationRestartRange.min, range.max)
       : range;
 
   int _sanitizedTargetReps(int reps) {
     if (window.contains(reps)) return reps;
-    warnings.add(EngineWarning(
-      WarningCode.targetRepsOutOfRange,
-      '$reps not in $window',
-    ));
+    warnings.add(
+      EngineWarning(WarningCode.targetRepsOutOfRange, '$reps not in $window'),
+    );
     return window.clamp(reps);
   }
 
@@ -799,17 +854,21 @@ final class _Pass {
 
   int _sanitizedDays() {
     if (input.daysSinceLastSession >= 0) return input.daysSinceLastSession;
-    warnings.add(EngineWarning(
-      WarningCode.negativeLayoff,
-      '${input.daysSinceLastSession}',
-    ));
+    warnings.add(
+      EngineWarning(
+        WarningCode.negativeLayoff,
+        '${input.daysSinceLastSession}',
+      ),
+    );
     return 0;
   }
 
   EffectiveLoad _sanitizedEffectiveLoad() {
     var contribution = input.profile.bwContribution;
     if (!contribution.isFinite || contribution < 0 || contribution > 1) {
-      warnings.add(EngineWarning(WarningCode.bwContributionOutOfRange, '$contribution'));
+      warnings.add(
+        EngineWarning(WarningCode.bwContributionOutOfRange, '$contribution'),
+      );
       contribution = contribution.isFinite ? contribution.clamp(0.0, 1.0) : 0.0;
     }
     final bodyMass = input.bodyMass;
@@ -818,7 +877,9 @@ final class _Pass {
       // No body mass: run on external load only. The ratio formula is
       // scale-invariant in external load, so this degrades rather than breaks —
       // the percentage guardrails just read tighter than they should.
-      warnings.add(EngineWarning(WarningCode.invalidBodyMass, '${bodyMass.value}'));
+      warnings.add(
+        EngineWarning(WarningCode.invalidBodyMass, '${bodyMass.value}'),
+      );
       return EffectiveLoad.externalOnly;
     }
     return EffectiveLoad(bwContribution: contribution, bodyMass: bodyMass);
@@ -830,18 +891,22 @@ final class _Pass {
       return loads.floor;
     }
     if (load < loads.floor) {
-      warnings.add(EngineWarning(
-        WarningCode.loadBelowEquipmentFloor,
-        '${load.value} < ${loads.floor.value}',
-      ));
+      warnings.add(
+        EngineWarning(
+          WarningCode.loadBelowEquipmentFloor,
+          '${load.value} < ${loads.floor.value}',
+        ),
+      );
       return loads.floor;
     }
     if (loads.isRepresentable(load)) return load;
     final snapped = loads.snapDown(load);
-    warnings.add(EngineWarning(
-      WarningCode.lastLoadNotRepresentable,
-      '${load.value} -> ${snapped.value}',
-    ));
+    warnings.add(
+      EngineWarning(
+        WarningCode.lastLoadNotRepresentable,
+        '${load.value} -> ${snapped.value}',
+      ),
+    );
     return snapped;
   }
 }

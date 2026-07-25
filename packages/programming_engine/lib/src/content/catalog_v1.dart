@@ -3,7 +3,7 @@
 /// values DRAFT pending instructor review
 ///
 /// In particular, `bwContribution`, biomechanics ranks, reason-specific swap
-/// ordering, and copy are seed-quality drafts. IDs and the 39-exercise membership
+/// ordering, and copy are seed-quality drafts. IDs and the 40-exercise membership
 /// follow `docs/EXERCISES.md`.
 library;
 
@@ -439,7 +439,6 @@ final List<Exercise> _exercises = <Exercise>[
     secondaryActions: const [JointAction.elbowExtension],
     rom: 4,
     stability: 2,
-    machineLean: true,
     seated: true,
   ),
   _exercise(
@@ -461,6 +460,24 @@ final List<Exercise> _exercises = <Exercise>[
     rom: 4,
     stability: 3,
     machineLean: true,
+  ),
+  _exercise(
+    id: 'assisted-dip',
+    name: 'Assisted Dip',
+    slug: 'assisted-dip',
+    role: BlockRole.upperPush,
+    movement: MovementClass.compoundUpperPush,
+    equipment: ResistanceEquipment.assistedStack,
+    // DRAFT: approximately 85% of body mass contributes to the movement.
+    bw: 0.85,
+    primary: const [MuscleGroup.chest, MuscleGroup.triceps],
+    secondary: const [MuscleGroup.shoulders],
+    actions: const [JointAction.verticalPush],
+    secondaryActions: const [JointAction.elbowExtension],
+    rom: 4,
+    stability: 2,
+    machineLean: true,
+    intimidation: IntimidationTier.moderate,
   ),
 
   // Upper — pull.
@@ -522,7 +539,8 @@ final List<Exercise> _exercises = <Exercise>[
     slug: 'bodyweight-assisted-chin-up',
     role: BlockRole.upperPull,
     movement: MovementClass.compoundUpperPull,
-    equipment: ResistanceEquipment.machine,
+    equipment: ResistanceEquipment.assistedStack,
+    // DRAFT: approximately 85% of body mass contributes to the movement.
     bw: 0.85,
     primary: const [MuscleGroup.lats, MuscleGroup.biceps],
     secondary: const [MuscleGroup.upperBack],
@@ -594,7 +612,6 @@ final List<Exercise> _exercises = <Exercise>[
     rom: 3,
     stability: 1,
     machineLean: true,
-    intimidation: IntimidationTier.moderate,
   ),
 
   // Core.
@@ -781,63 +798,113 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
   ]),
   ..._edgesFor(
     'dumbbell-bench-press',
-    busy: const ['machine-chest-press', 'bodyweight-push-up'],
-    intimidating: const ['machine-chest-press', 'bodyweight-push-up'],
+    busy: const ['machine-chest-press', 'assisted-dip', 'bodyweight-push-up'],
+    intimidating: const [
+      'machine-chest-press',
+      'assisted-dip',
+      'bodyweight-push-up',
+    ],
     uncomfortable: const [
       'dumbbell-incline-bench-press',
       'machine-chest-press',
     ],
-    unavailable: const ['bodyweight-push-up', 'machine-chest-press'],
+    unavailable: const [
+      'bodyweight-push-up',
+      'machine-chest-press',
+      'assisted-dip',
+    ],
   ),
   ..._edgesFor(
     'barbell-bench-press',
-    busy: const ['dumbbell-bench-press', 'machine-chest-press'],
-    intimidating: const ['machine-chest-press', 'bodyweight-push-up'],
+    busy: const ['dumbbell-bench-press', 'machine-chest-press', 'assisted-dip'],
+    intimidating: const [
+      'machine-chest-press',
+      'assisted-dip',
+      'bodyweight-push-up',
+    ],
     uncomfortable: const [
       'dumbbell-incline-bench-press',
       'machine-chest-press',
     ],
-    unavailable: const ['dumbbell-bench-press', 'machine-chest-press'],
+    unavailable: const [
+      'dumbbell-bench-press',
+      'machine-chest-press',
+      'assisted-dip',
+    ],
   ),
   ..._edgesFor(
     'machine-chest-press',
-    busy: const ['dumbbell-bench-press', 'bodyweight-push-up'],
+    busy: const ['dumbbell-bench-press', 'assisted-dip', 'bodyweight-push-up'],
     intimidating: const [
       'bodyweight-push-up',
       'dumbbell-seated-overhead-press',
     ],
     uncomfortable: const ['dumbbell-incline-bench-press', 'bodyweight-push-up'],
-    unavailable: const ['dumbbell-bench-press', 'bodyweight-push-up'],
+    unavailable: const [
+      'dumbbell-bench-press',
+      'bodyweight-push-up',
+      'assisted-dip',
+    ],
   ),
   ..._edgesFor(
     'dumbbell-incline-bench-press',
-    busy: const ['dumbbell-bench-press', 'machine-chest-press'],
-    intimidating: const ['machine-chest-press', 'bodyweight-push-up'],
+    busy: const ['dumbbell-bench-press', 'machine-chest-press', 'assisted-dip'],
+    intimidating: const [
+      'machine-chest-press',
+      'assisted-dip',
+      'bodyweight-push-up',
+    ],
     uncomfortable: const ['dumbbell-bench-press', 'machine-chest-press'],
-    unavailable: const ['dumbbell-bench-press', 'machine-chest-press'],
+    unavailable: const [
+      'dumbbell-bench-press',
+      'machine-chest-press',
+      'assisted-dip',
+    ],
   ),
   ..._edgesFor(
     'dumbbell-seated-overhead-press',
-    busy: const ['machine-chest-press', 'bodyweight-push-up'],
+    busy: const ['machine-chest-press', 'assisted-dip', 'bodyweight-push-up'],
+    intimidating: const [
+      'machine-chest-press',
+      'assisted-dip',
+      'bodyweight-push-up',
+    ],
+    uncomfortable: const [
+      'dumbbell-incline-bench-press',
+      'machine-chest-press',
+    ],
+    unavailable: const [
+      'machine-chest-press',
+      'bodyweight-push-up',
+      'assisted-dip',
+    ],
+  ),
+  ..._edgesFor(
+    'bodyweight-push-up',
+    busy: const ['machine-chest-press', 'assisted-dip', 'dumbbell-bench-press'],
+    intimidating: const [
+      'machine-chest-press',
+      'dumbbell-seated-overhead-press',
+    ],
+    uncomfortable: const [
+      'machine-chest-press',
+      'dumbbell-incline-bench-press',
+    ],
+    unavailable: const [
+      'machine-chest-press',
+      'dumbbell-bench-press',
+      'assisted-dip',
+    ],
+  ),
+  ..._edgesFor(
+    'assisted-dip',
+    busy: const ['machine-chest-press', 'dumbbell-bench-press'],
     intimidating: const ['machine-chest-press', 'bodyweight-push-up'],
     uncomfortable: const [
       'dumbbell-incline-bench-press',
       'machine-chest-press',
     ],
     unavailable: const ['machine-chest-press', 'bodyweight-push-up'],
-  ),
-  ..._edgesFor(
-    'bodyweight-push-up',
-    busy: const ['machine-chest-press', 'dumbbell-bench-press'],
-    intimidating: const [
-      'machine-chest-press',
-      'dumbbell-seated-overhead-press',
-    ],
-    uncomfortable: const [
-      'machine-chest-press',
-      'dumbbell-incline-bench-press',
-    ],
-    unavailable: const ['machine-chest-press', 'dumbbell-bench-press'],
   ),
   ..._edgesFor(
     'machine-pulldown',

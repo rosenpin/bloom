@@ -8,9 +8,28 @@ void main() {
   const config = ProgrammingConfig();
   final compatibilityScheme = config.schemeFor(Goal.tonedAndDefined);
 
-  test('EXERCISES.md has exactly 39 unique fixture rows', () {
-    expect(catalogV1.exercises, hasLength(39));
-    expect(exercisesById, hasLength(39));
+  test('EXERCISES.md has exactly 40 unique fixture rows', () {
+    expect(catalogV1.exercises, hasLength(40));
+    expect(exercisesById, hasLength(40));
+  });
+
+  test('rows 29 and 29b are signed assisted-stack compounds', () {
+    final pullUp = exercisesById['bodyweight-assisted-chin-up']!;
+    final dip = exercisesById['assisted-dip']!;
+    expect(pullUp.name, 'Assisted Pull-Up');
+    expect(pullUp.blockRole, BlockRole.upperPull);
+    expect(pullUp.resistanceEquipment, ResistanceEquipment.assistedStack);
+    expect(pullUp.bwContribution, 0.85);
+    expect(dip.name, 'Assisted Dip');
+    expect(dip.blockRole, BlockRole.upperPush);
+    expect(dip.resistanceEquipment, ResistanceEquipment.assistedStack);
+    expect(dip.bwContribution, 0.85);
+    expect(
+      catalogV1.swapEdges.any(
+        (edge) => edge.fromId == 'assisted-dip' || edge.toId == 'assisted-dip',
+      ),
+      isTrue,
+    );
   });
 
   test('no swap edge has a dangling from or to id', () {

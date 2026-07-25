@@ -125,6 +125,130 @@ void main() {
     }
   });
 
+  test('machine affinity is the rounded machine-variant fraction per day', () {
+    for (final fixture in personaFixtures) {
+      final plan = successfulPlan(fixture.profile);
+      final affinity = machineAffinityFor(
+        fixture.profile,
+        const ProgrammingConfig(),
+      );
+      for (final day in plan.days) {
+        final primaries = day.exercises
+            .where((exercise) => exercise.blockRole.isPrimary)
+            .toList(growable: false);
+        final expected = (primaries.length * affinity).round();
+        final actual = primaries
+            .where(
+              (exercise) => exercisesById[exercise.exerciseId]!.machineLeanOk,
+            )
+            .length;
+        expect(
+          (actual - expected).abs(),
+          lessThanOrEqualTo(1),
+          reason: '${fixture.name}/${day.kind.name}/affinity=$affinity',
+        );
+        if (affinity == 1) {
+          expect(
+            actual,
+            primaries.length,
+            reason: '${fixture.name}/${day.kind.name}/forced edge',
+          );
+        }
+      }
+    }
+  });
+
+  test('machine affinity does not change isolation-slot selection', () {
+    final profile = _profile(
+      experience: ProfileExperienceTier.beenAWhile,
+      comfort: GymComfort.mostlyFine,
+    );
+    const noMachines = ProgrammingConfig(
+      machineAffinityBeenAWhile: 0,
+      machineAffinityMostlyFineComfort: 0,
+    );
+    const allMachines = ProgrammingConfig(
+      machineAffinityBeenAWhile: 1,
+      machineAffinityMostlyFineComfort: 0,
+    );
+    final low = successfulPlan(profile, config: noMachines);
+    final high = successfulPlan(profile, config: allMachines);
+    for (var dayIndex = 0; dayIndex < low.days.length; dayIndex++) {
+      List<String> isolationIds(PlanDay day) => day.exercises
+          .where((exercise) => !exercise.blockRole.isPrimary)
+          .map((exercise) => exercise.exerciseId)
+          .toList(growable: false);
+      expect(
+        isolationIds(high.days[dayIndex]),
+        isolationIds(low.days[dayIndex]),
+      );
+    }
+  });
+
+  test(
+    'glute emphasis stays first; non-glute emphasis keeps compounds first',
+    () {
+      final glutePlan = successfulPlan(personaFixtures.first.profile);
+      for (final day in glutePlan.days.where(
+        (day) => day.kind == PlanDayKind.lower,
+      )) {
+        expect(day.exercises.first.blockRole, BlockRole.gluteIsolation);
+        expect(day.exercises.first.isEmphasis, isTrue);
+      }
+
+      for (final fixture in <PersonaFixture>[
+        personaFixtures[6],
+        personaFixtures[9],
+        personaFixtures[10],
+      ]) {
+        final plan = successfulPlan(fixture.profile);
+        for (final day in plan.days) {
+          if (day.kind == PlanDayKind.lowerGluteLed) continue;
+          expect(
+            day.exercises.first.blockRole.isPrimary,
+            isTrue,
+            reason: '${fixture.name}/${day.kind.name}',
+          );
+        }
+      }
+    },
+  );
+
+  test(
+    'back, arms and core emphasis each add one occurrence where applicable',
+    () {
+      const cases = <(Emphasis, BlockRole)>[
+        (Emphasis.back, BlockRole.upperPull),
+        (Emphasis.arms, BlockRole.armShoulderIsolation),
+        (Emphasis.core, BlockRole.core),
+      ];
+      for (final (emphasis, role) in cases) {
+        final profile = _profile(
+          days: TrainingDaysPerWeek.three,
+          emphasis: emphasis,
+          experience: ProfileExperienceTier.trainsRegularly,
+          comfort: GymComfort.totallyAtHome,
+        );
+        final emphasized = successfulPlan(profile);
+        final balanced = successfulPlan(
+          profile.copyWith(emphasis: Emphasis.balanced),
+        );
+        var changedDays = 0;
+        for (var dayIndex = 0; dayIndex < emphasized.days.length; dayIndex++) {
+          int occurrences(PlanDay day) => day.exercises
+              .where((exercise) => exercise.blockRole == role)
+              .length;
+          final delta =
+              occurrences(emphasized.days[dayIndex]) -
+              occurrences(balanced.days[dayIndex]);
+          expect(delta, anyOf(0, 1), reason: '${emphasis.name}/day $dayIndex');
+          if (delta == 1) changedDays++;
+        }
+        expect(changedDays, greaterThan(0), reason: emphasis.name);
+      }
+    },
+  );
+
   test('session shapes are 4, 6, and 7 plus a cardio finisher', () {
     final expected = <SessionMinutes, int>{
       SessionMinutes.thirty: 4,
@@ -257,22 +381,20 @@ void main() {
   });
 
   group('fixed fallback ladder', () {
-    test('relaxes gym comfort first and warns', () {
-      final plan = successfulPlan(
+    test('never relaxes low-comfort intimidation gating', () {
+      final result = assemblePlan(
         _profile(comfort: GymComfort.low),
-        catalog: _singleExerciseCatalog(intimidation: IntimidationTier.high),
+        const ProgrammingConfig(),
+        _singleExerciseCatalog(intimidation: IntimidationTier.high),
       );
+      expect(result, isA<Failure<Plan>>());
       expect(
-        plan.warnings.map((warning) => warning.code),
-        contains(WarningCode.gymComfortRelaxed),
-      );
-      expect(
-        plan.warnings.map((warning) => warning.code),
-        isNot(contains(WarningCode.experienceTierRelaxed)),
+        (result as Failure<Plan>).error.code,
+        PlanAssemblyErrorCode.noUsableExercises,
       );
     });
 
-    test('then relaxes experience, preserving the comfort warning', () {
+    test('relaxes experience while preserving the comfort gate', () {
       final plan = successfulPlan(
         _profile(
           comfort: GymComfort.low,
@@ -284,10 +406,11 @@ void main() {
       );
       expect(
         plan.warnings.map((warning) => warning.code),
-        containsAll(<WarningCode>[
-          WarningCode.gymComfortRelaxed,
-          WarningCode.experienceTierRelaxed,
-        ]),
+        contains(WarningCode.experienceTierRelaxed),
+      );
+      expect(
+        plan.warnings.map((warning) => warning.code),
+        isNot(contains(WarningCode.gymComfortRelaxed)),
       );
     });
 
@@ -352,6 +475,10 @@ void main() {
           .toList(growable: false);
       final plan = successfulPlan(
         _profile(minutes: SessionMinutes.thirty),
+        config: const ProgrammingConfig(
+          machineAffinityBeenAWhile: 0,
+          machineAffinityMostlyFineComfort: 0,
+        ),
         catalog: ContentCatalogData(
           contentVersion: 'dangling-swap-fixture',
           exercises: baseExercises,

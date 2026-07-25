@@ -24,7 +24,11 @@ Iterable<ProgressionInput> sweep({List<EffortLevel?>? levels}) sync* {
   const repsSpread = <int>[5, 8, 10, 12, 15];
   // Every effort target the shipped goals use: RPE 6 (feel healthier), 7 (toned,
   // and every novice), 8 (stronger, build curves).
-  const targets = <EffortTarget>[EffortTarget(6), EffortTarget(7), EffortTarget(8)];
+  const targets = <EffortTarget>[
+    EffortTarget(6),
+    EffortTarget(7),
+    EffortTarget(8),
+  ];
   final taps = levels ?? <EffortLevel?>[...EffortLevel.values, null];
 
   for (final exercise in loadMetricFixtures) {
@@ -68,10 +72,36 @@ void main() {
       expect(
         loads.isRepresentable(load),
         isTrue,
-        reason: '${input.profile.resistanceEquipment.name} '
+        reason:
+            '${input.profile.resistanceEquipment.name} '
             '${input.unitSystem.name}: ${load.value}kg is not on the ladder '
             '($loads) — $decision',
       );
+    }
+  });
+
+  test('assisted-stack loads are representable and never exceed zero', () {
+    for (final unitSystem in UnitSystem.values) {
+      final loads = config.availableLoads(assistedPullUp, unitSystem);
+      for (var rung = 0; rung <= 15; rung++) {
+        final base = loads.shift(loads.floor, rung);
+        for (final level in EffortLevel.values) {
+          final decision = suggester.suggest(
+            inputFor(
+              assistedPullUp,
+              range: compoundRange,
+              unitSystem: unitSystem,
+              lastLoad: base,
+              lastReps: level == EffortLevel.tooHard ? 6 : 12,
+              targetReps: 12,
+              reported: level,
+            ),
+          );
+          final load = decision.externalLoad!;
+          expect(load <= Kg.zero, isTrue, reason: '$decision');
+          expect(loads.isRepresentable(load), isTrue, reason: '$decision');
+        }
+      }
     }
   });
 
@@ -80,7 +110,11 @@ void main() {
       final decision = suggester.suggest(input);
       expect(decision.regime, ProgressionRegime.noFeedback);
       expect(decision.stepsMoved, 0, reason: '$decision');
-      expect(decision.targetReps, input.history!.targetReps, reason: '$decision');
+      expect(
+        decision.targetReps,
+        input.history!.targetReps,
+        reason: '$decision',
+      );
       expect(decision.why, contains(ReasonCode.noFeedbackHold));
     }
   });
@@ -110,7 +144,11 @@ void main() {
   test('the load never moves more than two equipment steps', () {
     for (final input in sweep()) {
       final decision = suggester.suggest(input);
-      expect(decision.stepsMoved.abs(), lessThanOrEqualTo(2), reason: '$decision');
+      expect(
+        decision.stepsMoved.abs(),
+        lessThanOrEqualTo(2),
+        reason: '$decision',
+      );
     }
   });
 
@@ -118,27 +156,41 @@ void main() {
     for (final input in sweep(levels: <EffortLevel?>[EffortLevel.wayTooEasy])) {
       final decision = suggester.suggest(input);
       if (decision.regime != ProgressionRegime.calibration) continue;
-      expect(decision.stepsMoved.abs(), lessThanOrEqualTo(2), reason: '$decision');
+      expect(
+        decision.stepsMoved.abs(),
+        lessThanOrEqualTo(2),
+        reason: '$decision',
+      );
     }
   });
 
   test(
-      'the normal regime moves at most ONE step wherever a step is coarser than the '
-      '±10% cap — the beginner case ENGINE.md names', () {
-    var checked = 0;
-    for (final input in sweep()) {
-      final decision = suggester.suggest(input);
-      if (decision.regime != ProgressionRegime.normal) continue;
-      final loads = config.availableLoads(input.profile, input.unitSystem);
-      final base = loads.snapDown(input.history!.lastLoad);
-      final bodyTerm = input.bodyMass * input.profile.bwContribution;
-      final effective = base + bodyTerm;
-      if (loads.stepAt(base) < effective * config.maxChangeFraction) continue;
-      checked++;
-      expect(decision.stepsMoved.abs(), lessThanOrEqualTo(1), reason: '$decision');
-    }
-    expect(checked, greaterThan(100), reason: 'the coarse-step case must be covered');
-  });
+    'the normal regime moves at most ONE step wherever a step is coarser than the '
+    '±10% cap — the beginner case ENGINE.md names',
+    () {
+      var checked = 0;
+      for (final input in sweep()) {
+        final decision = suggester.suggest(input);
+        if (decision.regime != ProgressionRegime.normal) continue;
+        final loads = config.availableLoads(input.profile, input.unitSystem);
+        final base = loads.snapDown(input.history!.lastLoad);
+        final bodyTerm = input.bodyMass * input.profile.bwContribution;
+        final effective = base + bodyTerm;
+        if (loads.stepAt(base) < effective * config.maxChangeFraction) continue;
+        checked++;
+        expect(
+          decision.stepsMoved.abs(),
+          lessThanOrEqualTo(1),
+          reason: '$decision',
+        );
+      }
+      expect(
+        checked,
+        greaterThan(100),
+        reason: 'the coarse-step case must be covered',
+      );
+    },
+  );
 
   test('the load change never exceeds the cap the config allows', () {
     for (final input in sweep()) {
@@ -150,8 +202,9 @@ void main() {
       final bodyTerm = input.bodyMass * input.profile.bwContribution;
       final oneStep = loads.stepAt(base);
       final calibrating = decision.regime == ProgressionRegime.calibration;
-      final fraction =
-          calibrating ? config.calibrationMaxIncreaseFraction : config.maxChangeFraction;
+      final fraction = calibrating
+          ? config.calibrationMaxIncreaseFraction
+          : config.maxChangeFraction;
       var allowed = (base + bodyTerm) * fraction;
       if (allowed < oneStep) allowed = oneStep;
       final ceiling = oneStep * config.maxStepsPerAdjustment;
@@ -171,12 +224,18 @@ void main() {
   test('target reps stay inside the prescribable window', () {
     for (final input in sweep()) {
       final decision = suggester.suggest(input);
-      final isIsolationLike = input.profile.movementClass.isIsolation ||
+      final isIsolationLike =
+          input.profile.movementClass.isIsolation ||
           input.profile.laterality.isPerSide;
-      final low = isIsolationLike && config.isolationRestartRange.min < input.range.min
+      final low =
+          isIsolationLike && config.isolationRestartRange.min < input.range.min
           ? config.isolationRestartRange.min
           : input.range.min;
-      expect(decision.targetReps, greaterThanOrEqualTo(low), reason: '$decision');
+      expect(
+        decision.targetReps,
+        greaterThanOrEqualTo(low),
+        reason: '$decision',
+      );
       expect(
         decision.targetReps,
         lessThanOrEqualTo(input.range.max),
@@ -207,33 +266,44 @@ void main() {
     }
   });
 
-  test('a step up always resets the reps to the bottom of the window or below the '
-      'previous target', () {
-    for (final input in sweep()) {
-      final decision = suggester.suggest(input);
-      if (decision.stepsMoved <= 0) continue;
-      expect(
-        decision.targetReps,
-        lessThanOrEqualTo(input.range.max),
-        reason: 'double progression must not raise weight and reps together: '
-            '$decision',
-      );
-      expect(decision.why, contains(ReasonCode.weightStep), reason: '$decision');
-    }
-  });
-
-  test('bodyweight-family suggestions are always BodyweightOnly, never a raw load',
-      () {
-    for (final input in sweep()) {
-      final decision = suggester.suggest(input);
-      if (input.profile.resistanceEquipment != ResistanceEquipment.bodyweight) {
-        continue;
+  test(
+    'a step up always resets the reps to the bottom of the window or below the '
+    'previous target',
+    () {
+      for (final input in sweep()) {
+        final decision = suggester.suggest(input);
+        if (decision.stepsMoved <= 0) continue;
+        expect(
+          decision.targetReps,
+          lessThanOrEqualTo(input.range.max),
+          reason:
+              'double progression must not raise weight and reps together: '
+              '$decision',
+        );
+        expect(
+          decision.why,
+          contains(ReasonCode.weightStep),
+          reason: '$decision',
+        );
       }
-      expect(
-        decision.suggestion,
-        anyOf(isA<BodyweightOnly>(), isA<NeedsCalibration>()),
-        reason: '$decision',
-      );
-    }
-  });
+    },
+  );
+
+  test(
+    'bodyweight-family suggestions are always BodyweightOnly, never a raw load',
+    () {
+      for (final input in sweep()) {
+        final decision = suggester.suggest(input);
+        if (input.profile.resistanceEquipment !=
+            ResistanceEquipment.bodyweight) {
+          continue;
+        }
+        expect(
+          decision.suggestion,
+          anyOf(isA<BodyweightOnly>(), isA<NeedsCalibration>()),
+          reason: '$decision',
+        );
+      }
+    },
+  );
 }

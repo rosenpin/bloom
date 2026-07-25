@@ -112,6 +112,20 @@ const dumbbellBench = ExerciseData(
   supportEquipment: SupportEquipment.bench,
 );
 
+/// #29 Assisted Pull-Up — assistance is a negative external load on a signed
+/// stack. Progression moves toward zero.
+const assistedPullUp = ExerciseData(
+  id: 'bodyweight-assisted-chin-up',
+  slug: 'bodyweight-assisted-chin-up',
+  name: 'Assisted Pull-Up',
+  blockRole: BlockRole.upperPull,
+  movementClass: MovementClass.compoundUpperPull,
+  metricType: MetricType.loadReps,
+  resistanceEquipment: ResistanceEquipment.assistedStack,
+  bwContribution: 0.85,
+  machineLeanOk: true,
+);
+
 /// #28 Single-Arm Dumbbell Row — per side, so it takes the isolation rep window.
 const singleArmRow = ExerciseData(
   id: 'dumbbell-row-unilateral',
@@ -228,24 +242,23 @@ ProgressionInput inputFor(
   bool noHistory = false,
   Kg bodyMass = referenceBodyMass,
   int daysSinceLastSession = 3,
-}) =>
-    ProgressionInput(
-      profile: exercise,
-      range: range,
-      effort: effort,
-      unitSystem: unitSystem,
-      bodyMass: bodyMass,
-      daysSinceLastSession: daysSinceLastSession,
-      history: noHistory
-          ? null
-          : ExerciseSnapshot(
-              lastLoad: lastLoad ?? const Kg(12),
-              lastReps: lastReps,
-              targetReps: targetReps ?? range.min,
-              reportedEffort: reported,
-              lastHold: lastHold,
-            ),
-    );
+}) => ProgressionInput(
+  profile: exercise,
+  range: range,
+  effort: effort,
+  unitSystem: unitSystem,
+  bodyMass: bodyMass,
+  daysSinceLastSession: daysSinceLastSession,
+  history: noHistory
+      ? null
+      : ExerciseSnapshot(
+          lastLoad: lastLoad ?? const Kg(12),
+          lastReps: lastReps,
+          targetReps: targetReps ?? range.min,
+          reportedEffort: reported,
+          lastHold: lastHold,
+        ),
+);
 
 /// The compound rep window used by "toned & defined" (§2).
 const compoundRange = RepRange(10, 12);

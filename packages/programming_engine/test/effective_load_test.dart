@@ -11,7 +11,10 @@ import 'support/fixtures.dart';
 
 void main() {
   group('the conversion', () {
-    const goblet = EffectiveLoad(bwContribution: 0.65, bodyMass: referenceBodyMass);
+    const goblet = EffectiveLoad(
+      bwContribution: 0.65,
+      bodyMass: referenceBodyMass,
+    );
 
     test('a 70 kg user holding 12 kg on a goblet squat moves 57.5 kg', () {
       expect(goblet.bodyTerm, const Kg(45.5));
@@ -21,10 +24,21 @@ void main() {
     test('external and effective round-trip exactly', () {
       const contributions = <double>[0, 0.1, 0.4, 0.65, 0.85, 1];
       const masses = <Kg>[Kg(45), Kg(58), Kg(70), Kg(95), Kg(120)];
-      const externals = <Kg>[Kg.zero, Kg(2), Kg(12), Kg(22.5), Kg(100)];
+      const externals = <Kg>[
+        Kg(-50),
+        Kg(-30),
+        Kg.zero,
+        Kg(2),
+        Kg(12),
+        Kg(22.5),
+        Kg(100),
+      ];
       for (final contribution in contributions) {
         for (final mass in masses) {
-          final math = EffectiveLoad(bwContribution: contribution, bodyMass: mass);
+          final math = EffectiveLoad(
+            bwContribution: contribution,
+            bodyMass: mass,
+          );
           for (final external in externals) {
             expect(
               math.external(math.effective(external)).value,
@@ -46,10 +60,26 @@ void main() {
     });
 
     test('a pure bodyweight movement still has a load to scale', () {
-      const plankMath = EffectiveLoad(bwContribution: 1, bodyMass: referenceBodyMass);
+      const plankMath = EffectiveLoad(
+        bwContribution: 1,
+        bodyMass: referenceBodyMass,
+      );
       expect(plankMath.effective(Kg.zero), referenceBodyMass);
       expect(plankMath.external(referenceBodyMass), Kg.zero);
     });
+
+    test(
+      'assisted-stack external load subtracts assistance from body mass',
+      () {
+        const assisted = EffectiveLoad(
+          bwContribution: 0.85,
+          bodyMass: referenceBodyMass,
+        );
+        expect(assisted.bodyTerm, const Kg(59.5));
+        expect(assisted.effective(const Kg(-30)), const Kg(29.5));
+        expect(assisted.external(const Kg(29.5)), const Kg(-30));
+      },
+    );
 
     test('externalOnly is the no-body-mass degradation', () {
       expect(EffectiveLoad.externalOnly.effective(const Kg(12)), const Kg(12));
@@ -82,13 +112,13 @@ void main() {
 
     test('bw_contribution widens the ±10% cap in external terms', () {
       ProgressionInput inputWith(ExerciseData exercise) => inputFor(
-            exercise,
-            range: compoundRange,
-            lastLoad: const Kg(12),
-            lastReps: 14,
-            targetReps: 10,
-            reported: EffortLevel.wayTooEasy,
-          );
+        exercise,
+        range: compoundRange,
+        lastLoad: const Kg(12),
+        lastReps: 14,
+        targetReps: 10,
+        reported: EffortLevel.wayTooEasy,
+      );
 
       final withBw = suggester.suggest(inputWith(gobletSquat));
       final withoutBw = suggester.suggest(inputWith(externalOnlyTwin));
@@ -99,8 +129,11 @@ void main() {
       expect(withoutBw.stepsMoved, 1);
     });
 
-    test('a 120 kg user is not asked for the same relative jump as a 50 kg user', () {
-      LoadDecision decisionFor(Kg bodyMass) => suggester.suggest(inputFor(
+    test(
+      'a 120 kg user is not asked for the same relative jump as a 50 kg user',
+      () {
+        LoadDecision decisionFor(Kg bodyMass) => suggester.suggest(
+          inputFor(
             gobletSquat,
             range: compoundRange,
             lastLoad: const Kg(12),
@@ -108,23 +141,27 @@ void main() {
             targetReps: 10,
             reported: EffortLevel.wayTooEasy,
             bodyMass: bodyMass,
-          ));
+          ),
+        );
 
-      final lighter = decisionFor(const Kg(50));
-      final heavier = decisionFor(const Kg(120));
-      expect(lighter.stepsMoved, lessThanOrEqualTo(heavier.stepsMoved));
-      expect(heavier.stepsMoved, lessThanOrEqualTo(2));
-    });
+        final lighter = decisionFor(const Kg(50));
+        final heavier = decisionFor(const Kg(120));
+        expect(lighter.stepsMoved, lessThanOrEqualTo(heavier.stepsMoved));
+        expect(heavier.stepsMoved, lessThanOrEqualTo(2));
+      },
+    );
 
     test('a bodyweight movement can progress at all, which is the point', () {
-      final decision = suggester.suggest(inputFor(
-        gluteBridgeAdded,
-        range: isolationRange,
-        lastLoad: Kg.zero,
-        lastReps: 15,
-        targetReps: 15,
-        reported: EffortLevel.wayTooEasy,
-      ));
+      final decision = suggester.suggest(
+        inputFor(
+          gluteBridgeAdded,
+          range: isolationRange,
+          lastLoad: Kg.zero,
+          lastReps: 15,
+          targetReps: 15,
+          reported: EffortLevel.wayTooEasy,
+        ),
+      );
       expect(decision.suggestion, isA<BodyweightOnly>());
       expect(decision.stepsMoved, greaterThan(0));
     });

@@ -24,7 +24,9 @@ enum MovementClass {
   cardio;
 
   bool get isCompound =>
-      this == compoundLower || this == compoundUpperPush || this == compoundUpperPull;
+      this == compoundLower ||
+      this == compoundUpperPush ||
+      this == compoundUpperPull;
 
   bool get isIsolation => this == isolationLower || this == isolationUpper;
 
@@ -47,10 +49,15 @@ enum BlockRole {
 
   /// Primaries are never dropped by "shorten today" (§8).
   bool get isPrimary =>
-      this == lowerHinge || this == lowerSquat || this == upperPush || this == upperPull;
+      this == lowerHinge ||
+      this == lowerSquat ||
+      this == upperPush ||
+      this == upperPull;
 
   bool get isIsolation =>
-      this == gluteIsolation || this == legIsolation || this == armShoulderIsolation;
+      this == gluteIsolation ||
+      this == legIsolation ||
+      this == armShoulderIsolation;
 }
 
 /// What a set of this exercise is measured in.
@@ -75,16 +82,31 @@ enum ResistanceEquipment {
 
   /// Selectorized machine — pin steps.
   machine,
+
+  /// Gravitron-style stack. The selected assistance is stored as a negative
+  /// external load, from the negative stack maximum up to zero.
+  assistedStack,
+
   cable,
 
   /// Bodyweight, optionally with added load.
   bodyweight;
 
-  bool get isPinLoaded => this == machine || this == cable;
+  bool get isPinLoaded =>
+      this == machine || this == assistedStack || this == cable;
 }
 
 /// What she needs besides the resistance itself — used for swap filtering.
-enum SupportEquipment { none, bench, inclineBench, rack, mat, box, platform, hipThrustPad }
+enum SupportEquipment {
+  none,
+  bench,
+  inclineBench,
+  rack,
+  mat,
+  box,
+  platform,
+  hipThrustPad,
+}
 
 enum MuscleGroup {
   glutes,
@@ -126,7 +148,8 @@ final class MuscleTarget {
   int get hashCode => Object.hash(muscle, role);
 
   @override
-  String toString() => '${muscle.name}:${role == MuscleRole.primary ? 'P' : 'S'}';
+  String toString() =>
+      '${muscle.name}:${role == MuscleRole.primary ? 'P' : 'S'}';
 }
 
 /// Authored now, used later — joint-load balancing is a future feature (⏸ in
@@ -160,7 +183,12 @@ enum DifficultyTier { beginner, intermediate, advanced }
 
 /// How much lifting she has done before. Quiz-derived; ordered, so
 /// `index >= exercise.minExperience.index` is the eligibility test.
-enum ExperienceTier { neverTrained, returningAfterBreak, trainsSometimes, trainsRegularly }
+enum ExperienceTier {
+  neverTrained,
+  returningAfterBreak,
+  trainsSometimes,
+  trainsRegularly,
+}
 
 /// How intimidating the setup is in a commercial gym. Gym comfort is the first
 /// dimension the assembler may relax when a block would otherwise be empty.
@@ -220,12 +248,13 @@ abstract interface class Exercise implements LoadProfile {
   /// progressively more comfortable profiles accept more involved setups.
   IntimidationTier get intimidationTier;
 
-  /// Hard age and safety gates. Unlike comfort and experience, these are never
-  /// relaxed by plan assembly.
+  /// Hard age and safety gates. Like low-comfort intimidation, these are never
+  /// relaxed by plan assembly; experience alone has a warned fallback.
   AgeEligibility get ageEligibility;
   SafetyEligibility get safetyEligibility;
 
-  /// Suitable as a machine-lean alternative for older novices (§8).
+  /// Authored as a machine-lean variant for §8's affinity quota. This includes
+  /// literal machines plus supported calibration-floor variants.
   bool get machineLeanOk;
 
   /// A seated variant, preferred for 60+ where equivalent (§8).
