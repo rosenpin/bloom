@@ -22,6 +22,9 @@ Iterable<ProgressionInput> sweep({List<EffortLevel?>? levels}) sync* {
   );
   const loads = <Kg>[Kg(2), Kg(5), Kg(12), Kg(22.5), Kg(45), Kg(100)];
   const repsSpread = <int>[5, 8, 10, 12, 15];
+  // Every effort target the shipped goals use: RPE 6 (feel healthier), 7 (toned,
+  // and every novice), 8 (stronger, build curves).
+  const targets = <EffortTarget>[EffortTarget(6), EffortTarget(7), EffortTarget(8)];
   final taps = levels ?? <EffortLevel?>[...EffortLevel.values, null];
 
   for (final exercise in loadMetricFixtures) {
@@ -30,16 +33,19 @@ Iterable<ProgressionInput> sweep({List<EffortLevel?>? levels}) sync* {
       for (final load in loads) {
         for (final lastReps in repsSpread) {
           for (final targetReps in <int>[range.min, range.max]) {
-            for (final tap in taps) {
-              yield inputFor(
-                exercise,
-                range: range,
-                unitSystem: unitSystem,
-                lastLoad: load,
-                lastReps: lastReps,
-                targetReps: targetReps,
-                reported: tap,
-              );
+            for (final effort in targets) {
+              for (final tap in taps) {
+                yield inputFor(
+                  exercise,
+                  range: range,
+                  effort: effort,
+                  unitSystem: unitSystem,
+                  lastLoad: load,
+                  lastReps: lastReps,
+                  targetReps: targetReps,
+                  reported: tap,
+                );
+              }
             }
           }
         }
@@ -50,7 +56,7 @@ Iterable<ProgressionInput> sweep({List<EffortLevel?>? levels}) sync* {
 
 void main() {
   test('the sweep is big enough to be worth calling a sweep', () {
-    expect(sweep().length, greaterThan(2000));
+    expect(sweep().length, greaterThan(6000));
   });
 
   test('every suggested load is representable on its equipment family', () {

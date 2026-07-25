@@ -47,6 +47,28 @@ enum WarningCode {
   /// A load-metric exercise had no representable load at all; fell back to a rep
   /// target.
   noRepresentableLoad,
+
+  /// Plan assembly exhausted the profile's gym-comfort candidates for a block
+  /// and retried at the most permissive comfort level.
+  gymComfortRelaxed,
+
+  /// Plan assembly still could not fill a block after relaxing gym comfort and
+  /// retried at the most permissive experience tier.
+  experienceTierRelaxed,
+
+  /// The catalog did not have enough distinct eligible exercises to deduplicate
+  /// this role across the whole week. The day itself remains deduplicated.
+  weeklyDedupRelaxed,
+
+  /// No exercise survived the fixed fallback ladder, so the block was omitted.
+  blockDropped,
+
+  /// A swap edge pointed at an absent or retired exercise and was skipped.
+  danglingSwapSkipped,
+
+  /// A swap edge failed its role, difficulty, or rep-window compatibility guard
+  /// and was skipped.
+  invalidSwapSkipped,
 }
 
 final class EngineWarning {

@@ -58,7 +58,10 @@ final class RepScheme {
         range: range,
         effort: effort.rpe > config.noviceMaxRpe ? EffortTarget(config.noviceMaxRpe) : effort,
         rest: rest,
-        extraSetOnEmphasis: extraSetOnEmphasis,
+        // The +1 emphasis set is part of the unlocked goal scheme. Retaining it
+        // here would let a novice Build Curves dose reach 4 sets despite the
+        // explicit first-four-weeks cap of 3.
+        extraSetOnEmphasis: false,
       );
 
   /// The opening dose for this scheme: top of the set count, bottom of the rep
@@ -141,6 +144,7 @@ final class ProgrammingConfig {
     this.bodyweightRepStep = 1,
     this.exerciseCountByMinutes = const {30: 4, 45: 6, 60: 8},
     this.warmUpMinutes = 5,
+    this.olderWarmUpMinutes = 7,
     this.machineLeanAge = 50,
     this.seatedPreferenceAge = 60,
     this.reportedRpeByLevel = _defaultReportedRpe,
@@ -273,6 +277,10 @@ final class ProgrammingConfig {
   /// One generic 5 minutes, bike or incline walk. RESOLVED: no per-exercise ramp
   /// sets in v1.
   final int warmUpMinutes;
+
+  /// The spec says 60+ gets a longer warm-up but does not pin a duration. Seven
+  /// minutes is the v1 authored default and remains configurable.
+  final int olderWarmUpMinutes;
 
   /// Older novices (roughly 50+ *and* never trained) lean toward machine variants.
   final int machineLeanAge;

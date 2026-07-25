@@ -162,6 +162,18 @@ enum DifficultyTier { beginner, intermediate, advanced }
 /// `index >= exercise.minExperience.index` is the eligibility test.
 enum ExperienceTier { neverTrained, returningAfterBreak, trainsSometimes, trainsRegularly }
 
+/// How intimidating the setup is in a commercial gym. Gym comfort is the first
+/// dimension the assembler may relax when a block would otherwise be empty.
+enum IntimidationTier { low, moderate, high }
+
+/// A hard age boundary, separate from the 60+ seated *preference*. The fallback
+/// ladder never relaxes this value.
+enum AgeEligibility { allAges, under60, under50 }
+
+/// Whether the movement is safe to prescribe in a self-guided product. The
+/// assembler never relaxes this value.
+enum SafetyEligibility { selfGuided, instructorRequired }
+
 /// The slice of an exercise the load math needs. Kept narrow so `LoadSuggester`
 /// depends on five attributes rather than the whole content row.
 abstract interface class LoadProfile {
@@ -203,6 +215,15 @@ abstract interface class Exercise implements LoadProfile {
 
   /// Eligibility: she needs at least this much experience.
   ExperienceTier get minExperience;
+
+  /// Eligibility: low-comfort profiles accept only [IntimidationTier.low], while
+  /// progressively more comfortable profiles accept more involved setups.
+  IntimidationTier get intimidationTier;
+
+  /// Hard age and safety gates. Unlike comfort and experience, these are never
+  /// relaxed by plan assembly.
+  AgeEligibility get ageEligibility;
+  SafetyEligibility get safetyEligibility;
 
   /// Suitable as a machine-lean alternative for older novices (§8).
   bool get machineLeanOk;
@@ -250,6 +271,9 @@ final class ExerciseData implements Exercise {
     this.stabilityRank = 3,
     this.difficultyTier = DifficultyTier.beginner,
     this.minExperience = ExperienceTier.neverTrained,
+    this.intimidationTier = IntimidationTier.low,
+    this.ageEligibility = AgeEligibility.allAges,
+    this.safetyEligibility = SafetyEligibility.selfGuided,
     this.machineLeanOk = false,
     this.seatedVariant = false,
     this.supportEquipment = SupportEquipment.none,
@@ -296,6 +320,12 @@ final class ExerciseData implements Exercise {
   final DifficultyTier difficultyTier;
   @override
   final ExperienceTier minExperience;
+  @override
+  final IntimidationTier intimidationTier;
+  @override
+  final AgeEligibility ageEligibility;
+  @override
+  final SafetyEligibility safetyEligibility;
   @override
   final bool machineLeanOk;
   @override
@@ -357,4 +387,38 @@ final class SwapEdge {
 
   @override
   String toString() => 'SwapEdge($fromId -> $toId, ${reason.name}, #$rank)';
+}
+
+/// A versioned, deterministic content snapshot. Exercise order is authorial:
+/// within each block role it is the candidate order the assembler rotates over.
+abstract interface class ContentCatalog {
+  String get contentVersion;
+  List<Exercise> get exercises;
+  List<SwapEdge> get swapEdges;
+
+  /// Only these authored block roles advance with `Profile.mesocycleIndex`.
+  Set<BlockRole> get rotatingBlockRoles;
+}
+
+/// Immutable in-memory implementation used by the seed/test fixture and web
+/// funnel. The app's persisted content adapter can implement [ContentCatalog]
+/// directly.
+final class ContentCatalogData implements ContentCatalog {
+  ContentCatalogData({
+    required this.contentVersion,
+    required Iterable<Exercise> exercises,
+    required Iterable<SwapEdge> swapEdges,
+    required Iterable<BlockRole> rotatingBlockRoles,
+  }) : exercises = List<Exercise>.unmodifiable(exercises),
+       swapEdges = List<SwapEdge>.unmodifiable(swapEdges),
+       rotatingBlockRoles = Set<BlockRole>.unmodifiable(rotatingBlockRoles);
+
+  @override
+  final String contentVersion;
+  @override
+  final List<Exercise> exercises;
+  @override
+  final List<SwapEdge> swapEdges;
+  @override
+  final Set<BlockRole> rotatingBlockRoles;
 }

@@ -343,6 +343,88 @@ void main() {
     ),
   ];
 
+  // ── §4.7 at effort targets other than RPE 7 ────────────────────────────────
+  // Two of the four shipped goals target RPE 8 and one targets RPE 6, and the
+  // easier week is just an easier target — so a non-7 target is the normal case,
+  // not an edge case.
+  final otherTargets = <Row>[
+    row(
+      rule: '§4.7 at a "Feel healthier" target (RPE 6) "just right" still moves: the '
+          'tap is answered against the week\'s target, so it means "I hit what you '
+          'asked for", not "RPE 7"',
+      input: inputFor(
+        gobletSquat,
+        range: compoundRange,
+        effort: const EffortTarget(6),
+        lastLoad: const Kg(12),
+        lastReps: 10,
+        targetReps: 10,
+        reported: EffortLevel.justRight,
+      ),
+      regime: ProgressionRegime.normal,
+      load: const Kg(12),
+      reps: 11,
+      steps: 0,
+      // The arithmetic wants a small decrease (she worked harder than the RPE 6
+      // target); §4.3 holds the load and §4.7 spends the progress on reps.
+      why: [ReasonCode.asymmetricDownRuleHold, ReasonCode.repsProgress],
+    ),
+    row(
+      rule: '§4.7 at a RPE 6 target, "just right" at the top of the range still steps '
+          'the weight up',
+      input: inputFor(
+        gobletSquat,
+        range: compoundRange,
+        effort: const EffortTarget(6),
+        lastLoad: const Kg(12),
+        lastReps: 12,
+        targetReps: 12,
+        reported: EffortLevel.justRight,
+      ),
+      regime: ProgressionRegime.normal,
+      load: const Kg(14),
+      reps: 10,
+      steps: 1,
+      why: [ReasonCode.topOfRangeStepUp, ReasonCode.weightStep],
+    ),
+    row(
+      rule: '§4.3 at a "Stronger" target (RPE 8), "harder than I\'d like" holds both '
+          'load and reps even though it is numerically on target — she just told us '
+          'it was harder than she wanted',
+      input: inputFor(
+        gobletSquat,
+        range: const RepRange(6, 8),
+        effort: const EffortTarget(8),
+        lastLoad: const Kg(12),
+        lastReps: 8,
+        targetReps: 8,
+        reported: EffortLevel.harderThanIdLike,
+      ),
+      regime: ProgressionRegime.normal,
+      load: const Kg(12),
+      reps: 8,
+      steps: 0,
+    ),
+    row(
+      rule: '§4.5 at a RPE 8 target, "just right" is *easier* than target, so the '
+          'weight moves at the top of the range',
+      input: inputFor(
+        gobletSquat,
+        range: const RepRange(6, 8),
+        effort: const EffortTarget(8),
+        lastLoad: const Kg(12),
+        lastReps: 8,
+        targetReps: 8,
+        reported: EffortLevel.justRight,
+      ),
+      regime: ProgressionRegime.normal,
+      load: const Kg(14),
+      reps: 6,
+      steps: 1,
+      why: [ReasonCode.topOfRangeStepUp, ReasonCode.weightStep, ReasonCode.repsReset],
+    ),
+  ];
+
   // ── §4 Cold start, bodyweight and timed ────────────────────────────────────
   final coldStartAndMetrics = <Row>[
     row(
@@ -659,6 +741,7 @@ void main() {
     '§4.4 deadband': deadband,
     '§4.5 discretization': discretization,
     '§4.6–§4.7 feedback rules': feedbackRules,
+    '§4.7 at other effort targets': otherTargets,
     '§4 cold start, bodyweight and timed': coldStartAndMetrics,
     '§3 weight increments': increments,
     '§3 isolation and single-side work': isolationRules,

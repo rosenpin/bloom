@@ -217,6 +217,23 @@ final class _Pass {
   int get resetReps =>
       isIsolationLike ? window.clamp(config.isolationRestartRange.min) : range.min;
 
+  /// Whether this report licenses *any* progress this session.
+  ///
+  /// Keyed to the label first, the arithmetic second. §4's question copy is phrased
+  /// against the week's target ("could you have done 2 more?"), so "just right"
+  /// means "I hit what you asked for" whatever the target RPE is — and §4.7 says
+  /// that always moves. Without this, a "Feel healthier" user (target RPE 6, 4 RIR)
+  /// tapping "just right" (3 RIR) would read as *harder* than target every session
+  /// and never progress at all.
+  ///
+  /// The same rule going the other way: anything she calls harder than "just right"
+  /// never buys progress, even where the arithmetic says she is on target — at an
+  /// RPE 8 target, "harder than I'd like" is numerically at target, but she has just
+  /// told us it was harder than she'd like.
+  bool supportsProgress(InterpretedEffort report) =>
+      report.level.index <= EffortLevel.justRight.index ||
+      report.rir > input.effort.rir;
+
   LoadDecision run() {
     switch (input.profile.metricType) {
       case MetricType.timed:
@@ -330,7 +347,7 @@ final class _Pass {
       capped = false;
     }
 
-    final atOrEasierThanTarget = report.rir >= input.effort.rir;
+    final progressAllowed = supportsProgress(report);
 
     // §4.3 asymmetric down-rule.
     if (delta.isNegative &&
@@ -344,7 +361,7 @@ final class _Pass {
     // buys more load, even when she beat the rep target and the formula therefore
     // asks for more. §1.3 — when the feedback is ambiguous, hold. (ENGINE.md's
     // invariant "'too hard' ⇒ load never increases" depends on this.)
-    if (delta.isPositive && !atOrEasierThanTarget) {
+    if (delta.isPositive && !progressAllowed) {
       delta = Kg.zero;
       heldByEffortAboveTarget = true;
       capped = false;
@@ -392,7 +409,7 @@ final class _Pass {
     }
     // No load change. §4.7: at target effort progress still has to come from
     // somewhere, so it comes from reps.
-    if (atOrEasierThanTarget) {
+    if (progressAllowed) {
       return _spendOnReps(
         base: base,
         targetReps: targetReps,
@@ -604,7 +621,7 @@ final class _Pass {
       );
     }
     final report = interpretEffort(level, config);
-    if (report.rir < input.effort.rir) {
+    if (!supportsProgress(report)) {
       // Harder than target: meet her where she is, never above the target.
       final next = licensesDecrease(
         effort: report,
@@ -668,7 +685,7 @@ final class _Pass {
       return _timedDecision(lastHold);
     }
     final report = interpretEffort(level, config);
-    if (report.rir < input.effort.rir) {
+    if (!supportsProgress(report)) {
       if (report.rpe >= 9) {
         why.add(ReasonCode.loadDecrease);
         return _timedDecision(_shiftHold(lastHold, -1));
