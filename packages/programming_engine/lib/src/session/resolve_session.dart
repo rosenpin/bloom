@@ -1,7 +1,6 @@
 /// Session-resolve time: plan structure meets the folded event log.
 library;
 
-import 'package:collection/collection.dart';
 import 'package:meta/meta.dart';
 
 import '../config/programming_config.dart';
@@ -9,7 +8,6 @@ import '../content/exercise.dart';
 import '../core/dose.dart';
 import '../core/effort.dart';
 import '../core/events.dart';
-import '../core/load_suggestion.dart';
 import '../core/prescription.dart';
 import '../core/reason_code.dart';
 import '../core/units.dart';
@@ -19,9 +17,10 @@ import '../history/training_history.dart';
 import '../plan/plan.dart';
 import '../progression/layoff.dart';
 import '../progression/load_suggester.dart';
+import 'session_state.dart';
 
-/// Step 5 intentionally has no active session modifiers. The type is present so
-/// the public call shape stays stable when shorten/low-energy arrive in step 6.
+/// Resolve-time modifiers remain empty in v1. Shorten and low-energy are events
+/// consumed by `advanceSession`, so replay owns those mid-session decisions.
 final class SessionModifiers {
   const SessionModifiers();
 
@@ -30,109 +29,6 @@ final class SessionModifiers {
 
   @override
   int get hashCode => (SessionModifiers).hashCode;
-}
-
-final class SessionResolution {
-  SessionResolution({
-    required this.date,
-    required this.planRef,
-    required this.mesocycleIndex,
-    required this.mesocycleWeekIndex,
-    required this.absoluteWeekIndex,
-    required this.weekKind,
-    required this.dayIndex,
-    required this.dayKind,
-    required this.daysSinceLastSession,
-    required Iterable<ExercisePrescription> prescriptions,
-    required Iterable<EngineWarning> warnings,
-  }) : prescriptions = List<ExercisePrescription>.unmodifiable(prescriptions),
-       warnings = List<EngineWarning>.unmodifiable(warnings);
-
-  final DateTime date;
-  final String planRef;
-  final int mesocycleIndex;
-  final int mesocycleWeekIndex;
-  final int absoluteWeekIndex;
-  final MesocycleWeekKind weekKind;
-  final int dayIndex;
-  final PlanDayKind? dayKind;
-  final int? daysSinceLastSession;
-  final List<ExercisePrescription> prescriptions;
-  final List<EngineWarning> warnings;
-
-  SessionRecord toRecord({
-    required String sessionId,
-    required Iterable<SessionEvent> events,
-  }) => SessionRecord(
-    sessionId: sessionId,
-    date: date,
-    planRef: planRef,
-    mesocycleIndex: mesocycleIndex,
-    mesocycleWeekIndex: mesocycleWeekIndex,
-    absoluteWeekIndex: absoluteWeekIndex,
-    dayIndex: dayIndex,
-    weekKind: weekKind,
-    events: events,
-  );
-
-  /// Stable semantic bytes for replay and run-twice determinism checks.
-  String toCanonicalString() {
-    final output = StringBuffer()
-      ..writeln('date=${date.toUtc().toIso8601String()}')
-      ..writeln('plan=$planRef')
-      ..writeln('mesocycle=$mesocycleIndex')
-      ..writeln('week=$absoluteWeekIndex/$mesocycleWeekIndex:${weekKind.name}')
-      ..writeln('day=$dayIndex:${dayKind?.name ?? 'none'}')
-      ..writeln('daysSince=${daysSinceLastSession ?? 'none'}');
-    for (final prescription in prescriptions) {
-      final dose = prescription.dose;
-      output
-        ..write('exercise=${prescription.exerciseId}:')
-        ..write(_doseCanonical(dose))
-        ..write(':${prescription.laterality.name}:')
-        ..write(_suggestionCanonical(prescription.suggestion))
-        ..write(':bridge=${_bridgeCanonical(prescription.bridge)}')
-        ..write(':why=')
-        ..writeln(prescription.why.map((reason) => reason.name).join(','));
-    }
-    for (final warning in warnings) {
-      output.writeln('warning=${warning.code.name}:${warning.detail}');
-    }
-    return output.toString();
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is SessionResolution &&
-      other.date == date &&
-      other.planRef == planRef &&
-      other.mesocycleIndex == mesocycleIndex &&
-      other.mesocycleWeekIndex == mesocycleWeekIndex &&
-      other.absoluteWeekIndex == absoluteWeekIndex &&
-      other.weekKind == weekKind &&
-      other.dayIndex == dayIndex &&
-      other.dayKind == dayKind &&
-      other.daysSinceLastSession == daysSinceLastSession &&
-      const ListEquality<ExercisePrescription>().equals(
-        other.prescriptions,
-        prescriptions,
-      ) &&
-      const ListEquality<EngineWarning>().equals(other.warnings, warnings);
-
-  @override
-  int get hashCode => Object.hash(
-    date,
-    planRef,
-    mesocycleIndex,
-    mesocycleWeekIndex,
-    absoluteWeekIndex,
-    weekKind,
-    dayIndex,
-    dayKind,
-    daysSinceLastSession,
-    Object.hashAll(prescriptions),
-    Object.hashAll(warnings),
-  );
 }
 
 /// Total session resolver. Malformed/partial plan state degrades to a stable
@@ -206,8 +102,23 @@ final class _ResolutionPass {
         dayIndex: 0,
         dayKind: null,
         daysSinceLastSession: daysSinceLastSession,
-        prescriptions: const <ExercisePrescription>[],
+        exercises: const <SessionExerciseEntry>[],
+        budget: const SessionBudgetInfo(
+          plannedMinutes: 0,
+          availableMinutes: 0,
+          completedSetCount: 0,
+        ),
         warnings: warnings,
+        reasonCodes: const <ReasonCode>[],
+        pendingPlanEditSuggestions: const <PendingPlanEditSuggestion>[],
+        pendingSwapSuggestions: const <SessionSwapSuggestion>[],
+        pendingExclusions: const <String>{},
+        excludedExerciseIds: snapshot.excludedExerciseIds,
+        events: const <SessionEvent>[],
+        historySnapshot: snapshot,
+        unitSystem: history.unitSystem,
+        bodyMass: history.bodyMass,
+        config: config,
       );
     }
 
@@ -223,6 +134,23 @@ final class _ResolutionPass {
       );
     }
 
+    final entries = <SessionExerciseEntry>[
+      for (var index = 0; index < prescriptions.length; index++)
+        SessionExerciseEntry.pending(
+          planExercise: _entryPlanExercise(
+            planDay.exercises[index],
+            prescriptions[index],
+          ),
+          prescription: prescriptions[index],
+        ),
+    ];
+    final reasonCodes = <ReasonCode>[];
+    for (final prescription in prescriptions) {
+      for (final reason in prescription.why) {
+        if (!reasonCodes.contains(reason)) reasonCodes.add(reason);
+      }
+    }
+    final plannedMinutes = _plannedMinutes(planDay);
     return SessionResolution(
       date: date,
       planRef: planRef,
@@ -233,9 +161,62 @@ final class _ResolutionPass {
       dayIndex: planDay.dayIndex,
       dayKind: planDay.kind,
       daysSinceLastSession: daysSinceLastSession,
-      prescriptions: prescriptions,
+      exercises: entries,
+      budget: SessionBudgetInfo(
+        plannedMinutes: plannedMinutes,
+        availableMinutes: plannedMinutes,
+        completedSetCount: 0,
+      ),
       warnings: warnings,
+      reasonCodes: reasonCodes,
+      pendingPlanEditSuggestions: const <PendingPlanEditSuggestion>[],
+      pendingSwapSuggestions: const <SessionSwapSuggestion>[],
+      pendingExclusions: const <String>{},
+      excludedExerciseIds: snapshot.excludedExerciseIds,
+      events: const <SessionEvent>[],
+      historySnapshot: snapshot,
+      unitSystem: history.unitSystem,
+      bodyMass: history.bodyMass,
+      config: config,
     );
+  }
+
+  PlanExercise _entryPlanExercise(
+    PlanExercise planned,
+    ExercisePrescription prescription,
+  ) {
+    if (planned.exerciseId == prescription.exerciseId) return planned;
+    for (final candidate in planned.orderedSwapCandidates) {
+      if (candidate.exerciseId == prescription.exerciseId) {
+        return PlanExercise(
+          exerciseId: candidate.exerciseId,
+          name: candidate.name,
+          blockRole: candidate.blockRole,
+          movementClass: candidate.movementClass,
+          metricType: candidate.metricType,
+          laterality: candidate.laterality,
+          difficultyTier: candidate.difficultyTier,
+          resistanceEquipment: candidate.resistanceEquipment,
+          supportEquipment: candidate.supportEquipment,
+          bwContribution: candidate.bwContribution,
+          loadStepOverride: candidate.loadStepOverride,
+          dropPriority: planned.dropPriority,
+          isEmphasis: planned.isEmphasis,
+          rotatesAcrossMesocycles: false,
+          rotationCandidateIds: const <String>[],
+          orderedSwapCandidates: planned.orderedSwapCandidates,
+          doseByWeekKind: candidate.doseByWeekKind,
+          repRange: candidate.repRange,
+        );
+      }
+    }
+    return planned;
+  }
+
+  int _plannedMinutes(PlanDay day) {
+    if (day.hasCardioFinisher || day.exercises.length >= 7) return 60;
+    if (day.exercises.length >= 5) return 45;
+    return 30;
   }
 
   ExercisePrescription _prescribe(
@@ -360,14 +341,10 @@ final class _ResolutionPass {
         )
         .toList(growable: false);
     candidates.sort((left, right) {
-      final relation = left.patternRelation.index.compareTo(
-        right.patternRelation.index,
-      );
-      if (relation != 0) return relation;
+      final tier = left.tier.compareTo(right.tier);
+      if (tier != 0) return tier;
       final rank = left.rank.compareTo(right.rank);
       if (rank != 0) return rank;
-      final reason = left.reason.index.compareTo(right.reason.index);
-      if (reason != 0) return reason;
       return left.exerciseId.compareTo(right.exerciseId);
     });
     if (candidates.isNotEmpty) {
@@ -547,29 +524,3 @@ int _calendarDaysBetween(DateTime earlier, DateTime later) {
   final second = DateTime.utc(later.year, later.month, later.day);
   return second.difference(first).inDays;
 }
-
-String _doseCanonical(Dose dose) => switch (dose) {
-  RepsDose(:final sets, :final range, :final effort, :final targetReps) =>
-    '${sets}x$range@$targetReps/rpe${effort.rpe}',
-  TimedDose(:final sets, :final hold) => '${sets}x${hold.inSeconds}s',
-};
-
-String _suggestionCanonical(LoadSuggestion suggestion) => switch (suggestion) {
-  SuggestedLoad(:final kg) => 'load=${kg.value}',
-  BodyweightOnly(:final added) => 'bodyweight+${added.value}',
-  NeedsCalibration(:final floor, :final probeReps) =>
-    'calibrate=${floor.value}x$probeReps',
-  RepOrDurationTarget(:final reps, :final hold) =>
-    hold == null ? 'reps=$reps' : 'hold=${hold.inSeconds}',
-};
-
-String _bridgeCanonical(DropBridge? bridge) => switch (bridge) {
-  null => 'none',
-  DropSetBridge(
-    :final backOffLoad,
-    :final backOffRepsMin,
-    :final backOffRepsMax,
-  ) =>
-    'drop=${backOffLoad.value}/$backOffRepsMin-$backOffRepsMax',
-  EasierVariationBridge(:final exerciseId) => 'variation=$exerciseId',
-};

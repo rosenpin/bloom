@@ -486,7 +486,7 @@ void main() {
             SwapEdge(
               fromId: 'dumbbell-goblet-squat',
               toId: 'missing',
-              reason: SwapReason.busy,
+              tier: 1,
               rank: 0,
             ),
           ],
@@ -502,12 +502,7 @@ void main() {
           .firstWhere(
             (exercise) => exercise.exerciseId == 'dumbbell-goblet-squat',
           );
-      expect(
-        goblet.orderedSwapCandidates.where(
-          (candidate) => candidate.reason == SwapReason.busy,
-        ),
-        isNotEmpty,
-      );
+      expect(goblet.orderedSwapCandidates, isNotEmpty);
     });
   });
 }

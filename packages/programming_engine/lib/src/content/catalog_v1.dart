@@ -2,17 +2,16 @@
 ///
 /// values DRAFT pending instructor review
 ///
-/// In particular, `bwContribution`, biomechanics ranks, reason-specific swap
-/// ordering, and copy are seed-quality drafts. IDs and the 40-exercise membership
+/// In particular, `bwContribution`, biomechanics ranks, swap ordering, and copy
+/// are seed-quality drafts. IDs and the 40-exercise membership
 /// follow `docs/EXERCISES.md`.
 library;
 
-import '../core/events.dart';
 import '../core/prescription.dart';
 import 'exercise.dart';
 
 final ContentCatalog catalogV1 = ContentCatalogData(
-  contentVersion: 'catalog-v1-draft-2026-07-25',
+  contentVersion: 'catalog-v1-tiered-swaps-2026-07-25',
   exercises: _exercises,
   swapEdges: _swapEdges,
   rotatingBlockRoles: const <BlockRole>{
@@ -723,9 +722,8 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
   const SwapEdge(
     fromId: 'machine-leg-press',
     toId: 'dumbbell-bulgarian-split-squat',
-    reason: SwapReason.busy,
-    rank: 2,
-    patternRelation: SwapPatternRelation.crossPattern,
+    tier: 2,
+    rank: 0,
   ),
   ..._edgesFor(
     'dumbbell-bulgarian-split-squat',
@@ -778,9 +776,8 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
   const SwapEdge(
     fromId: 'barbell-deadlift',
     toId: 'machine-leg-press',
-    reason: SwapReason.intimidating,
-    rank: 2,
-    patternRelation: SwapPatternRelation.crossPattern,
+    tier: 2,
+    rank: 0,
   ),
   ..._edgesFor(
     'cable-pull-through',
@@ -805,9 +802,8 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
   const SwapEdge(
     fromId: 'machine-back-extension',
     toId: 'dumbbell-glute-bridge',
-    reason: SwapReason.unavailable,
-    rank: 2,
-    patternRelation: SwapPatternRelation.crossPattern,
+    tier: 2,
+    rank: 0,
   ),
   ..._denseRoleEdges(const [
     'barbell-hip-thrust',
@@ -820,21 +816,32 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
   const SwapEdge(
     fromId: 'machine-leg-extension',
     toId: 'machine-seated-hamstring-curl',
-    reason: SwapReason.unavailable,
+    tier: 2,
     rank: 0,
   ),
   const SwapEdge(
     fromId: 'machine-leg-extension',
     toId: 'machine-standing-calf-raises',
-    reason: SwapReason.unavailable,
+    tier: 2,
     rank: 1,
   ),
   const SwapEdge(
     fromId: 'machine-leg-extension',
     toId: 'machine-leg-press',
-    reason: SwapReason.unavailable,
-    rank: 2,
-    patternRelation: SwapPatternRelation.crossPattern,
+    tier: 3,
+    rank: 0,
+  ),
+  const SwapEdge(
+    fromId: 'machine-seated-hamstring-curl',
+    toId: 'machine-leg-extension',
+    tier: 2,
+    rank: 0,
+  ),
+  const SwapEdge(
+    fromId: 'machine-standing-calf-raises',
+    toId: 'machine-leg-extension',
+    tier: 2,
+    rank: 0,
   ),
   ..._edgesFor(
     'dumbbell-bench-press',
@@ -922,9 +929,8 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
   const SwapEdge(
     fromId: 'dumbbell-seated-overhead-press',
     toId: 'dumbbell-lateral-raise',
-    reason: SwapReason.uncomfortable,
-    rank: 2,
-    patternRelation: SwapPatternRelation.crossPattern,
+    tier: 3,
+    rank: 0,
   ),
   ..._edgesFor(
     'bodyweight-push-up',
@@ -979,15 +985,32 @@ final List<SwapEdge> _swapEdges = <SwapEdge>[
   const SwapEdge(
     fromId: 'dumbbell-row-unilateral',
     toId: 'machine-rear-deltoid-row',
-    reason: SwapReason.busy,
+    tier: 1,
     rank: 0,
   ),
   const SwapEdge(
     fromId: 'dumbbell-row-unilateral',
     toId: 'machine-seated-cable-row',
-    reason: SwapReason.busy,
-    rank: 1,
-    patternRelation: SwapPatternRelation.crossPattern,
+    tier: 2,
+    rank: 0,
+  ),
+  const SwapEdge(
+    fromId: 'dumbbell-lateral-raise',
+    toId: 'dumbbell-curl',
+    tier: 2,
+    rank: 0,
+  ),
+  const SwapEdge(
+    fromId: 'dumbbell-curl',
+    toId: 'dumbbell-lateral-raise',
+    tier: 2,
+    rank: 0,
+  ),
+  const SwapEdge(
+    fromId: 'cable-rope-pushdown',
+    toId: 'dumbbell-lateral-raise',
+    tier: 2,
+    rank: 0,
   ),
   ..._edgesFor(
     'bodyweight-assisted-chin-up',
@@ -1112,20 +1135,39 @@ List<SwapEdge> _edgesFor(
   required List<String> uncomfortable,
   required List<String> unavailable,
 }) {
-  final result = <SwapEdge>[];
-  void add(SwapReason reason, List<String> ids) {
-    for (var rank = 0; rank < ids.length; rank++) {
-      result.add(
-        SwapEdge(fromId: fromId, toId: ids[rank], reason: reason, rank: rank),
-      );
+  // The four authored lists predate §9's reason-agnostic graph. Preserve their
+  // union and authorial order while emitting one universal tiered edge per
+  // target. Any SwapReason can traverse every resulting edge.
+  final orderedIds = <String>[];
+  final included = <String>{};
+  for (final ids in <List<String>>[
+    busy,
+    intimidating,
+    uncomfortable,
+    unavailable,
+  ]) {
+    for (final id in ids) {
+      if (included.add(id)) orderedIds.add(id);
     }
   }
-
-  add(SwapReason.busy, busy);
-  add(SwapReason.intimidating, intimidating);
-  add(SwapReason.uncomfortable, uncomfortable);
-  add(SwapReason.unavailable, unavailable);
+  final rankByTier = <int, int>{1: 0, 2: 0, 3: 0};
+  final result = <SwapEdge>[];
+  for (final toId in orderedIds) {
+    final tier = _authoredTier(fromId, toId);
+    final rank = rankByTier[tier]!;
+    result.add(SwapEdge(fromId: fromId, toId: toId, tier: tier, rank: rank));
+    rankByTier[tier] = rank + 1;
+  }
   return result;
+}
+
+int _authoredTier(String fromId, String toId) {
+  final from = _exercises.where((exercise) => exercise.id == fromId).first;
+  final to = _exercises.where((exercise) => exercise.id == toId).first;
+  final similarPattern = from.primaryJointActions.any(
+    to.primaryJointActions.contains,
+  );
+  return similarPattern ? 1 : 2;
 }
 
 List<SwapEdge> _denseRoleEdges(List<String> exerciseIds) {

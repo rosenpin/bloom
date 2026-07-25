@@ -74,8 +74,12 @@ enum ReasonCode {
   stallDeload,
 
   /// Two consecutive "too hard" reports selected a −10% rebuild at resolve
-  /// time. Step 6 also uses this code for the immediate missed-bottom correction.
+  /// time.
   reactiveDeload,
+
+  /// Set 1 missed the bottom of the range, so remaining sets were immediately
+  /// re-prescribed at −10%, snapped to real equipment (§5).
+  missedBottomSameSessionDrop,
 
   // ── Layoff (§6) ────────────────────────────────────────────────────────────
   /// 7–13 days away: repeat last weights, no increase.
@@ -114,6 +118,9 @@ enum ReasonCode {
   // ── Session modifiers and safety (§8, §9, §11) ─────────────────────────────
   /// "Low energy today": same exercises, −10%, bottom of the range.
   lowEnergy,
+
+  /// Mid-session low-energy modifier applied to still-unstarted work.
+  lowEnergyApplied,
 
   /// Session shortened: isolation dropped from the end, primaries kept.
   shortened,

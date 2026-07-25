@@ -89,6 +89,25 @@ enum WarningCode {
 
   /// A malformed mesocycle configuration was clamped to a usable value.
   invalidMesocycleConfiguration,
+
+  /// A mid-session event named an exercise that is not in this session.
+  unknownSessionExercise,
+
+  /// An event was valid but could not affect an exercise in its current state.
+  sessionEventIgnored,
+
+  /// The same idempotent session modifier was requested more than once.
+  sessionModifierAlreadyApplied,
+
+  /// No eligible swap remained after tier and exclusion filtering.
+  noEligibleSessionSwap,
+
+  /// Calibration hit the safety floor without five clean reps; the movement
+  /// stopped and an easier tier-1/2 alternative was offered.
+  calibrationFloorFailed,
+
+  /// A plan edit could not find its source slot or resolved replacement.
+  planEditTargetMissing,
 }
 
 final class EngineWarning {

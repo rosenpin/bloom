@@ -9,7 +9,6 @@
 /// catalog both implement [Exercise].
 library;
 
-import '../core/events.dart' show SwapReason;
 import '../core/prescription.dart';
 import '../core/units.dart';
 
@@ -406,44 +405,39 @@ final class ExerciseData implements Exercise {
   String toString() => 'ExerciseData($id)';
 }
 
-/// Whether an authored swap keeps the narrower movement pattern or deliberately
-/// crosses it while preserving [SwapRegionPurpose].
-enum SwapPatternRelation { patternPreserving, crossPattern }
-
 /// An edge in the swap graph:
-/// `(from_id, to_id, reason enum, rank int, pattern relation)`.
-/// Ranks are unique per `(from, reason)` — ties would break determinism.
+/// `(from_id, to_id, tier, rank)`.
+///
+/// The edge is reachable for every swap reason. Tier is the §9 compatibility
+/// rule: 1 = similar pattern, 2 = same muscles and same complexion, 3 = same
+/// muscles only. Ranks are unique per `(from, tier)`.
 final class SwapEdge {
   const SwapEdge({
     required this.fromId,
     required this.toId,
-    required this.reason,
+    required this.tier,
     required this.rank,
-    this.patternRelation = SwapPatternRelation.patternPreserving,
-  }) : assert(rank >= 0);
+  }) : assert(tier >= 1 && tier <= 3),
+       assert(rank >= 0);
 
   final String fromId;
   final String toId;
-  final SwapReason reason;
+  final int tier;
   final int rank;
-  final SwapPatternRelation patternRelation;
 
   @override
   bool operator ==(Object other) =>
       other is SwapEdge &&
       other.fromId == fromId &&
       other.toId == toId &&
-      other.reason == reason &&
-      other.rank == rank &&
-      other.patternRelation == patternRelation;
+      other.tier == tier &&
+      other.rank == rank;
 
   @override
-  int get hashCode => Object.hash(fromId, toId, reason, rank, patternRelation);
+  int get hashCode => Object.hash(fromId, toId, tier, rank);
 
   @override
-  String toString() =>
-      'SwapEdge($fromId -> $toId, ${reason.name}, #$rank, '
-      '${patternRelation.name})';
+  String toString() => 'SwapEdge($fromId -> $toId, tier $tier, #$rank)';
 }
 
 /// A versioned, deterministic content snapshot. Exercise order is authorial:

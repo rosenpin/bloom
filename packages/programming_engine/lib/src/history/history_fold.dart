@@ -18,12 +18,18 @@ final class ExerciseHistorySnapshot {
   const ExerciseHistorySnapshot({
     required this.lastLoad,
     required this.lastReps,
+    this.targetReps,
+    this.targetRpe,
+    this.prescribedLoad,
     required this.lastEffort,
     required this.everSeen,
     required this.sessionsSinceProgress,
     required this.consecutiveTooHardCount,
     required this.lastWorkingLoad,
     required this.lastWorkingReps,
+    this.lastWorkingTargetReps,
+    this.lastWorkingTargetRpe,
+    this.lastWorkingPrescribedLoad,
     required this.lastWorkingEffort,
     required this.lastSeenSessionDate,
     required this.lastMesocycleIndex,
@@ -32,12 +38,18 @@ final class ExerciseHistorySnapshot {
   static const ExerciseHistorySnapshot empty = ExerciseHistorySnapshot(
     lastLoad: null,
     lastReps: null,
+    targetReps: null,
+    targetRpe: null,
+    prescribedLoad: null,
     lastEffort: null,
     everSeen: false,
     sessionsSinceProgress: 0,
     consecutiveTooHardCount: 0,
     lastWorkingLoad: null,
     lastWorkingReps: null,
+    lastWorkingTargetReps: null,
+    lastWorkingTargetRpe: null,
+    lastWorkingPrescribedLoad: null,
     lastWorkingEffort: null,
     lastSeenSessionDate: null,
     lastMesocycleIndex: null,
@@ -45,6 +57,15 @@ final class ExerciseHistorySnapshot {
 
   final Kg? lastLoad;
   final int? lastReps;
+
+  /// What the latest set was prescribed to do, distinct from what happened.
+  ///
+  /// Pre-migration events carry no prescription context, so [targetReps] falls
+  /// back to their actual reps. This preserves replay compatibility while new
+  /// events restore exact §4.3 missed-target detection.
+  final int? targetReps;
+  final int? targetRpe;
+  final Kg? prescribedLoad;
   final EffortLevel? lastEffort;
   final bool everSeen;
 
@@ -58,6 +79,9 @@ final class ExerciseHistorySnapshot {
   /// the next mesocycle steps from this working anchor.
   final Kg? lastWorkingLoad;
   final int? lastWorkingReps;
+  final int? lastWorkingTargetReps;
+  final int? lastWorkingTargetRpe;
+  final Kg? lastWorkingPrescribedLoad;
   final EffortLevel? lastWorkingEffort;
   final DateTime? lastSeenSessionDate;
   final int? lastMesocycleIndex;
@@ -69,7 +93,9 @@ final class ExerciseHistorySnapshot {
     return ExerciseSnapshot(
       lastLoad: load,
       lastReps: reps,
-      targetReps: reps,
+      targetReps: useWorkingAnchor
+          ? lastWorkingTargetReps ?? reps
+          : targetReps ?? reps,
       reportedEffort: useWorkingAnchor ? lastWorkingEffort : lastEffort,
     );
   }
@@ -79,12 +105,18 @@ final class ExerciseHistorySnapshot {
       other is ExerciseHistorySnapshot &&
       other.lastLoad == lastLoad &&
       other.lastReps == lastReps &&
+      other.targetReps == targetReps &&
+      other.targetRpe == targetRpe &&
+      other.prescribedLoad == prescribedLoad &&
       other.lastEffort == lastEffort &&
       other.everSeen == everSeen &&
       other.sessionsSinceProgress == sessionsSinceProgress &&
       other.consecutiveTooHardCount == consecutiveTooHardCount &&
       other.lastWorkingLoad == lastWorkingLoad &&
       other.lastWorkingReps == lastWorkingReps &&
+      other.lastWorkingTargetReps == lastWorkingTargetReps &&
+      other.lastWorkingTargetRpe == lastWorkingTargetRpe &&
+      other.lastWorkingPrescribedLoad == lastWorkingPrescribedLoad &&
       other.lastWorkingEffort == lastWorkingEffort &&
       other.lastSeenSessionDate == lastSeenSessionDate &&
       other.lastMesocycleIndex == lastMesocycleIndex;
@@ -93,12 +125,18 @@ final class ExerciseHistorySnapshot {
   int get hashCode => Object.hash(
     lastLoad,
     lastReps,
+    targetReps,
+    targetRpe,
+    prescribedLoad,
     lastEffort,
     everSeen,
     sessionsSinceProgress,
     consecutiveTooHardCount,
     lastWorkingLoad,
     lastWorkingReps,
+    lastWorkingTargetReps,
+    lastWorkingTargetRpe,
+    lastWorkingPrescribedLoad,
     lastWorkingEffort,
     lastSeenSessionDate,
     lastMesocycleIndex,
@@ -223,6 +261,9 @@ TrainingSnapshot incrementTrainingSnapshot(
     exercises[entry.key] = ExerciseHistorySnapshot(
       lastLoad: set?.load ?? prior.lastLoad,
       lastReps: set?.reps ?? prior.lastReps,
+      targetReps: set != null ? set.targetReps ?? set.reps : prior.targetReps,
+      targetRpe: set != null ? set.targetRpe : prior.targetRpe,
+      prescribedLoad: set != null ? set.prescribedLoad : prior.prescribedLoad,
       lastEffort: set != null ? session.effort : prior.lastEffort,
       everSeen: prior.everSeen || set != null,
       sessionsSinceProgress: noProgressCount,
@@ -233,6 +274,15 @@ TrainingSnapshot incrementTrainingSnapshot(
       lastWorkingReps: set != null && isWorkingWeek
           ? set.reps
           : prior.lastWorkingReps,
+      lastWorkingTargetReps: set != null && isWorkingWeek
+          ? set.targetReps ?? set.reps
+          : prior.lastWorkingTargetReps,
+      lastWorkingTargetRpe: set != null && isWorkingWeek
+          ? set.targetRpe
+          : prior.lastWorkingTargetRpe,
+      lastWorkingPrescribedLoad: set != null && isWorkingWeek
+          ? set.prescribedLoad
+          : prior.lastWorkingPrescribedLoad,
       lastWorkingEffort: set != null && isWorkingWeek
           ? session.effort
           : prior.lastWorkingEffort,

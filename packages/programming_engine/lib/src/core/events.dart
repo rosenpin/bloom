@@ -30,7 +30,18 @@ enum SwapReason {
 
 /// Where it hurt (§11). Coarse on purpose — this drives an exclusion, not a
 /// diagnosis, and we are not a medical product.
-enum PainSite { knee, hip, lowBack, midBack, shoulder, elbow, wrist, neck, ankle, other }
+enum PainSite {
+  knee,
+  hip,
+  lowBack,
+  midBack,
+  shoulder,
+  elbow,
+  wrist,
+  neck,
+  ankle,
+  other,
+}
 
 /// Everything that can happen inside a session.
 sealed class SessionEvent {
@@ -46,8 +57,13 @@ final class SetCompleted extends SessionEvent {
     required this.load,
     required this.reps,
     required this.unitSystem,
-  })  : assert(setIndex >= 0),
-        assert(reps >= 0);
+    this.targetReps,
+    this.targetRpe,
+    this.prescribedLoad,
+  }) : assert(setIndex >= 0),
+       assert(reps >= 0),
+       assert(targetReps == null || targetReps >= 1),
+       assert(targetRpe == null || (targetRpe >= 1 && targetRpe <= 10));
 
   final String exerciseId;
 
@@ -57,6 +73,15 @@ final class SetCompleted extends SessionEvent {
   final int reps;
   final UnitSystem unitSystem;
 
+  /// Optional prescription context captured when the set was shown.
+  ///
+  /// Older events do not have these fields. The history fold deliberately falls
+  /// back to actual [reps] for their target so old logs retain their pre-migration
+  /// behaviour; new events preserve the exact §4.3 missed-target yardstick.
+  final int? targetReps;
+  final int? targetRpe;
+  final Kg? prescribedLoad;
+
   @override
   bool operator ==(Object other) =>
       other is SetCompleted &&
@@ -64,14 +89,29 @@ final class SetCompleted extends SessionEvent {
       other.setIndex == setIndex &&
       other.load == load &&
       other.reps == reps &&
-      other.unitSystem == unitSystem;
+      other.unitSystem == unitSystem &&
+      other.targetReps == targetReps &&
+      other.targetRpe == targetRpe &&
+      other.prescribedLoad == prescribedLoad;
 
   @override
-  int get hashCode => Object.hash(exerciseId, setIndex, load, reps, unitSystem);
+  int get hashCode => Object.hash(
+    exerciseId,
+    setIndex,
+    load,
+    reps,
+    unitSystem,
+    targetReps,
+    targetRpe,
+    prescribedLoad,
+  );
 
   @override
   String toString() =>
-      'SetCompleted($exerciseId, set $setIndex, ${load.value}kg x $reps, ${unitSystem.name})';
+      'SetCompleted($exerciseId, set $setIndex, ${load.value}kg x $reps, '
+      '${unitSystem.name}${targetReps == null ? '' : ', target $targetReps'}'
+      '${targetRpe == null ? '' : ' @RPE $targetRpe'}'
+      '${prescribedLoad == null ? '' : ', prescribed ${prescribedLoad!.value}kg'})';
 }
 
 /// The feel tap — once per exercise, on the last set, during rest. Optional,
@@ -81,9 +121,14 @@ final class EffortReported extends SessionEvent {
 
   /// Decodes a raw 1..5 from the UI or the log. Returns `null` for anything else
   /// rather than throwing.
-  static EffortReported? fromLevelValue({required String exerciseId, required int level}) {
+  static EffortReported? fromLevelValue({
+    required String exerciseId,
+    required int level,
+  }) {
     final decoded = EffortLevel.fromValue(level);
-    return decoded == null ? null : EffortReported(exerciseId: exerciseId, level: decoded);
+    return decoded == null
+        ? null
+        : EffortReported(exerciseId: exerciseId, level: decoded);
   }
 
   final String exerciseId;
@@ -91,13 +136,16 @@ final class EffortReported extends SessionEvent {
 
   @override
   bool operator ==(Object other) =>
-      other is EffortReported && other.exerciseId == exerciseId && other.level == level;
+      other is EffortReported &&
+      other.exerciseId == exerciseId &&
+      other.level == level;
 
   @override
   int get hashCode => Object.hash(exerciseId, level);
 
   @override
-  String toString() => 'EffortReported($exerciseId, ${level.name}/${level.value})';
+  String toString() =>
+      'EffortReported($exerciseId, ${level.name}/${level.value})';
 }
 
 /// "Give me something else for this."
@@ -109,7 +157,9 @@ final class SwapRequested extends SessionEvent {
 
   @override
   bool operator ==(Object other) =>
-      other is SwapRequested && other.exerciseId == exerciseId && other.reason == reason;
+      other is SwapRequested &&
+      other.exerciseId == exerciseId &&
+      other.reason == reason;
 
   @override
   int get hashCode => Object.hash(exerciseId, reason);
@@ -126,7 +176,8 @@ final class Shorten extends SessionEvent {
   final int minutes;
 
   @override
-  bool operator ==(Object other) => other is Shorten && other.minutes == minutes;
+  bool operator ==(Object other) =>
+      other is Shorten && other.minutes == minutes;
 
   @override
   int get hashCode => minutes.hashCode;
@@ -159,7 +210,9 @@ final class PainReported extends SessionEvent {
 
   @override
   bool operator ==(Object other) =>
-      other is PainReported && other.exerciseId == exerciseId && other.site == site;
+      other is PainReported &&
+      other.exerciseId == exerciseId &&
+      other.site == site;
 
   @override
   int get hashCode => Object.hash(exerciseId, site);

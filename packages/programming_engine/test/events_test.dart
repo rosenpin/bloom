@@ -11,14 +11,14 @@ import 'package:test/test.dart';
 /// Exhaustive over the sealed hierarchy: adding a case to `SessionEvent` breaks
 /// compilation here, which is the point.
 String describe(SessionEvent event) => switch (event) {
-      SetCompleted(:final exerciseId, :final reps) => 'set:$exerciseId:$reps',
-      EffortReported(:final level) => 'effort:${level.value}',
-      SwapRequested(:final reason) => 'swap:${reason.name}',
-      Shorten(:final minutes) => 'shorten:$minutes',
-      LowEnergy() => 'lowEnergy',
-      PainReported(:final site) => 'pain:${site.name}',
-      SessionAbandoned() => 'abandoned',
-    };
+  SetCompleted(:final exerciseId, :final reps) => 'set:$exerciseId:$reps',
+  EffortReported(:final level) => 'effort:${level.value}',
+  SwapRequested(:final reason) => 'swap:${reason.name}',
+  Shorten(:final minutes) => 'shorten:$minutes',
+  LowEnergy() => 'lowEnergy',
+  PainReported(:final site) => 'pain:${site.name}',
+  SessionAbandoned() => 'abandoned',
+};
 
 void main() {
   const events = <SessionEvent>[
@@ -82,6 +82,27 @@ void main() {
       isFalse,
       reason: 'the unit system in force at entry is part of the event',
     );
+    expect(
+      const SetCompleted(
+            exerciseId: 'a',
+            setIndex: 0,
+            load: Kg(10),
+            reps: 8,
+            unitSystem: UnitSystem.metric,
+            targetReps: 10,
+            targetRpe: 7,
+            prescribedLoad: Kg(12),
+          ) ==
+          const SetCompleted(
+            exerciseId: 'a',
+            setIndex: 0,
+            load: Kg(10),
+            reps: 8,
+            unitSystem: UnitSystem.metric,
+          ),
+      isFalse,
+      reason: 'prescribed context is part of the immutable log value',
+    );
     expect(const LowEnergy(), const LowEnergy());
     expect(const SessionAbandoned() == const LowEnergy(), isFalse);
   });
@@ -112,42 +133,45 @@ void main() {
     ]);
     expect(PainSite.values, isNotEmpty);
     for (final site in PainSite.values) {
-      expect(describe(PainReported(exerciseId: 'x', site: site)), startsWith('pain:'));
+      expect(
+        describe(PainReported(exerciseId: 'x', site: site)),
+        startsWith('pain:'),
+      );
     }
   });
 
   test('an event prints readably for a support replay', () {
-    expect(
-      describe(events.first),
-      'set:dumbbell-goblet-squat:11',
-    );
+    expect(describe(events.first), 'set:dumbbell-goblet-squat:11');
     expect(events.first.toString(), contains('12.0kg x 11'));
     expect(const LowEnergy().toString(), 'LowEnergy()');
   });
 
   group('the resolved prescription', () {
-    test('carries the dose, the suggestion, laterality, the bridge and the why', () {
-      const prescription = ExercisePrescription(
-        exerciseId: 'dumbbell-lateral-raise',
-        dose: RepsDose(
-          sets: 3,
-          range: RepRange(10, 15),
-          effort: EffortTarget.rpe7,
-          targetReps: 8,
-        ),
-        suggestion: SuggestedLoad(Kg(6)),
-        laterality: Laterality.bilateral,
-        bridge: DropSetBridge(
-          backOffLoad: Kg(4),
-          backOffRepsMin: 4,
-          backOffRepsMax: 5,
-        ),
-        why: [ReasonCode.topOfRangeStepUp, ReasonCode.repsReset],
-      );
-      expect(prescription.dose, isA<RepsDose>());
-      expect(prescription.why, hasLength(2));
-      expect(prescription.toString(), contains('lateral-raise'));
-    });
+    test(
+      'carries the dose, the suggestion, laterality, the bridge and the why',
+      () {
+        const prescription = ExercisePrescription(
+          exerciseId: 'dumbbell-lateral-raise',
+          dose: RepsDose(
+            sets: 3,
+            range: RepRange(10, 15),
+            effort: EffortTarget.rpe7,
+            targetReps: 8,
+          ),
+          suggestion: SuggestedLoad(Kg(6)),
+          laterality: Laterality.bilateral,
+          bridge: DropSetBridge(
+            backOffLoad: Kg(4),
+            backOffRepsMin: 4,
+            backOffRepsMax: 5,
+          ),
+          why: [ReasonCode.topOfRangeStepUp, ReasonCode.repsReset],
+        );
+        expect(prescription.dose, isA<RepsDose>());
+        expect(prescription.why, hasLength(2));
+        expect(prescription.toString(), contains('lateral-raise'));
+      },
+    );
 
     test('compares structurally, reason codes included', () {
       const one = ExercisePrescription(
@@ -185,14 +209,17 @@ void main() {
         RepOrDurationTarget.reps(12),
         RepOrDurationTarget.hold(Duration(seconds: 45)),
       ];
-      final rendered = suggestions.map((suggestion) => switch (suggestion) {
-            SuggestedLoad(:final kg) => 'try ${kg.value}kg',
-            BodyweightOnly(:final added) =>
-              added.isZero ? 'bodyweight' : 'bodyweight +${added.value}kg',
-            NeedsCalibration(:final floor) => 'find it from ${floor.value}kg',
-            RepOrDurationTarget(isTimed: true, :final hold) => 'hold ${hold!.inSeconds}s',
-            RepOrDurationTarget(:final reps) => '$reps reps',
-          });
+      final rendered = suggestions.map(
+        (suggestion) => switch (suggestion) {
+          SuggestedLoad(:final kg) => 'try ${kg.value}kg',
+          BodyweightOnly(:final added) =>
+            added.isZero ? 'bodyweight' : 'bodyweight +${added.value}kg',
+          NeedsCalibration(:final floor) => 'find it from ${floor.value}kg',
+          RepOrDurationTarget(isTimed: true, :final hold) =>
+            'hold ${hold!.inSeconds}s',
+          RepOrDurationTarget(:final reps) => '$reps reps',
+        },
+      );
       expect(rendered, <String>[
         'try 12.0kg',
         'bodyweight +5.0kg',
@@ -224,8 +251,10 @@ void main() {
       expect(dose.copyWith(targetReps: 11).targetReps, 11);
       expect(dose.copyWith(), dose);
       expect(
-        const TimedDose(sets: 3, hold: Duration(seconds: 30))
-            .copyWith(hold: const Duration(seconds: 35)),
+        const TimedDose(
+          sets: 3,
+          hold: Duration(seconds: 30),
+        ).copyWith(hold: const Duration(seconds: 35)),
         const TimedDose(sets: 3, hold: Duration(seconds: 35)),
       );
     });
@@ -247,7 +276,10 @@ void main() {
           MuscleTarget.primary(MuscleGroup.glutes),
           MuscleTarget.secondary(MuscleGroup.core),
         ],
-        primaryJointActions: [JointAction.kneeExtension, JointAction.hipExtension],
+        primaryJointActions: [
+          JointAction.kneeExtension,
+          JointAction.hipExtension,
+        ],
         secondaryJointActions: [JointAction.trunkBrace, JointAction.grip],
         romRank: 4,
         stabilityRank: 3,
@@ -260,7 +292,10 @@ void main() {
         dos: ['Keep your chest up'],
         donts: ['Let the dumbbell drift away from your body'],
       );
-      expect(goblet.primaryMuscles, <MuscleGroup>[MuscleGroup.quads, MuscleGroup.glutes]);
+      expect(goblet.primaryMuscles, <MuscleGroup>[
+        MuscleGroup.quads,
+        MuscleGroup.glutes,
+      ]);
       expect(goblet.isRetired, isFalse);
       expect(goblet.movementClass.isCompound, isTrue);
       expect(goblet.movementClass.isLowerBody, isTrue);
@@ -287,7 +322,7 @@ void main() {
       const edge = SwapEdge(
         fromId: 'barbell-squat',
         toId: 'dumbbell-goblet-squat',
-        reason: SwapReason.intimidating,
+        tier: 1,
         rank: 0,
       );
       expect(
@@ -295,11 +330,12 @@ void main() {
         const SwapEdge(
           fromId: 'barbell-squat',
           toId: 'dumbbell-goblet-squat',
-          reason: SwapReason.intimidating,
+          tier: 1,
           rank: 0,
         ),
       );
       expect(edge.toString(), contains('#0'));
+      expect(edge.tier, 1);
     });
 
     test('block roles know which ones "shorten today" may drop', () {

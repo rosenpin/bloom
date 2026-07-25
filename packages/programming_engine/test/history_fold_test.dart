@@ -50,6 +50,11 @@ void main() {
       final squat = folded.exercise('squat');
       expect(squat.lastLoad, const Kg(20));
       expect(squat.lastReps, 10);
+      expect(
+        squat.targetReps,
+        10,
+        reason: 'legacy events fall back to actual reps',
+      );
       expect(squat.lastEffort, EffortLevel.tooHard);
       expect(squat.everSeen, isTrue);
       expect(squat.sessionsSinceProgress, 2);
@@ -75,6 +80,56 @@ void main() {
       ).exercise('squat');
       expect(afterRepProgress.sessionsSinceProgress, 0);
       expect(afterLoadProgress.sessionsSinceProgress, 0);
+    });
+
+    test(
+      'new events preserve prescribed context separately from performance',
+      () {
+        final folded = foldTrainingHistory(
+          TrainingHistory(
+            records: [
+              _record(
+                id: 'prescribed',
+                date: DateTime.utc(2026, 1, 5),
+                events: const [
+                  SetCompleted(
+                    exerciseId: 'squat',
+                    setIndex: 0,
+                    load: Kg(20),
+                    reps: 8,
+                    unitSystem: UnitSystem.metric,
+                    targetReps: 10,
+                    targetRpe: 7,
+                    prescribedLoad: Kg(22.5),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ).exercise('squat');
+
+        expect(folded.lastLoad, const Kg(20));
+        expect(folded.lastReps, 8);
+        expect(folded.targetReps, 10);
+        expect(folded.targetRpe, 7);
+        expect(folded.prescribedLoad, const Kg(22.5));
+        expect(folded.asProgressionSnapshot()!.targetReps, 10);
+      },
+    );
+
+    test('legacy events explicitly retain actual-reps target fallback', () {
+      final folded = foldTrainingHistory(
+        TrainingHistory(
+          records: [
+            _setRecord('legacy', DateTime.utc(2026, 1, 5), const Kg(20), 7),
+          ],
+        ),
+      ).exercise('squat');
+
+      expect(folded.targetReps, 7);
+      expect(folded.targetRpe, isNull);
+      expect(folded.prescribedLoad, isNull);
+      expect(folded.asProgressionSnapshot()!.targetReps, 7);
     });
 
     test('programmed deload does not replace the working anchor', () {

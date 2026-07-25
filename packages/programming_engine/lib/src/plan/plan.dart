@@ -7,7 +7,6 @@ import '../config/programming_config.dart';
 import '../content/exercise.dart';
 import '../core/dose.dart';
 import '../core/effort.dart';
-import '../core/events.dart';
 import '../core/prescription.dart';
 import '../core/units.dart';
 import '../core/warnings.dart';
@@ -40,6 +39,37 @@ final class PlanStamps {
       Object.hash(engineVersion, configHash, contentHash, profileHash);
 }
 
+/// Deterministic decision stamp appended by [applyPlanEdit].
+///
+/// There is intentionally no wall-clock field: the pure edit API has no clock.
+/// Storage may timestamp the command separately; replay identity comes from this
+/// stable edit id plus the engine/config/content versions that interpreted it.
+final class PlanEditStamp {
+  const PlanEditStamp({
+    required this.engineVersion,
+    required this.configHash,
+    required this.contentHash,
+    required this.editId,
+  });
+
+  final String engineVersion;
+  final String configHash;
+  final String contentHash;
+  final String editId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PlanEditStamp &&
+      other.engineVersion == engineVersion &&
+      other.configHash == configHash &&
+      other.contentHash == contentHash &&
+      other.editId == editId;
+
+  @override
+  int get hashCode =>
+      Object.hash(engineVersion, configHash, contentHash, editId);
+}
+
 final class PlanWeek {
   const PlanWeek({required this.weekIndex, required this.kind})
     : assert(weekIndex >= 1);
@@ -68,12 +98,12 @@ final class PlanSwapCandidate implements LoadProfile {
     required this.supportEquipment,
     required this.bwContribution,
     required this.loadStepOverride,
-    required this.reason,
+    required this.tier,
     required this.rank,
-    required this.patternRelation,
     required Map<MesocycleWeekKind, Dose> doseByWeekKind,
     required this.repRange,
-  }) : doseByWeekKind = Map<MesocycleWeekKind, Dose>.unmodifiable(
+  }) : assert(tier >= 1 && tier <= 3),
+       doseByWeekKind = Map<MesocycleWeekKind, Dose>.unmodifiable(
          doseByWeekKind,
        );
 
@@ -94,9 +124,11 @@ final class PlanSwapCandidate implements LoadProfile {
   final double bwContribution;
   @override
   final Kg? loadStepOverride;
-  final SwapReason reason;
+
+  /// §9 compatibility tier. Tier 3 is exposed so the UI can hide it behind
+  /// "custom swap — not recommended".
+  final int tier;
   final int rank;
-  final SwapPatternRelation patternRelation;
 
   /// The target exercise keeps its own prescription world. A cross-pattern swap
   /// never inherits the source exercise's rep window.
@@ -119,9 +151,8 @@ final class PlanSwapCandidate implements LoadProfile {
       other.supportEquipment == supportEquipment &&
       other.bwContribution == bwContribution &&
       other.loadStepOverride == loadStepOverride &&
-      other.reason == reason &&
+      other.tier == tier &&
       other.rank == rank &&
-      other.patternRelation == patternRelation &&
       const MapEquality<MesocycleWeekKind, Dose>().equals(
         other.doseByWeekKind,
         doseByWeekKind,
@@ -141,9 +172,8 @@ final class PlanSwapCandidate implements LoadProfile {
     supportEquipment,
     bwContribution,
     loadStepOverride,
-    reason,
+    tier,
     rank,
-    patternRelation,
     Object.hashAll(
       MesocycleWeekKind.values.map(
         (kind) => Object.hash(kind, doseByWeekKind[kind]),
@@ -324,22 +354,26 @@ final class Plan {
     required Iterable<PlanWeek> mesocycleCalendar,
     required Iterable<PlanDay> days,
     required Iterable<EngineWarning> warnings,
+    Iterable<PlanEditStamp> editStamps = const <PlanEditStamp>[],
   }) : assert(mesocycleIndex >= 1),
        mesocycleCalendar = List<PlanWeek>.unmodifiable(mesocycleCalendar),
        days = List<PlanDay>.unmodifiable(days),
-       warnings = List<EngineWarning>.unmodifiable(warnings);
+       warnings = List<EngineWarning>.unmodifiable(warnings),
+       editStamps = List<PlanEditStamp>.unmodifiable(editStamps);
 
   final int mesocycleIndex;
   final PlanStamps stamps;
   final List<PlanWeek> mesocycleCalendar;
   final List<PlanDay> days;
   final List<EngineWarning> warnings;
+  final List<PlanEditStamp> editStamps;
 
   /// Stable reference stored on session-record persistence rows without
   /// retaining the whole plan document.
   String get reference =>
       '${stamps.engineVersion}|${stamps.configHash}|${stamps.contentHash}|'
-      '${stamps.profileHash}|m$mesocycleIndex';
+      '${stamps.profileHash}|m$mesocycleIndex'
+      '${editStamps.isEmpty ? '' : '|edits=${editStamps.map((stamp) => stamp.editId).join(',')}'}';
 
   /// Stable semantic bytes for persistence checks and determinism tests.
   String toCanonicalString() {
@@ -375,7 +409,7 @@ final class Plan {
             exercise.orderedSwapCandidates
                 .map(
                   (candidate) =>
-                      '${candidate.reason.name}.${candidate.rank}.'
+                      'tier${candidate.tier}.${candidate.rank}.'
                       '${candidate.exerciseId}.${candidate.blockRole.name}.'
                       '${candidate.movementClass.name}.${candidate.metricType.name}.'
                       '${candidate.laterality.name}.${candidate.difficultyTier.name}.'
@@ -383,7 +417,6 @@ final class Plan {
                       '${candidate.supportEquipment.name}.'
                       '${candidate.bwContribution}.'
                       '${candidate.loadStepOverride?.value ?? 'null'}.'
-                      '${candidate.patternRelation.name}.'
                       '${candidate.repRange ?? 'timed'}.'
                       '${MesocycleWeekKind.values.map((kind) => '${kind.name}=${candidate.doseFor(kind) == null ? 'missing' : _doseText(candidate.doseFor(kind)!)}').join(';')}',
                 )
@@ -398,6 +431,12 @@ final class Plan {
     for (final warning in warnings) {
       output.writeln('warning=${warning.code.name}:${warning.detail}');
     }
+    for (final stamp in editStamps) {
+      output.writeln(
+        'edit=${stamp.engineVersion}|${stamp.configHash}|'
+        '${stamp.contentHash}|${stamp.editId}',
+      );
+    }
     return output.toString();
   }
 
@@ -411,7 +450,8 @@ final class Plan {
         mesocycleCalendar,
       ) &&
       const ListEquality<PlanDay>().equals(other.days, days) &&
-      const ListEquality<EngineWarning>().equals(other.warnings, warnings);
+      const ListEquality<EngineWarning>().equals(other.warnings, warnings) &&
+      const ListEquality<PlanEditStamp>().equals(other.editStamps, editStamps);
 
   @override
   int get hashCode => Object.hash(
@@ -420,6 +460,7 @@ final class Plan {
     Object.hashAll(mesocycleCalendar),
     Object.hashAll(days),
     Object.hashAll(warnings),
+    Object.hashAll(editStamps),
   );
 }
 

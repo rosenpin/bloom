@@ -52,53 +52,39 @@ void main() {
     }
   });
 
-  test(
-    'cross-pattern edges are never top-ranked when a preserving edge exists',
-    () {
-      final grouped = <String, List<SwapEdge>>{};
-      for (final edge in catalogV1.swapEdges) {
-        (grouped['${edge.fromId}/${edge.reason.name}'] ??= <SwapEdge>[]).add(
-          edge,
-        );
-      }
-      for (final entry in grouped.entries) {
-        final preserving = entry.value.where(
-          (edge) =>
-              edge.patternRelation == SwapPatternRelation.patternPreserving,
-        );
-        if (preserving.isEmpty) continue;
-        final firstPreserving = preserving
-            .map((edge) => edge.rank)
-            .reduce((left, right) => left < right ? left : right);
-        for (final edge in entry.value.where(
-          (edge) => edge.patternRelation == SwapPatternRelation.crossPattern,
-        )) {
-          expect(
-            edge.rank,
-            greaterThan(firstPreserving),
-            reason: '${entry.key}: $edge',
-          );
-        }
-      }
-    },
-  );
+  test('every edge has a valid three-tier tag', () {
+    for (final edge in catalogV1.swapEdges) {
+      expect(edge.tier, inInclusiveRange(1, 3), reason: '$edge');
+    }
+  });
 
-  test('the six revised cross-pattern candidates are restored and tagged', () {
-    const expected = <String>{
-      'barbell-deadlift->machine-leg-press',
-      'machine-back-extension->dumbbell-glute-bridge',
-      'machine-leg-extension->machine-leg-press',
-      'dumbbell-seated-overhead-press->dumbbell-lateral-raise',
-      'machine-leg-press->dumbbell-bulgarian-split-squat',
-      'dumbbell-row-unilateral->machine-seated-cable-row',
+  test('the six restored candidates carry the documented tiers', () {
+    const expected = <String, int>{
+      'barbell-deadlift->machine-leg-press': 2,
+      'machine-back-extension->dumbbell-glute-bridge': 2,
+      'machine-leg-extension->machine-leg-press': 3,
+      'dumbbell-seated-overhead-press->dumbbell-lateral-raise': 3,
+      'machine-leg-press->dumbbell-bulgarian-split-squat': 2,
+      'dumbbell-row-unilateral->machine-seated-cable-row': 2,
     };
-    final actual = catalogV1.swapEdges
-        .where(
-          (edge) => edge.patternRelation == SwapPatternRelation.crossPattern,
-        )
-        .map((edge) => '${edge.fromId}->${edge.toId}')
-        .toSet();
+    final actual = <String, int>{
+      for (final edge in catalogV1.swapEdges)
+        if (expected.containsKey('${edge.fromId}->${edge.toId}'))
+          '${edge.fromId}->${edge.toId}': edge.tier,
+    };
     expect(actual, expected);
+  });
+
+  test('tier 3 is reserved for compound-isolation crossings', () {
+    for (final edge in catalogV1.swapEdges.where((edge) => edge.tier == 3)) {
+      final from = exercisesById[edge.fromId]!.movementClass;
+      final to = exercisesById[edge.toId]!.movementClass;
+      expect(
+        from.isCompound && to.isIsolation || from.isIsolation && to.isCompound,
+        isTrue,
+        reason: '$edge',
+      );
+    }
   });
 
   test('assembly snapshots each swap target with its own dose', () {
@@ -123,7 +109,7 @@ void main() {
     final lateralRaise = shoulderPress.orderedSwapCandidates.firstWhere(
       (candidate) =>
           candidate.exerciseId == 'dumbbell-lateral-raise' &&
-          candidate.patternRelation == SwapPatternRelation.crossPattern,
+          candidate.tier == 3,
     );
     expect(lateralRaise.repRange, const RepRange(10, 15));
     expect(
@@ -132,16 +118,27 @@ void main() {
     );
   });
 
-  test('swap ranks are unique per from id and reason', () {
+  test('swap ranks are unique per from id and tier', () {
     final ranks = <String, Set<int>>{};
     for (final edge in catalogV1.swapEdges) {
-      final key = '${edge.fromId}/${edge.reason.name}';
+      final key = '${edge.fromId}/tier${edge.tier}';
       expect(
         (ranks[key] ??= <int>{}).add(edge.rank),
         isTrue,
         reason: '$key rank ${edge.rank}',
       );
     }
+  });
+
+  test('every exercise has a shown-by-default authored candidate', () {
+    final missing = <String>[
+      for (final exercise in catalogV1.exercises)
+        if (!catalogV1.swapEdges.any(
+          (edge) => edge.fromId == exercise.id && edge.tier <= 2,
+        ))
+          exercise.id,
+    ];
+    expect(missing, isEmpty);
   });
 
   test(

@@ -6,7 +6,6 @@ import '../config/programming_config.dart';
 import '../content/exercise.dart';
 import '../core/dose.dart';
 import '../core/effort.dart';
-import '../core/events.dart';
 import '../core/warnings.dart';
 import '../profile/profile.dart';
 import 'eligibility.dart';
@@ -608,70 +607,39 @@ final class _AssemblyContext {
     required bool isEmphasis,
   }) {
     final result = <PlanSwapCandidate>[];
-    for (final reason in SwapReason.values) {
-      final edges =
-          catalog.swapEdges
-              .where((edge) => edge.fromId == from.id && edge.reason == reason)
-              .toList(growable: false)
-            ..sort((left, right) => left.rank.compareTo(right.rank));
-      final included = <String>{};
-      var fallbackRank = edges.isEmpty ? 0 : edges.last.rank + 1;
-      for (final edge in edges) {
-        final target = exercisesById[edge.toId];
-        if (target == null || target.isRetired) {
-          _addWarning(
-            EngineWarning(
-              WarningCode.danglingSwapSkipped,
-              '${edge.fromId}->${edge.toId}/${reason.name}',
-            ),
-          );
-          continue;
-        }
-        if (!_swapCompatible(from, target)) {
-          _addWarning(
-            EngineWarning(
-              WarningCode.invalidSwapSkipped,
-              '${edge.fromId}->${edge.toId}/${reason.name}',
-            ),
-          );
-          continue;
-        }
-        if (eligible(target, eligibleProfile) && included.add(target.id)) {
-          result.add(
-            PlanSwapCandidate(
-              exerciseId: target.id,
-              name: target.name,
-              blockRole: target.blockRole,
-              movementClass: target.movementClass,
-              metricType: target.metricType,
-              laterality: target.laterality,
-              difficultyTier: target.difficultyTier,
-              resistanceEquipment: target.resistanceEquipment,
-              supportEquipment: target.supportEquipment,
-              bwContribution: target.bwContribution,
-              loadStepOverride: target.loadStepOverride,
-              reason: reason,
-              rank: edge.rank,
-              patternRelation: edge.patternRelation,
-              doseByWeekKind: _dosesFor(target, scheme, isEmphasis: isEmphasis),
-              repRange: target.metricType == MetricType.timed
-                  ? null
-                  : config.rangeFor(target, scheme),
-            ),
-          );
-        }
+    final edges =
+        catalog.swapEdges
+            .where((edge) => edge.fromId == from.id)
+            .toList(growable: false)
+          ..sort((left, right) {
+            final tier = left.tier.compareTo(right.tier);
+            if (tier != 0) return tier;
+            final rank = left.rank.compareTo(right.rank);
+            if (rank != 0) return rank;
+            return left.toId.compareTo(right.toId);
+          });
+    final included = <String>{};
+    for (final edge in edges) {
+      final target = exercisesById[edge.toId];
+      if (target == null || target.isRetired) {
+        _addWarning(
+          EngineWarning(
+            WarningCode.danglingSwapSkipped,
+            '${edge.fromId}->${edge.toId}/tier${edge.tier}',
+          ),
+        );
+        continue;
       }
-
-      for (final target in _orderedCandidates(
-        from.blockRole,
-        eligibleProfile,
-      )) {
-        if (target.id == from.id ||
-            included.contains(target.id) ||
-            !_swapCompatible(from, target)) {
-          continue;
-        }
-        included.add(target.id);
+      if (!_swapCompatible(from, target)) {
+        _addWarning(
+          EngineWarning(
+            WarningCode.invalidSwapSkipped,
+            '${edge.fromId}->${edge.toId}/tier${edge.tier}',
+          ),
+        );
+        continue;
+      }
+      if (eligible(target, eligibleProfile) && included.add(target.id)) {
         result.add(
           PlanSwapCandidate(
             exerciseId: target.id,
@@ -685,9 +653,8 @@ final class _AssemblyContext {
             supportEquipment: target.supportEquipment,
             bwContribution: target.bwContribution,
             loadStepOverride: target.loadStepOverride,
-            reason: reason,
-            rank: fallbackRank++,
-            patternRelation: SwapPatternRelation.patternPreserving,
+            tier: edge.tier,
+            rank: edge.rank,
             doseByWeekKind: _dosesFor(target, scheme, isEmphasis: isEmphasis),
             repRange: target.metricType == MetricType.timed
                 ? null
@@ -696,6 +663,54 @@ final class _AssemblyContext {
         );
       }
     }
+
+    // Total fallback: same authored block role preserves the movement
+    // complexion, so it is a shown-by-default tier-2 alternative. It is
+    // resolved into the plan so mid-session swaps stay offline even if the
+    // content tables later change.
+    var fallbackRank = result
+        .where((candidate) => candidate.tier == 2)
+        .fold<int>(
+          -1,
+          (rank, candidate) => candidate.rank > rank ? candidate.rank : rank,
+        );
+    fallbackRank++;
+    for (final target in _orderedCandidates(from.blockRole, eligibleProfile)) {
+      if (target.id == from.id ||
+          included.contains(target.id) ||
+          !_swapCompatible(from, target)) {
+        continue;
+      }
+      included.add(target.id);
+      result.add(
+        PlanSwapCandidate(
+          exerciseId: target.id,
+          name: target.name,
+          blockRole: target.blockRole,
+          movementClass: target.movementClass,
+          metricType: target.metricType,
+          laterality: target.laterality,
+          difficultyTier: target.difficultyTier,
+          resistanceEquipment: target.resistanceEquipment,
+          supportEquipment: target.supportEquipment,
+          bwContribution: target.bwContribution,
+          loadStepOverride: target.loadStepOverride,
+          tier: 2,
+          rank: fallbackRank++,
+          doseByWeekKind: _dosesFor(target, scheme, isEmphasis: isEmphasis),
+          repRange: target.metricType == MetricType.timed
+              ? null
+              : config.rangeFor(target, scheme),
+        ),
+      );
+    }
+    result.sort((left, right) {
+      final tier = left.tier.compareTo(right.tier);
+      if (tier != 0) return tier;
+      final rank = left.rank.compareTo(right.rank);
+      if (rank != 0) return rank;
+      return left.exerciseId.compareTo(right.exerciseId);
+    });
     return result;
   }
 
@@ -993,10 +1008,7 @@ String _contentCanonical(ContentCatalog catalog) {
     ]);
   }
   for (final edge in catalog.swapEdges) {
-    parts.add(
-      '${edge.fromId}:${edge.toId}:${edge.reason.name}:${edge.rank}:'
-      '${edge.patternRelation.name}',
-    );
+    parts.add('${edge.fromId}:${edge.toId}:tier${edge.tier}:${edge.rank}');
   }
   for (final role in BlockRole.values) {
     if (catalog.rotatingBlockRoles.contains(role)) {
