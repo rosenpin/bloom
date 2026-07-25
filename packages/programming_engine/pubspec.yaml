@@ -1,0 +1,15 @@
+name: programming_engine
+description: Pure Dart training-programming engine — plan assembly, progression, in-session adaptation. No Flutter, no I/O, no clock access.
+version: 1.0.0
+# repository: https://github.com/my_org/my_repo
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  collection: ^1.19.0
+  meta: ^1.16.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6
