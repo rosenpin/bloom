@@ -125,9 +125,22 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.rose,
           foregroundColor: AppColors.paper,
+          disabledBackgroundColor: AppColors.blushSoft,
+          disabledForegroundColor: AppColors.inkFaint,
           minimumSize: const Size.fromHeight(52),
           shape: const RoundedRectangleBorder(
-            borderRadius: AppRadii.smallBorder,
+            borderRadius: AppRadii.mediumBorder,
+          ),
+          textStyle: textTheme.labelLarge,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.inkSoft,
+          side: const BorderSide(color: AppColors.line),
+          minimumSize: const Size.fromHeight(52),
+          shape: const RoundedRectangleBorder(
+            borderRadius: AppRadii.mediumBorder,
           ),
           textStyle: textTheme.labelLarge,
         ),

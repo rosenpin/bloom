@@ -2,15 +2,80 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../theme/app_spacing.dart';
+import '../../features/onboarding/presentation/onboarding_screens.dart';
+import '../../features/plan/presentation/plan_reveal_screen.dart';
+import '../../features/tabs/presentation/me_screen.dart';
+import '../../features/tabs/presentation/plan_screen.dart';
+import '../../features/tabs/presentation/today_screen.dart';
+import '../providers.dart';
 
 part 'app_router.g.dart';
 
 @Riverpod(keepAlive: true)
 GoRouter router(Ref ref) {
+  final onboardingRepository = ref.watch(onboardingRepositoryProvider);
   final router = GoRouter(
-    initialLocation: '/today',
+    initialLocation: '/',
+    redirect: (context, state) async {
+      final location = state.matchedLocation;
+      if (location.startsWith('/onboarding')) return null;
+
+      final completed = await onboardingRepository.hasCompletedProfile();
+      if (location == '/') {
+        return completed ? '/today' : '/onboarding';
+      }
+      if (!completed &&
+          (location == '/today' || location == '/plan' || location == '/me')) {
+        return '/onboarding';
+      }
+      return null;
+    },
     routes: [
+      GoRoute(path: '/', builder: (context, state) => const SizedBox.shrink()),
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const WelcomeScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/age',
+        builder: (context, state) => const AgeScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/goal',
+        builder: (context, state) => const GoalScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/days',
+        builder: (context, state) => const DaysScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/session-length',
+        builder: (context, state) => const SessionLengthScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/experience',
+        builder: (context, state) => const ExperienceScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/emphasis',
+        builder: (context, state) => const EmphasisScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/activities',
+        builder: (context, state) => const ActivitiesScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/menstrual',
+        builder: (context, state) => const MenstrualScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/generating',
+        builder: (context, state) => const GeneratingScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/reveal',
+        builder: (context, state) => const PlanRevealScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             _AppShell(navigationShell: navigationShell),
@@ -19,11 +84,7 @@ GoRouter router(Ref ref) {
             routes: [
               GoRoute(
                 path: '/today',
-                builder: (context, state) => const _PlaceholderScreen(
-                  screenKey: ValueKey('today-screen'),
-                  title: 'Today',
-                  description: 'Your next workout will be ready when you are.',
-                ),
+                builder: (context, state) => const TodayScreen(),
               ),
             ],
           ),
@@ -31,12 +92,7 @@ GoRouter router(Ref ref) {
             routes: [
               GoRoute(
                 path: '/plan',
-                builder: (context, state) => const _PlaceholderScreen(
-                  screenKey: ValueKey('plan-screen'),
-                  title: 'Plan',
-                  description:
-                      'A plan shaped around your schedule, goals, and real life.',
-                ),
+                builder: (context, state) => const PlanScreen(),
               ),
             ],
           ),
@@ -44,12 +100,7 @@ GoRouter router(Ref ref) {
             routes: [
               GoRoute(
                 path: '/me',
-                builder: (context, state) => const _PlaceholderScreen(
-                  screenKey: ValueKey('me-screen'),
-                  title: 'Me',
-                  description:
-                      'Your preferences and progress will live here, quietly remembered.',
-                ),
+                builder: (context, state) => const MeScreen(),
               ),
             ],
           ),
@@ -79,8 +130,8 @@ class _AppShell extends StatelessWidget {
         destinations: const [
           NavigationDestination(
             key: ValueKey('today-tab'),
-            icon: Icon(Icons.today_outlined),
-            selectedIcon: Icon(Icons.today_rounded),
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
             label: 'Today',
           ),
           NavigationDestination(
@@ -96,48 +147,6 @@ class _AppShell extends StatelessWidget {
             label: 'Me',
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen({
-    required this.screenKey,
-    required this.title,
-    required this.description,
-  });
-
-  final Key screenKey;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      key: screenKey,
-      minimum: const EdgeInsets.all(AppSpacing.lg),
-      child: Align(
-        alignment: const Alignment(0, -0.24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.displaySmall,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                description,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
