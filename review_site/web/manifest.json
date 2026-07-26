@@ -1,0 +1,34 @@
+{
+    "name": "Women’s Gym Generator Review",
+    "short_name": "Gym Review",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#FDF5F1",
+    "theme_color": "#A24854",
+    "description": "Review the real Women’s Gym programming engine output.",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

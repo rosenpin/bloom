@@ -1,0 +1,31 @@
+name: review_site
+description: Review the real Women's Gym programming engine output.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  programming_engine:
+    path: ../packages/programming_engine
+  web: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: WixMadeforText
+      fonts:
+        - asset: assets/fonts/WixMadeforText.ttf
+        - asset: assets/fonts/WixMadeforText-Italic.ttf
+          style: italic
+    - family: YoungSerif
+      fonts:
+        - asset: assets/fonts/YoungSerif-Regular.ttf
