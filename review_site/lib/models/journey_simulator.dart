@@ -27,6 +27,7 @@ final class JourneyPoint {
     required this.exerciseName,
     required this.load,
     required this.hasExternalLoad,
+    required this.sets,
     required this.target,
     required this.targetKind,
   });
@@ -38,8 +39,16 @@ final class JourneyPoint {
   final String exerciseName;
   final Kg load;
   final bool hasExternalLoad;
+  final int sets;
   final int target;
   final JourneyTargetKind targetKind;
+
+  double volume(UnitSystem unitSystem) {
+    final work = sets * target;
+    if (!hasExternalLoad) return work.toDouble();
+    final displayLoad = unitSystem.isMetric ? load.value : load.inLb;
+    return work * displayLoad;
+  }
 }
 
 final class JourneyResult {
@@ -117,6 +126,7 @@ JourneyResult simulateJourney({
           exerciseName: entry.planExercise.name,
           load: load,
           hasExternalLoad: entry.planExercise.metricType.hasLoad,
+          sets: prescription.dose.sets,
           target: target.value,
           targetKind: target.kind,
         ),

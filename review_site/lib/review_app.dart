@@ -278,11 +278,13 @@ final class _ReviewHomeState extends State<ReviewHome> {
 
   String? _exportPayload() {
     final plan = _plan;
-    if (plan == null) return null;
+    final journey = _journey;
+    if (plan == null || journey == null) return null;
     return createNotesExportJson(
       form: _form,
       plan: plan,
       notes: _notes,
+      journey: journey,
       journeyWeeks: _journeyWeeks,
       journeyPattern: _journeyPattern.name,
       generatedAt: DateTime.now().toUtc().toIso8601String(),

@@ -58,7 +58,7 @@ final class FeedbackTab extends StatelessWidget {
         ),
         const SizedBox(height: 5),
         const Text(
-          'Notes are stored per stamped plan in this browser. Export carries the profile and all engine stamps.',
+          'Notes are stored per stamped plan in this browser. Export carries the profile, journey series, and all engine stamps.',
           style: TextStyle(color: AppColors.inkSoft),
         ),
         const SizedBox(height: 16),

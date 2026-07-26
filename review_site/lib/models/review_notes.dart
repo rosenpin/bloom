@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:programming_engine/programming_engine.dart';
 
+import 'journey_simulator.dart';
 import 'review_form_state.dart';
 
 const _notesUnset = Object();
@@ -192,6 +193,7 @@ String createNotesExportJson({
   required ReviewFormState form,
   required Plan plan,
   required ReviewNotes notes,
+  required JourneyResult journey,
   required int journeyWeeks,
   required String journeyPattern,
   required String generatedAt,
@@ -204,6 +206,7 @@ String createNotesExportJson({
     'journeySimulation': <String, Object>{
       'weeks': journeyWeeks,
       'effortPattern': journeyPattern,
+      'series': _journeySeriesJson(journey, form.unitSystem),
     },
     'stamps': <String, String>{
       'engineVersion': plan.stamps.engineVersion,
@@ -214,6 +217,48 @@ String createNotesExportJson({
     'notes': notes.toJson(),
   };
   return const JsonEncoder.withIndent('  ').convert(payload);
+}
+
+List<Map<String, Object>> _journeySeriesJson(
+  JourneyResult journey,
+  UnitSystem unitSystem,
+) {
+  final series = journey.series.values.toList(growable: false)
+    ..sort(
+      (left, right) =>
+          left.first.exerciseName.compareTo(right.first.exerciseName),
+    );
+  final loadUnit = unitSystem.isMetric ? 'kg' : 'lb';
+  return <Map<String, Object>>[
+    for (final points in series)
+      <String, Object>{
+        'exerciseId': points.first.exerciseId,
+        'exerciseName': points.first.exerciseName,
+        'hasExternalLoad': points.first.hasExternalLoad,
+        'loadUnit': loadUnit,
+        'targetKind': points.first.targetKind.name,
+        'sessions': <int>[for (final point in points) point.session],
+        'absoluteWeeks': <int>[for (final point in points) point.absoluteWeek],
+        'weekKinds': <String>[for (final point in points) point.weekKind.name],
+        'sets': <int>[for (final point in points) point.sets],
+        'externalLoad': <num>[
+          for (final point in points)
+            _journeyNumber(
+              unitSystem.isMetric ? point.load.value : point.load.inLb,
+            ),
+        ],
+        'target': <int>[for (final point in points) point.target],
+        'volume': <num>[
+          for (final point in points) _journeyNumber(point.volume(unitSystem)),
+        ],
+      },
+  ];
+}
+
+num _journeyNumber(double value) {
+  final whole = value.round();
+  if ((value - whole).abs() < 0.000001) return whole;
+  return double.parse(value.toStringAsFixed(3));
 }
 
 bool _mapsEqual<K, V>(Map<K, V> left, Map<K, V> right) {

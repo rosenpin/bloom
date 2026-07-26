@@ -111,11 +111,17 @@ final class JourneyTab extends StatelessWidget {
               '${result.sessionCount} simulated sessions',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
-            _LineLegend(color: AppColors.roseDeep, label: 'Load ($loadUnit)'),
+            const _LineLegend(color: AppColors.roseDeep, label: 'Volume'),
+            _LineLegend(
+              color: AppColors.coral,
+              label: 'Load ($loadUnit)',
+              subtle: true,
+            ),
             const _LineLegend(
               color: AppColors.lavender,
               label: 'Target reps / hold',
               subtle: true,
+              dashed: true,
             ),
             const _ShadeLegend(
               color: AppColors.lavenderSoft,
@@ -153,11 +159,13 @@ final class _LineLegend extends StatelessWidget {
     required this.color,
     required this.label,
     this.subtle = false,
+    this.dashed = false,
   });
 
   final Color color;
   final String label;
   final bool subtle;
+  final bool dashed;
 
   @override
   Widget build(BuildContext context) {
@@ -168,7 +176,11 @@ final class _LineLegend extends StatelessWidget {
           width: 22,
           height: 8,
           child: CustomPaint(
-            painter: _LegendLinePainter(color: color, subtle: subtle),
+            painter: _LegendLinePainter(
+              color: color,
+              subtle: subtle,
+              dashed: dashed,
+            ),
           ),
         ),
         const SizedBox(width: 5),
@@ -186,18 +198,23 @@ final class _LineLegend extends StatelessWidget {
 }
 
 final class _LegendLinePainter extends CustomPainter {
-  const _LegendLinePainter({required this.color, required this.subtle});
+  const _LegendLinePainter({
+    required this.color,
+    required this.subtle,
+    required this.dashed,
+  });
 
   final Color color;
   final bool subtle;
+  final bool dashed;
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = subtle ? color.withValues(alpha: 0.72) : color
-      ..strokeWidth = subtle ? 1.5 : 2.5
+      ..color = subtle ? color.withValues(alpha: 0.66) : color
+      ..strokeWidth = subtle ? 1.4 : 3
       ..strokeCap = StrokeCap.round;
-    if (subtle) {
+    if (dashed) {
       _drawDashedSegment(
         canvas,
         Offset(0, size.height / 2),
@@ -215,7 +232,9 @@ final class _LegendLinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LegendLinePainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.subtle != subtle;
+      oldDelegate.color != color ||
+      oldDelegate.subtle != subtle ||
+      oldDelegate.dashed != dashed;
 }
 
 final class _ShadeLegend extends StatelessWidget {
@@ -272,7 +291,7 @@ final class _SeriesRow extends StatelessWidget {
         if (!hasLoad) ...<Widget>[
           const SizedBox(height: 3),
           const Text(
-            'Rep / duration progression · no external load',
+            'No external load · volume is sets × reps / hold',
             style: TextStyle(
               color: AppColors.inkFaint,
               fontSize: 12,
@@ -349,7 +368,6 @@ final class _JourneyChartState extends State<_JourneyChart> {
         void selectNearest(double dx) {
           final plot = _plotRect(
             Size(constraints.maxWidth, constraints.maxHeight),
-            widget.hasLoad,
           );
           var nearestIndex = 0;
           var nearestDistance = double.infinity;
@@ -395,7 +413,7 @@ final class _JourneyChartState extends State<_JourneyChart> {
                 if (hovered != null)
                   Positioned(
                     top: 0,
-                    left: widget.hasLoad ? 43 : 12,
+                    left: 49,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: AppColors.paper.withValues(alpha: 0.94),
@@ -444,7 +462,7 @@ final class _ProgressChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final plot = _plotRect(size, hasLoad);
+    final plot = _plotRect(size);
     _drawWeekShading(canvas, plot);
     canvas.drawLine(
       Offset(plot.left, plot.bottom),
@@ -452,37 +470,6 @@ final class _ProgressChartPainter extends CustomPainter {
       Paint()
         ..color = AppColors.line
         ..strokeWidth = 1,
-    );
-
-    final targetValues = <double>[
-      for (final point in points) point.target.toDouble(),
-    ];
-    final targetOffsets = _offsets(targetValues, plot);
-    final targetPaint = Paint()
-      ..color = AppColors.lavender.withValues(alpha: 0.74)
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.round;
-    for (var index = 1; index < targetOffsets.length; index++) {
-      _drawDashedSegment(
-        canvas,
-        targetOffsets[index - 1],
-        targetOffsets[index],
-        targetPaint,
-      );
-    }
-    for (final offset in targetOffsets) {
-      canvas.drawCircle(
-        offset,
-        2.1,
-        Paint()..color = AppColors.lavender.withValues(alpha: 0.8),
-      );
-    }
-    _drawAxisLabels(
-      canvas,
-      plot,
-      targetValues,
-      side: _AxisSide.right,
-      formatter: (value) => _number(value),
     );
 
     if (hasLoad) {
@@ -502,23 +489,84 @@ final class _ProgressChartPainter extends CustomPainter {
       canvas.drawPath(
         path,
         Paint()
-          ..color = AppColors.roseDeep
-          ..strokeWidth = 2.5
+          ..color = AppColors.coral.withValues(alpha: 0.58)
+          ..strokeWidth = 1.4
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round
           ..style = PaintingStyle.stroke,
       );
       for (final offset in loadOffsets) {
-        canvas.drawCircle(offset, 2.5, Paint()..color = AppColors.coral);
+        canvas.drawCircle(
+          offset,
+          1.8,
+          Paint()..color = AppColors.coral.withValues(alpha: 0.7),
+        );
       }
-      _drawAxisLabels(
+    }
+
+    final targetValues = <double>[
+      for (final point in points) point.target.toDouble(),
+    ];
+    final targetOffsets = _offsets(targetValues, plot);
+    final targetPaint = Paint()
+      ..color = AppColors.lavender.withValues(alpha: 0.66)
+      ..strokeWidth = 1.4
+      ..strokeCap = StrokeCap.round;
+    for (var index = 1; index < targetOffsets.length; index++) {
+      _drawDashedSegment(
         canvas,
-        plot,
-        loadValues,
-        side: _AxisSide.left,
-        formatter: _number,
+        targetOffsets[index - 1],
+        targetOffsets[index],
+        targetPaint,
       );
     }
+    for (final offset in targetOffsets) {
+      canvas.drawCircle(
+        offset,
+        1.8,
+        Paint()..color = AppColors.lavender.withValues(alpha: 0.72),
+      );
+    }
+    _drawAxisLabels(
+      canvas,
+      plot,
+      targetValues,
+      side: _AxisSide.right,
+      formatter: _number,
+    );
+
+    final volumeValues = <double>[
+      for (final point in points) point.volume(unitSystem),
+    ];
+    final volumeOffsets = _offsets(volumeValues, plot);
+    final volumePath = Path();
+    for (var index = 0; index < volumeOffsets.length; index++) {
+      final offset = volumeOffsets[index];
+      if (index == 0) {
+        volumePath.moveTo(offset.dx, offset.dy);
+      } else {
+        volumePath.lineTo(offset.dx, offset.dy);
+      }
+    }
+    canvas.drawPath(
+      volumePath,
+      Paint()
+        ..color = AppColors.roseDeep
+        ..strokeWidth = 3.2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke,
+    );
+    for (final offset in volumeOffsets) {
+      canvas.drawCircle(offset, 2.8, Paint()..color = AppColors.roseDeep);
+    }
+    _drawAxisLabels(
+      canvas,
+      plot,
+      volumeValues,
+      side: _AxisSide.left,
+      formatter: _number,
+    );
 
     final hovered = hoveredPoint;
     if (hovered != null) {
@@ -671,8 +719,8 @@ void _drawAxisLabel(
   painter.paint(canvas, Offset(x, centerY - painter.height / 2));
 }
 
-Rect _plotRect(Size size, bool hasLoad) =>
-    Rect.fromLTRB(hasLoad ? 40 : 10, 22, size.width - 42, size.height - 14);
+Rect _plotRect(Size size) =>
+    Rect.fromLTRB(46, 22, size.width - 42, size.height - 14);
 
 double _xForSession(int session, int sessionCount, Rect plot) =>
     plot.left + (session - 1) / math.max(1, sessionCount - 1) * plot.width;
@@ -700,6 +748,8 @@ String _pointTooltip(JourneyPoint point, UnitSystem unitSystem) {
   final parts = <String>[
     'Session ${point.session}',
     'week ${point.absoluteWeek}',
+    'volume ${_number(point.volume(unitSystem))}',
+    '${point.sets} sets',
   ];
   if (point.hasExternalLoad) {
     parts.add(
@@ -720,46 +770,48 @@ String journeyProgressSummary(
   UnitSystem unitSystem,
 ) {
   assert(points.isNotEmpty);
-  final parts = <String>[];
+  final volumeValues = <double>[
+    for (final point in points) point.volume(unitSystem),
+  ];
+  final volumeStart = volumeValues.first;
+  final volumePeak = volumeValues.reduce(math.max);
+  final volumeLatest = volumeValues.last;
+  final volume = StringBuffer(
+    'volume ${_number(volumeStart)} -> ${_number(volumePeak)} (peak)',
+  );
+  if (!_sameNumber(volumeLatest, volumePeak)) {
+    volume.write(' · latest ${_number(volumeLatest)}');
+  }
+
+  final details = <String>[];
   if (points.first.hasExternalLoad) {
     final values = <double>[
       for (final point in points) _displayValue(point.load, unitSystem),
     ];
     final start = values.first;
     final peak = values.reduce(math.max);
-    final current = values.last;
     final unit = unitSystem.isMetric ? 'kg' : 'lb';
-    parts.add('load ${_number(start)} → ${_number(peak)} $unit (peak)');
-    if (!_sameNumber(current, peak)) {
-      parts.add('current ${_number(current)} $unit');
-    }
+    details.add('load ${_number(start)} -> ${_number(peak)} $unit');
   }
 
   final targetValues = <int>[for (final point in points) point.target];
   final targetStart = targetValues.first;
   final targetPeak = targetValues.reduce(math.max);
-  final targetCurrent = targetValues.last;
   final isHold = points.first.targetKind == JourneyTargetKind.hold;
   final targetLabel = isHold ? 'hold' : 'reps';
   final targetUnit = isHold ? ' sec' : '';
-  parts.add(
-    '$targetLabel $targetStart → $targetPeak$targetUnit'
-    '${targetCurrent == targetPeak ? '' : ' (peak)'}',
-  );
-  if (targetCurrent != targetPeak) {
-    parts.add('current $targetCurrent$targetUnit');
-  }
+  details.add('$targetLabel $targetStart -> $targetPeak$targetUnit');
 
   switch (points.last.weekKind) {
     case MesocycleWeekKind.easier:
-      parts.add('ends in easier week');
+      details.add('ends in easier week');
     case MesocycleWeekKind.deload:
-      parts.add('ends in deload week');
+      details.add('ends in deload week');
     case MesocycleWeekKind.build:
     case MesocycleWeekKind.push:
       break;
   }
-  return parts.join(' · ');
+  return '$volume\n${details.join(' · ')}';
 }
 
 double _displayValue(Kg load, UnitSystem unitSystem) =>
