@@ -34,6 +34,12 @@ final class PlanRepository {
     return _decode(await query.getSingleOrNull());
   }
 
+  Future<StoredPlanDocument?> loadById(String id) async {
+    final query = _database.select(_database.plans)
+      ..where((plan) => plan.id.equals(id));
+    return _decode(await query.getSingleOrNull());
+  }
+
   Future<StoredPlanDocument> store(
     engine.Plan plan, {
     required OnboardingRepository onboardingRepository,
@@ -62,6 +68,28 @@ final class PlanRepository {
       );
     });
 
+    return StoredPlanDocument(row: row, plan: plan);
+  }
+
+  Future<StoredPlanDocument> update(
+    StoredPlanDocument document,
+    engine.Plan plan,
+  ) async {
+    await (_database.update(
+      _database.plans,
+    )..where((row) => row.id.equals(document.row.id))).write(
+      PlansCompanion(
+        documentJson: Value(PlanCodec.encode(plan)),
+        engineVersion: Value(plan.stamps.engineVersion),
+        configHash: Value(plan.stamps.configHash),
+        contentHash: Value(plan.stamps.contentHash),
+        profileHash: Value(plan.stamps.profileHash),
+        mesocycleIndex: Value(plan.mesocycleIndex),
+      ),
+    );
+    final row = await (_database.select(
+      _database.plans,
+    )..where((row) => row.id.equals(document.row.id))).getSingle();
     return StoredPlanDocument(row: row, plan: plan);
   }
 

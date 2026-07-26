@@ -8,6 +8,7 @@ import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../plan/domain/plan_presentation.dart';
+import '../../session/application/session_controller.dart';
 
 class TodayScreen extends ConsumerWidget {
   const TodayScreen({super.key});
@@ -16,7 +17,10 @@ class TodayScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final documentState = ref.watch(latestPlanProvider);
     final answersState = ref.watch(onboardingAnswersProvider);
-    if (documentState.isLoading || answersState.isLoading) {
+    final previewState = ref.watch(sessionPreviewProvider);
+    if (documentState.isLoading ||
+        answersState.isLoading ||
+        previewState.isLoading) {
       return const LoadingBloom();
     }
     final document = documentState.value;
@@ -25,8 +29,11 @@ class TodayScreen extends ConsumerWidget {
       return _NoPlanToday(onCreatePlan: () => context.go('/onboarding'));
     }
 
-    final day = document.plan.days.first;
-    final weekKind = document.plan.mesocycleCalendar.first.kind;
+    final preview = previewState.value;
+    final day = preview?.day ?? document.plan.days.first;
+    final weekKind =
+        preview?.state.weekKind ?? document.plan.mesocycleCalendar.first.kind;
+    final weekExplanation = PlanPresentation.weekKindExplanation(weekKind);
     return SafeArea(
       key: const ValueKey('today-screen'),
       child: SingleChildScrollView(
@@ -127,12 +134,37 @@ class TodayScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                if (weekExplanation != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: const BoxDecoration(
+                      color: AppColors.blushSoft,
+                      borderRadius: AppRadii.mediumBorder,
+                    ),
+                    child: Text(
+                      weekExplanation,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.inkSoft,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.md),
                 FilledButton.icon(
-                  key: const ValueKey('workout-player-milestone'),
-                  onPressed: null,
-                  icon: const Icon(Icons.lock_clock_outlined),
-                  label: const Text('Workout player coming soon'),
+                  key: const ValueKey('start-workout'),
+                  onPressed: preview == null
+                      ? null
+                      : () async {
+                          final runtime = await ref
+                              .read(sessionControllerProvider.notifier)
+                              .start();
+                          if (runtime != null && context.mounted) {
+                            context.push('/session');
+                          }
+                        },
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Start workout'),
                 ),
               ],
             ),

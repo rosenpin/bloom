@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../features/onboarding/presentation/onboarding_screens.dart';
 import '../../features/plan/presentation/plan_reveal_screen.dart';
+import '../../features/session/presentation/session_player_screen.dart';
 import '../../features/tabs/presentation/me_screen.dart';
 import '../../features/tabs/presentation/plan_screen.dart';
 import '../../features/tabs/presentation/today_screen.dart';
@@ -25,7 +26,10 @@ GoRouter router(Ref ref) {
         return completed ? '/today' : '/onboarding';
       }
       if (!completed &&
-          (location == '/today' || location == '/plan' || location == '/me')) {
+          (location == '/today' ||
+              location == '/plan' ||
+              location == '/me' ||
+              location == '/session')) {
         return '/onboarding';
       }
       return null;
@@ -75,6 +79,10 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: '/onboarding/reveal',
         builder: (context, state) => const PlanRevealScreen(),
+      ),
+      GoRoute(
+        path: '/session',
+        builder: (context, state) => const SessionPlayerScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

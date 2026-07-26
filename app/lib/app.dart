@@ -11,6 +11,7 @@ class WomensGymApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(seedExerciseContentProvider);
     final gate = ref.watch(startupVersionGateProvider);
     return MaterialApp.router(
       title: 'Bloom',

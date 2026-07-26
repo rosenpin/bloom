@@ -6,6 +6,7 @@ import 'package:programming_engine/programming_engine.dart' as programming;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../data/db/app_database.dart';
 import '../features/onboarding/data/onboarding_repository.dart';
@@ -13,6 +14,9 @@ import '../features/onboarding/domain/onboarding_answers.dart';
 import '../features/plan/application/plan_generation_service.dart';
 import '../features/plan/data/plan_repository.dart';
 import '../features/plan/domain/stored_plan_document.dart';
+import '../features/session/application/rest_timer_foundation.dart';
+import '../features/session/application/session_lifecycle_service.dart';
+import '../features/session/data/exercise_content_repository.dart';
 import 'programming_engine_facade.dart';
 import 'ulid.dart';
 import 'version_gate.dart';
@@ -33,7 +37,11 @@ AppDatabase database(Ref ref) {
 }
 
 @Riverpod(keepAlive: true)
-ProgrammingEngineFacade engine(Ref ref) => const ProgrammingEngineFacade();
+ProgrammingEngineFacade engine(Ref ref) => const ProgrammingEngineFacade(
+  config: programming.ProgrammingConfig(
+    exerciseCountByMinutes: {15: 1, 20: 2, 30: 4, 45: 6, 60: 8},
+  ),
+);
 
 @Riverpod(keepAlive: true)
 programming.ContentCatalog contentCatalog(Ref ref) => programming.catalogV1;
@@ -53,6 +61,48 @@ PlanRepository planRepository(Ref ref) => PlanRepository(
 );
 
 @Riverpod(keepAlive: true)
+ExerciseContentRepository exerciseContentRepository(Ref ref) =>
+    ExerciseContentRepository(ref.watch(databaseProvider));
+
+@Riverpod(keepAlive: true)
+ExerciseContentSeeder exerciseContentSeeder(Ref ref) => ExerciseContentSeeder(
+  ref.watch(databaseProvider),
+  ref.watch(contentCatalogProvider),
+  ref.watch(clockProvider),
+);
+
+@Riverpod(keepAlive: true)
+Future<void> seedExerciseContent(Ref ref) =>
+    ref.watch(exerciseContentSeederProvider).seedIfEmpty();
+
+@Riverpod(keepAlive: true)
+SessionLifecycleService sessionLifecycleService(Ref ref) =>
+    SessionLifecycleService(
+      ref.watch(databaseProvider),
+      ref.watch(planRepositoryProvider),
+      ref.watch(onboardingRepositoryProvider),
+      ref.watch(exerciseContentSeederProvider),
+      ref.watch(ulidProvider),
+      ref.watch(clockProvider),
+      ref.watch(engineProvider).config,
+    );
+
+@Riverpod(keepAlive: true)
+FlutterLocalNotificationsPlugin localNotificationsPlugin(Ref ref) =>
+    FlutterLocalNotificationsPlugin();
+
+@Riverpod(keepAlive: true)
+RestNotificationScheduler restNotificationScheduler(Ref ref) =>
+    LocalRestNotificationScheduler(
+      ref.watch(localNotificationsPluginProvider),
+      ref.watch(clockProvider),
+    );
+
+@Riverpod(keepAlive: true)
+RestTimerFoundation restTimerFoundation(Ref ref) =>
+    RestTimerFoundation(ref.watch(restNotificationSchedulerProvider));
+
+@Riverpod(keepAlive: true)
 PlanGenerationService planGenerationService(Ref ref) => PlanGenerationService(
   ref.watch(onboardingRepositoryProvider),
   ref.watch(planRepositoryProvider),
@@ -67,6 +117,10 @@ Stream<OnboardingAnswers?> onboardingAnswers(Ref ref) =>
 @riverpod
 Stream<StoredPlanDocument?> latestPlan(Ref ref) =>
     ref.watch(planRepositoryProvider).watchLatest();
+
+@riverpod
+Future<SessionPreview?> sessionPreview(Ref ref) =>
+    ref.watch(sessionLifecycleServiceProvider).preview();
 
 @Riverpod(keepAlive: true)
 Duration minimumGenerationDelay(Ref ref) => const Duration(milliseconds: 2500);

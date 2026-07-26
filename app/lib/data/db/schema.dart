@@ -25,6 +25,8 @@ class Profiles extends Table {
   TextColumn get quizAnswersJson => text()();
   DateTimeColumn get lastPeriodStart => dateTime().nullable()();
   IntColumn get usualGapDays => integer().nullable()();
+  BoolColumn get unitPromptSeen =>
+      boolean().withDefault(const Constant(false))();
   DateTimeColumn get updatedAt => dateTime()();
 
   @override
@@ -61,15 +63,30 @@ class SessionRecords extends Table {
   TextColumn get id => text()();
   TextColumn get planId =>
       text().references(Plans, #id, onDelete: KeyAction.restrict)();
+  TextColumn get planRef => text().withDefault(const Constant(''))();
   IntColumn get dayIndex => integer()();
+  IntColumn get mesocycleIndex => integer().withDefault(const Constant(1))();
+  IntColumn get mesocycleWeekIndex =>
+      integer().withDefault(const Constant(1))();
+  IntColumn get absoluteWeekIndex => integer().withDefault(const Constant(1))();
+  TextColumn get weekKind => textEnum<engine.MesocycleWeekKind>().withDefault(
+    const Constant('build'),
+  )();
   DateTimeColumn get startedAt => dateTime()();
   DateTimeColumn get completedAt => dateTime().nullable()();
+  DateTimeColumn get abandonedAt => dateTime().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
 
   @override
-  List<String> get customConstraints => ['CHECK (day_index >= 1)'];
+  List<String> get customConstraints => [
+    'CHECK (day_index >= 1)',
+    'CHECK (mesocycle_index >= 1)',
+    'CHECK (mesocycle_week_index >= 1)',
+    'CHECK (absolute_week_index >= 1)',
+    'CHECK (completed_at IS NULL OR abandoned_at IS NULL)',
+  ];
 }
 
 @DataClassName('SessionEventRow')

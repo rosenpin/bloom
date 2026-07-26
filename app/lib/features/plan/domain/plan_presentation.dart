@@ -70,8 +70,17 @@ abstract final class PlanPresentation {
     engine.MesocycleWeekKind.build => 'Build week',
     engine.MesocycleWeekKind.easier => 'Easier week',
     engine.MesocycleWeekKind.push => 'Push week',
-    engine.MesocycleWeekKind.deload => 'Deload week',
+    engine.MesocycleWeekKind.deload => 'Lighter week',
   };
+
+  static String? weekKindExplanation(engine.MesocycleWeekKind kind) =>
+      switch (kind) {
+        engine.MesocycleWeekKind.easier =>
+          'A little less work on purpose. Your weights stay familiar.',
+        engine.MesocycleWeekKind.deload =>
+          'This week is lighter on purpose. It sets up the next six weeks.',
+        _ => null,
+      };
 
   static String? _activitiesLabel(OnboardingAnswers answers) {
     if (answers.otherActivities.containsKey(engine.ActivityKind.yogaPilates)) {
