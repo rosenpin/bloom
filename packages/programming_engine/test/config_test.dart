@@ -45,15 +45,15 @@ void main() {
       ),
       (
         rule:
-            'Build curves: 3–4 × 8–12 with +1 set on the emphasis area, '
-            'leave 1–2 reps, 90s',
+            'Build curves: exact Toned & defined hypertrophy scheme, with '
+            'emphasis volume supplied by assembly',
         goal: Goal.buildCurves,
         minSets: 3,
-        maxSets: 4,
-        range: RepRange(8, 12),
-        rpe: 8,
-        restSeconds: 90,
-        extraSetOnEmphasis: true,
+        maxSets: 3,
+        range: RepRange(10, 12),
+        rpe: 7,
+        restSeconds: 75,
+        extraSetOnEmphasis: false,
       ),
       (
         rule:
@@ -98,14 +98,15 @@ void main() {
       expect(bare.schemeFor(Goal.stronger).range, const RepRange(10, 12));
     });
 
-    test('an opening dose starts at the bottom of the range', () {
-      final dose = config.schemeFor(Goal.buildCurves).openingDose();
-      expect(dose.targetReps, 8);
-      expect(dose.sets, 4);
-      expect(
-        config.schemeFor(Goal.buildCurves).openingDose(isEmphasis: true).sets,
-        5,
-      );
+    test('build curves is exactly the toned scheme', () {
+      final curves = config.schemeFor(Goal.buildCurves);
+      final toned = config.schemeFor(Goal.tonedAndDefined);
+      expect(curves, toned);
+
+      final dose = curves.openingDose();
+      expect(dose.targetReps, 10);
+      expect(dose.sets, 3);
+      expect(curves.openingDose(isEmphasis: true), dose);
     });
   });
 

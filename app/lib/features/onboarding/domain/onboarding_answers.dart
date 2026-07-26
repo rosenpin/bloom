@@ -203,7 +203,7 @@ final class OnboardingAnswers {
           json['experienceTier'],
         ),
         gymComfort: _enumOrNull(engine.GymComfort.values, json['gymComfort']),
-        emphasis: _enumOrNull(engine.Emphasis.values, json['emphasis']),
+        emphasis: _decodeEmphasis(json['emphasis']),
         otherActivities: _decodeActivities(rawActivities),
         menstrualPreference:
             _enumOrNull(
@@ -230,6 +230,13 @@ T? _enumOrNull<T extends Enum>(List<T> values, Object? name) {
     if (value.name == name) return value;
   }
   return null;
+}
+
+engine.Emphasis? _decodeEmphasis(Object? name) {
+  // Schema v1 briefly exposed two no-emphasis values. Preserve resumability
+  // by migrating the legacy "none" spelling to the single quiz value.
+  if (name == 'none') return engine.Emphasis.balanced;
+  return _enumOrNull(engine.Emphasis.values, name);
 }
 
 Map<engine.ActivityKind, int> _decodeActivities(

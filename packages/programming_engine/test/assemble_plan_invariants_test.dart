@@ -67,7 +67,7 @@ void main() {
         }
       }
     }
-    expect(profileCount, 2835);
+    expect(profileCount, 2430);
   });
 
   test('every fixture plan slot is eligible and days are deduplicated', () {

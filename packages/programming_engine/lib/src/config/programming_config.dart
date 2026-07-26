@@ -47,7 +47,8 @@ final class RepScheme {
   final EffortTarget effort;
   final Duration rest;
 
-  /// "Build curves" gets +1 set on the emphasis area.
+  /// Optional scheme-level emphasis bonus. Shipped goal schemes leave this
+  /// false; emphasis-driven volume comes from plan assembly.
   final bool extraSetOnEmphasis;
 
   /// §2 RESOLVED: novices in their first 4 weeks are capped at 3 sets and 3+ RIR
@@ -60,9 +61,8 @@ final class RepScheme {
         ? EffortTarget(config.noviceMaxRpe)
         : effort,
     rest: rest,
-    // The +1 emphasis set is part of the unlocked goal scheme. Retaining it
-    // here would let a novice Build Curves dose reach 4 sets despite the
-    // explicit first-four-weeks cap of 3.
+    // A scheme-level emphasis bonus must never bypass the explicit
+    // first-four-weeks cap of 3 sets.
     extraSetOnEmphasis: false,
   );
 
@@ -380,14 +380,15 @@ final class ProgrammingConfig {
       effort: EffortTarget(8),
       rest: Duration(seconds: 120),
     ),
-    // "leave 1–2 reps", +1 set on emphasis, 90s rest
+    // RESOLVED (Tomer, 2026-07-26): "Build curves" is the same hypertrophy
+    // scheme as "Toned & defined". The distinct quiz label stays for marketing
+    // honesty; emphasis-driven volume comes from the emphasis answer.
     Goal.buildCurves: RepScheme(
       minSets: 3,
-      maxSets: 4,
-      range: RepRange(8, 12),
-      effort: EffortTarget(8),
-      rest: Duration(seconds: 90),
-      extraSetOnEmphasis: true,
+      maxSets: 3,
+      range: RepRange(10, 12),
+      effort: EffortTarget(7),
+      rest: Duration(seconds: 75),
     ),
     // "comfortable, never near failure", 60s rest
     Goal.feelHealthier: RepScheme(

@@ -732,7 +732,7 @@ final class _AssemblyContext {
       Emphasis.arms when isUpper || isFullBody =>
         BlockRole.armShoulderIsolation,
       Emphasis.core => BlockRole.core,
-      Emphasis.none || Emphasis.balanced => null,
+      Emphasis.balanced => null,
       _ => null,
     };
   }

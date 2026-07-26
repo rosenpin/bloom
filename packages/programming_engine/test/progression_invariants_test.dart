@@ -23,7 +23,7 @@ Iterable<ProgressionInput> sweep({List<EffortLevel?>? levels}) sync* {
   const loads = <Kg>[Kg(2), Kg(5), Kg(12), Kg(22.5), Kg(45), Kg(100)];
   const repsSpread = <int>[5, 8, 10, 12, 15];
   // Every effort target the shipped goals use: RPE 6 (feel healthier), 7 (toned,
-  // and every novice), 8 (stronger, build curves).
+  // build curves, and every novice), 8 (stronger).
   const targets = <EffortTarget>[
     EffortTarget(6),
     EffortTarget(7),

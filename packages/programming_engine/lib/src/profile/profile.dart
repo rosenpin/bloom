@@ -39,7 +39,7 @@ enum SessionMinutes {
   final int value;
 }
 
-enum Emphasis { none, balanced, glutes, back, arms, core, legs }
+enum Emphasis { balanced, glutes, back, arms, core, legs }
 
 /// The three answers exposed by the quiz. [newToIt] is the assembler's
 /// never-trained tier; [beenAWhile] maps to returning experience.
