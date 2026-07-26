@@ -500,7 +500,9 @@ final class _Pass {
       );
     }
     // No load change. §4.7: at target effort progress still has to come from
-    // somewhere, so it comes from reps.
+    // somewhere, so it comes from reps. The rule row says "+1-2 reps": exactly
+    // at target earns +1; reporting easier than target earns +2, so "a bit
+    // easy" visibly outpaces "just right" and struggling visibly lags both.
     if (progressAllowed) {
       return _spendOnReps(
         base: base,
@@ -508,6 +510,7 @@ final class _Pass {
         shortfallFraction: 0,
         regime: regime,
         incrementWasTooSmall: false,
+        minExtraReps: report.rir > input.effort.rir ? 2 : 1,
       );
     }
     return _decision(
@@ -601,11 +604,13 @@ final class _Pass {
     required double shortfallFraction,
     required ProgressionRegime regime,
     required bool incrementWasTooSmall,
+    int minExtraReps = 1,
   }) {
     if (targetReps < range.max) {
       final compensating = (shortfallFraction / config.loadFractionPerRep)
           .floor();
-      final extraReps = compensating < 1 ? 1 : compensating;
+      final extraReps =
+          compensating < minExtraReps ? minExtraReps : compensating;
       if (incrementWasTooSmall) why.add(ReasonCode.incrementTooSmallForStep);
       why.add(ReasonCode.repsProgress);
       return _decision(

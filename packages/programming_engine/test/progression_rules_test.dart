@@ -257,7 +257,9 @@ void main() {
       ),
       regime: ProgressionRegime.normal,
       load: const Kg(100),
-      reps: 11,
+      // Easier-than-target reports earn +2 reps ("+1-2" rule row); exactly-at-
+      // target earns +1. Differentiates "a bit easy" from "just right".
+      reps: 12,
       steps: 0,
       why: [ReasonCode.deadbandHold, ReasonCode.repsProgress],
     ),
