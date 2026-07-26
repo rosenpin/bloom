@@ -60,7 +60,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('plan-reveal-screen')), findsOneWidget);
-    expect(find.text('Strong & Toned — Core Focus'), findsOneWidget);
+    expect(find.text('Strong & Toned · Core Focus'), findsOneWidget);
     expect(find.text('2 gym days · core focus'), findsOneWidget);
     expect(find.text('Full Body A'), findsOneWidget);
     expect(find.text('Full Body B'), findsOneWidget);

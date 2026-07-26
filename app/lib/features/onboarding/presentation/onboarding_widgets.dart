@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -15,13 +17,9 @@ class BloomMark extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Transform.rotate(
-          angle: -0.35,
-          child: const Icon(
-            Icons.water_drop_rounded,
-            color: AppColors.rose,
-            size: AppSpacing.lg,
-          ),
+        const CustomPaint(
+          size: Size.square(AppSpacing.lg),
+          painter: _BloomFlowerPainter(),
         ),
         if (showWordmark) ...[
           const SizedBox(width: AppSpacing.xs),
@@ -30,6 +28,44 @@ class BloomMark extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The brand mark: a five-petal bloom. (Replaced the earlier single-drop mark,
+/// which read as a drop of blood: a bad accidental connotation for this app.)
+class _BloomFlowerPainter extends CustomPainter {
+  const _BloomFlowerPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final petal = Paint()..color = AppColors.rose;
+    final petalLength = size.height * 0.42;
+    final petalWidth = size.width * 0.30;
+
+    for (var i = 0; i < 5; i++) {
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.rotate(i * 2 * math.pi / 5);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(0, -petalLength / 2 - size.height * 0.06),
+          width: petalWidth,
+          height: petalLength,
+        ),
+        petal,
+      );
+      canvas.restore();
+    }
+
+    canvas.drawCircle(
+      center,
+      size.width * 0.14,
+      Paint()..color = AppColors.cream,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class QuizPage extends StatelessWidget {

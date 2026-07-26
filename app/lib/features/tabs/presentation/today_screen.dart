@@ -132,7 +132,7 @@ class TodayScreen extends ConsumerWidget {
                   key: const ValueKey('workout-player-milestone'),
                   onPressed: null,
                   icon: const Icon(Icons.lock_clock_outlined),
-                  label: const Text('Workout player — coming next'),
+                  label: const Text('Workout player coming soon'),
                 ),
               ],
             ),

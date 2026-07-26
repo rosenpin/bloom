@@ -19,7 +19,7 @@ abstract final class PlanPresentation {
       engine.Emphasis.back => 'Back Focus',
       _ => null,
     };
-    return emphasis == null ? goal : '$goal — $emphasis';
+    return emphasis == null ? goal : '$goal · $emphasis';
   }
 
   static String profileSummary(OnboardingAnswers answers) {
@@ -43,17 +43,17 @@ abstract final class PlanPresentation {
     return switch (day.kind) {
       engine.PlanDayKind.fullBodyA => 'Full Body A',
       engine.PlanDayKind.fullBodyB => 'Full Body B',
-      engine.PlanDayKind.lowerGluteLed => 'Lower Body — Glute Focus',
+      engine.PlanDayKind.lowerGluteLed => 'Lower Body · Glute Focus',
       engine.PlanDayKind.lower when emphasis == engine.Emphasis.glutes =>
-        'Lower Body — Glute Focus',
+        'Lower Body · Glute Focus',
       engine.PlanDayKind.lower when emphasis == engine.Emphasis.legs =>
-        'Lower Body — Leg Focus',
+        'Lower Body · Leg Focus',
       engine.PlanDayKind.lower => 'Lower Body',
       engine.PlanDayKind.upper when emphasis == engine.Emphasis.back =>
-        'Upper Body — Back Focus',
+        'Upper Body · Back Focus',
       engine.PlanDayKind.upper when emphasis == engine.Emphasis.arms =>
-        'Upper Body — Arm Focus',
-      engine.PlanDayKind.upper => 'Upper Body — Tone & Posture',
+        'Upper Body · Arm Focus',
+      engine.PlanDayKind.upper => 'Upper Body · Tone & Posture',
     };
   }
 

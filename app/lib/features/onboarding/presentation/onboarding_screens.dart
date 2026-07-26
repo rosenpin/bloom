@@ -76,7 +76,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        'Seven quick questions. Then a week of workouts built around you — every move shown, every weight decided.',
+                        'Seven quick questions, then a week of workouts built around you. Every move shown, every weight decided.',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: AppColors.inkSoft,
                           height: 1.45,
@@ -92,8 +92,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                               : 'Keep going',
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      _UnitFooter(answers: answers),
                     ],
                   ),
                 ),
@@ -102,59 +100,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
           ),
         );
       },
-    );
-  }
-}
-
-class _UnitFooter extends ConsumerStatefulWidget {
-  const _UnitFooter({required this.answers});
-
-  final OnboardingAnswers answers;
-
-  @override
-  ConsumerState<_UnitFooter> createState() => _UnitFooterState();
-}
-
-class _UnitFooterState extends ConsumerState<_UnitFooter> {
-  late bool _imperial;
-
-  @override
-  void initState() {
-    super.initState();
-    _imperial = widget.answers.unitSystem == engine.UnitSystem.imperial;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'Weights in ${_imperial ? 'lb' : 'kg'}',
-          style: Theme.of(
-            context,
-          ).textTheme.labelMedium?.copyWith(color: AppColors.inkSoft),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        BloomToggle(
-          key: const ValueKey('unit-toggle'),
-          value: _imperial,
-          onChanged: (value) {
-            setState(() => _imperial = value);
-            unawaited(
-              ref
-                  .read(onboardingRepositoryProvider)
-                  .update(
-                    (current) => current.copyWith(
-                      unitSystem: value
-                          ? engine.UnitSystem.imperial
-                          : engine.UnitSystem.metric,
-                    ),
-                  ),
-            );
-          },
-        ),
-      ],
     );
   }
 }
@@ -231,7 +176,7 @@ class GoalScreen extends ConsumerWidget {
       engine.Goal.stronger: ('Stronger', 'Lift more, carry more, ache less.'),
       engine.Goal.buildCurves: (
         'Build curves',
-        'Grow specific areas — usually glutes.',
+        'Grow specific areas, usually glutes.',
       ),
       engine.Goal.feelHealthier: (
         'Feel healthier',
@@ -333,7 +278,7 @@ class SessionLengthScreen extends ConsumerWidget {
       (answers) => QuizPage(
         step: 4,
         title: 'How long have you got?',
-        subtitle: 'Workouts should fit your life — not the other way around.',
+        subtitle: 'Workouts should fit your life, not the other way around.',
         onContinue: answers.sessionMinutes == null
             ? null
             : () => context.go('/onboarding/experience'),
@@ -514,7 +459,7 @@ class EmphasisScreen extends ConsumerWidget {
       (answers) => QuizPage(
         step: 6,
         title: 'Anywhere you want extra focus?',
-        subtitle: "You'll train everything — this tilts the balance.",
+        subtitle: "You'll train everything. This just tilts the balance.",
         onContinue: answers.emphasis == null
             ? null
             : () => context.go('/onboarding/activities'),
@@ -852,7 +797,7 @@ class MenstrualScreen extends ConsumerWidget {
                               key: const ValueKey('menstrual-not-applicable'),
                               title: 'None of this fits me',
                               description:
-                                  "On the pill, irregular, or no periods — we'll just ask how you feel instead.",
+                                  "On the pill, irregular, or no periods? We'll just ask how you feel instead.",
                               selected:
                                   answers.menstrualPreference ==
                                   MenstrualPreference.notApplicable,
@@ -909,7 +854,7 @@ class MenstrualScreen extends ConsumerWidget {
                             ref,
                             MenstrualPreference.declined,
                           ),
-                          child: const Text("Skip this — I'd rather not"),
+                          child: const Text("Skip this for now"),
                         ),
                       ],
                     ),

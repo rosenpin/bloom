@@ -38,13 +38,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Weights in lb'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('unit-toggle')));
-      await tester.pumpAndSettle();
-      expect(find.text('Weights in kg'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('unit-toggle')));
-      await tester.pumpAndSettle();
-      expect(find.text('Weights in lb'), findsOneWidget);
+      // Unit toggle removed from welcome (2026-07-26): units default from
+      // locale and surface at the first session, not during onboarding.
+      expect(find.byKey(const ValueKey('unit-toggle')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('welcome-start')));
       await tester.pumpAndSettle();
 
