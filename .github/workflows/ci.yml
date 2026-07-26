@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.5'
+          channel: stable
+      - run: dart pub get
+        working-directory: packages/programming_engine
+      - run: dart analyze --fatal-infos
+        working-directory: packages/programming_engine
+      - run: dart test
+        working-directory: packages/programming_engine
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.5'
+          channel: stable
+      - run: flutter pub get
+        working-directory: app
+      # generated files are gitignored; fresh checkouts must run codegen first
+      - run: dart run build_runner build --delete-conflicting-outputs
+        working-directory: app
+      - run: flutter analyze
+        working-directory: app
+      - run: flutter test
+        working-directory: app
+
+  review_site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.5'
+          channel: stable
+      - run: flutter pub get
+        working-directory: review_site
+      - run: flutter analyze
+        working-directory: review_site
+      - run: flutter test
+        working-directory: review_site
