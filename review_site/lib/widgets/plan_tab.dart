@@ -164,10 +164,26 @@ final class _Warnings extends StatelessWidget {
             const SizedBox(height: 8),
             for (final warning in warnings)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '• ${warning.code.name}'
-                  '${warning.detail.isEmpty ? '' : ' — ${warning.detail}'}',
+                padding: const EdgeInsets.only(top: 7),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '• ${warning.code.name}'
+                      '${warning.detail.isEmpty ? '' : ' · ${warning.detail}'}',
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 14, top: 2),
+                      child: Text(
+                        _warningGloss(warning.code),
+                        style: const TextStyle(
+                          color: AppColors.inkSoft,
+                          fontSize: 12,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
           ],
@@ -373,4 +389,67 @@ String _doseText(Dose dose) => switch (dose) {
   RepsDose(:final sets, :final range, :final effort) =>
     '$sets × ${range.min}–${range.max} @ RPE ${effort.rpe}',
   TimedDose(:final sets, :final hold) => '$sets × ${hold.inSeconds}s',
+};
+
+String _warningGloss(WarningCode code) => switch (code) {
+  WarningCode.invalidBodyMass =>
+    'body mass was missing or invalid, so bodyweight was left out of the load calculation',
+  WarningCode.bwContributionOutOfRange =>
+    'the bodyweight contribution was outside its safe range, so the engine brought it back inside',
+  WarningCode.invalidReps =>
+    'the recorded rep count was invalid, so the engine used one rep',
+  WarningCode.targetRepsOutOfRange =>
+    'the rep target was outside this exercise’s range, so the engine brought it back inside',
+  WarningCode.invertedRepRange =>
+    'the rep range arrived backwards, so the engine put its limits in the right order',
+  WarningCode.loadBelowEquipmentFloor =>
+    'the recorded load was lighter than this equipment supports, so the lightest available load was used',
+  WarningCode.lastLoadNotRepresentable =>
+    'the recorded load is not available on this equipment, so the engine moved it to a real setting',
+  WarningCode.nonFiniteLoad =>
+    'the recorded load was not a usable number, so the lightest available load was used',
+  WarningCode.negativeLayoff =>
+    'the time since the last session was negative, so the engine treated it as zero days',
+  WarningCode.invalidEquipmentStep =>
+    'the equipment had an invalid load step, so the standard step for this equipment was used',
+  WarningCode.clampedToEquipmentFloor =>
+    'the calculated load was too light for this equipment, so the lightest available load was used',
+  WarningCode.noRepresentableLoad =>
+    'this load could not be expressed on the equipment, so the engine gave a rep target instead',
+  WarningCode.gymComfortRelaxed =>
+    'the catalog had no match at this comfort level, so the engine allowed more familiar gym options',
+  WarningCode.experienceTierRelaxed =>
+    'the catalog still had no match, so the engine allowed options from a broader experience level',
+  WarningCode.weeklyDedupRelaxed =>
+    'the catalog ran out of unused options for this slot this week, so an exercise repeats',
+  WarningCode.blockDropped =>
+    'the catalog had no safe match for this slot, so the engine left the slot out',
+  WarningCode.danglingSwapSkipped =>
+    'a saved swap points to an exercise that is no longer available, so the engine skipped it',
+  WarningCode.invalidSwapSkipped =>
+    'a saved swap did not fit this workout slot, so the engine skipped it',
+  WarningCode.excludedExerciseSubstituted =>
+    'an excluded exercise had a suitable swap, so the engine used the replacement',
+  WarningCode.excludedExerciseHadNoSwap =>
+    'an excluded exercise had no suitable swap, so the engine kept the planned exercise as a fallback',
+  WarningCode.noPlanDayAvailable =>
+    'the plan had no workout day available for this session',
+  WarningCode.planWeekAlreadyComplete =>
+    'all planned days were already completed this week, so the final day repeats',
+  WarningCode.missingWeekDose =>
+    'this exercise had no prescription for the current week, so the engine used a stable fallback',
+  WarningCode.invalidMesocycleConfiguration =>
+    'the mesocycle settings were invalid, so the engine brought them back to a usable range',
+  WarningCode.unknownSessionExercise =>
+    'a workout update named an exercise that is not in this session, so it was ignored',
+  WarningCode.sessionEventIgnored =>
+    'this workout update could not apply in the exercise’s current state, so it was ignored',
+  WarningCode.sessionModifierAlreadyApplied =>
+    'this workout adjustment was already applied, so the duplicate request was ignored',
+  WarningCode.noEligibleSessionSwap =>
+    'no suitable swap remained after the current filters and exclusions',
+  WarningCode.calibrationFloorFailed =>
+    'calibration reached the lightest safe load, so the engine stopped and offered an easier alternative',
+  WarningCode.planEditTargetMissing =>
+    'the requested plan edit could not find its original slot or replacement',
 };

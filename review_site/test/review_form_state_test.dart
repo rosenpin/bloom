@@ -43,4 +43,13 @@ void main() {
     expect(state.toHistory().unitSystem, UnitSystem.imperial);
     expect(state.toHistory().bodyMass, const Kg(71.5));
   });
+
+  test('legacy none emphasis links map to balanced', () {
+    expect(
+      ReviewFormState.fromJson(const <String, Object?>{
+        'emphasis': 'none',
+      }).emphasis,
+      Emphasis.balanced,
+    );
+  });
 }

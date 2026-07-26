@@ -4,32 +4,55 @@ import 'review_form_state.dart';
 
 enum JourneyPattern { honestNovice, alwaysJustRight, struggling }
 
-final class JourneyPoint {
-  const JourneyPoint({
+enum JourneyTargetKind { reps, hold }
+
+final class JourneySession {
+  const JourneySession({
     required this.session,
     required this.absoluteWeek,
-    required this.exerciseId,
-    required this.exerciseName,
-    required this.load,
-    required this.hasExternalLoad,
+    required this.weekKind,
   });
 
   final int session;
   final int absoluteWeek;
+  final MesocycleWeekKind weekKind;
+}
+
+final class JourneyPoint {
+  const JourneyPoint({
+    required this.session,
+    required this.absoluteWeek,
+    required this.weekKind,
+    required this.exerciseId,
+    required this.exerciseName,
+    required this.load,
+    required this.hasExternalLoad,
+    required this.target,
+    required this.targetKind,
+  });
+
+  final int session;
+  final int absoluteWeek;
+  final MesocycleWeekKind weekKind;
   final String exerciseId;
   final String exerciseName;
   final Kg load;
   final bool hasExternalLoad;
+  final int target;
+  final JourneyTargetKind targetKind;
 }
 
 final class JourneyResult {
   JourneyResult({
     required Iterable<JourneyPoint> points,
-    required this.sessionCount,
-  }) : points = List<JourneyPoint>.unmodifiable(points);
+    required Iterable<JourneySession> sessions,
+  }) : points = List<JourneyPoint>.unmodifiable(points),
+       sessions = List<JourneySession>.unmodifiable(sessions);
 
   final List<JourneyPoint> points;
-  final int sessionCount;
+  final List<JourneySession> sessions;
+
+  int get sessionCount => sessions.length;
 
   Map<String, List<JourneyPoint>> get series {
     final result = <String, List<JourneyPoint>>{};
@@ -53,6 +76,7 @@ JourneyResult simulateJourney({
   );
   var history = form.toHistory();
   final points = <JourneyPoint>[];
+  final sessions = <JourneySession>[];
   final exposureByExercise = <String, int>{};
 
   for (var index = 0; index < dates.length; index++) {
@@ -63,6 +87,13 @@ JourneyResult simulateJourney({
       dates[index],
       config: config,
     );
+    sessions.add(
+      JourneySession(
+        session: sessionNumber,
+        absoluteWeek: resolution.absoluteWeekIndex,
+        weekKind: resolution.weekKind,
+      ),
+    );
     final events = <SessionEvent>[];
     for (final prescription in resolution.prescriptions) {
       final exposure = (exposureByExercise[prescription.exerciseId] ?? 0) + 1;
@@ -72,6 +103,7 @@ JourneyResult simulateJourney({
       );
       final load = _loadOf(prescription.suggestion);
       final targetReps = _targetReps(prescription);
+      final target = _journeyTarget(prescription.dose);
       final targetRpe = switch (prescription.dose) {
         RepsDose(:final effort) => effort.rpe,
         TimedDose() => null,
@@ -80,10 +112,13 @@ JourneyResult simulateJourney({
         JourneyPoint(
           session: sessionNumber,
           absoluteWeek: resolution.absoluteWeekIndex,
+          weekKind: resolution.weekKind,
           exerciseId: prescription.exerciseId,
           exerciseName: entry.planExercise.name,
           load: load,
           hasExternalLoad: entry.planExercise.metricType.hasLoad,
+          target: target.value,
+          targetKind: target.kind,
         ),
       );
       events
@@ -110,7 +145,7 @@ JourneyResult simulateJourney({
       resolution.toRecord(sessionId: 'review-$sessionNumber', events: events),
     );
   }
-  return JourneyResult(points: points, sessionCount: dates.length);
+  return JourneyResult(points: points, sessions: sessions);
 }
 
 EffortLevel _effortFor(JourneyPattern pattern, int exposure) =>
@@ -150,4 +185,16 @@ int _targetReps(ExercisePrescription prescription) =>
     switch (prescription.dose) {
       RepsDose(:final targetReps) => targetReps,
       TimedDose() => 1,
+    };
+
+({int value, JourneyTargetKind kind}) _journeyTarget(Dose dose) =>
+    switch (dose) {
+      RepsDose(:final targetReps) => (
+        value: targetReps,
+        kind: JourneyTargetKind.reps,
+      ),
+      TimedDose(:final hold) => (
+        value: hold.inSeconds,
+        kind: JourneyTargetKind.hold,
+      ),
     };

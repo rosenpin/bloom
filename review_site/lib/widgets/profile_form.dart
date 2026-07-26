@@ -21,6 +21,8 @@ final class _ProfileFormState extends State<ProfileForm> {
   late final TextEditingController _weeksController;
   late final TextEditingController _mesocycleController;
   late final TextEditingController _bodyMassController;
+  late final FocusNode _bodyMassFocusNode;
+  String? _bodyMassError;
 
   @override
   void initState() {
@@ -34,6 +36,7 @@ final class _ProfileFormState extends State<ProfileForm> {
     _bodyMassController = TextEditingController(
       text: _bodyMassText(widget.state),
     );
+    _bodyMassFocusNode = FocusNode()..addListener(_handleBodyMassFocusChange);
   }
 
   @override
@@ -42,8 +45,9 @@ final class _ProfileFormState extends State<ProfileForm> {
     _syncInteger(_weeksController, widget.state.weeksTrained);
     _syncInteger(_mesocycleController, widget.state.mesocycleIndex);
     if (oldWidget.state.unitSystem != widget.state.unitSystem ||
-        (double.tryParse(_bodyMassController.text) ?? -1) !=
-            widget.state.displayBodyMass) {
+        (!_bodyMassFocusNode.hasFocus &&
+            (double.tryParse(_bodyMassController.text) ?? -1) !=
+                widget.state.displayBodyMass)) {
       _bodyMassController.text = _bodyMassText(widget.state);
     }
   }
@@ -59,13 +63,46 @@ final class _ProfileFormState extends State<ProfileForm> {
     _weeksController.dispose();
     _mesocycleController.dispose();
     _bodyMassController.dispose();
+    _bodyMassFocusNode
+      ..removeListener(_handleBodyMassFocusChange)
+      ..dispose();
     super.dispose();
+  }
+
+  void _handleBodyMassFocusChange() {
+    if (_bodyMassFocusNode.hasFocus) {
+      if (_bodyMassError != null) {
+        setState(() => _bodyMassError = null);
+      }
+      return;
+    }
+    _commitBodyMass();
+  }
+
+  void _commitBodyMass() {
+    final entered = double.tryParse(_bodyMassController.text);
+    if (entered == null || !entered.isFinite) {
+      _bodyMassController.text = _bodyMassText(widget.state);
+      setState(() => _bodyMassError = 'Enter a body mass');
+      return;
+    }
+    final kg = widget.state.unitSystem.isMetric
+        ? entered
+        : Kg.fromLb(entered).value;
+    final clampedKg = kg.clamp(20, 400).toDouble();
+    final committed = widget.state.copyWith(bodyMassKg: clampedKg);
+    _bodyMassController.text = _bodyMassText(committed);
+    if (clampedKg != widget.state.bodyMassKg) {
+      widget.onChanged(committed);
+    } else if (_bodyMassError != null) {
+      setState(() => _bodyMassError = null);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
-    return ColoredBox(
+    return Material(
       color: AppColors.blushSoft.withValues(alpha: 0.38),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(18, 20, 18, 28),
@@ -79,6 +116,7 @@ final class _ProfileFormState extends State<ProfileForm> {
           const SizedBox(height: 18),
           DropdownButtonFormField<PersonaPreset>(
             key: ValueKey<String>('preset-${state.toCanonicalJson()}'),
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Persona preset'),
             hint: const Text('Custom profile'),
             items: <DropdownMenuItem<PersonaPreset>>[
@@ -127,7 +165,14 @@ final class _ProfileFormState extends State<ProfileForm> {
           _enumField<Emphasis>(
             label: 'Emphasis',
             value: state.emphasis,
-            values: Emphasis.values,
+            values: const <Emphasis>[
+              Emphasis.balanced,
+              Emphasis.glutes,
+              Emphasis.back,
+              Emphasis.arms,
+              Emphasis.core,
+              Emphasis.legs,
+            ],
             labelFor: emphasisLabel,
             onChanged: (value) =>
                 widget.onChanged(state.copyWith(emphasis: value)),
@@ -171,16 +216,8 @@ final class _ProfileFormState extends State<ProfileForm> {
             onChanged: (value) =>
                 widget.onChanged(state.copyWith(unitSystem: value)),
           ),
-          _numberField(
+          _bodyMassField(
             label: 'Body mass (${state.unitSystem.isMetric ? 'kg' : 'lb'})',
-            controller: _bodyMassController,
-            allowDecimal: true,
-            onParsed: (value) {
-              final kg = state.unitSystem.isMetric
-                  ? value
-                  : Kg.fromLb(value).value;
-              widget.onChanged(state.copyWith(bodyMassKg: kg.clamp(20, 400)));
-            },
           ),
           const SizedBox(height: 2),
           ExpansionTile(
@@ -274,6 +311,25 @@ final class _ProfileFormState extends State<ProfileForm> {
         final parsed = double.tryParse(value);
         if (parsed != null) onParsed(parsed);
       },
+    ),
+  );
+
+  Widget _bodyMassField({required String label}) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: TextField(
+      controller: _bodyMassController,
+      focusNode: _bodyMassFocusNode,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: <TextInputFormatter>[
+        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+      ],
+      decoration: InputDecoration(labelText: label, errorText: _bodyMassError),
+      onChanged: (_) {
+        if (_bodyMassError != null) {
+          setState(() => _bodyMassError = null);
+        }
+      },
+      onSubmitted: (_) => _commitBodyMass(),
     ),
   );
 

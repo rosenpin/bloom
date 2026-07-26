@@ -140,6 +140,9 @@ final class ReviewFormState {
         }
       }
     }
+    final decodedEmphasis = json['emphasis'] == 'none'
+        ? Emphasis.balanced
+        : named(Emphasis.values, 'emphasis', defaults.emphasis);
     return ReviewFormState(
       ageBand: named(AgeBand.values, 'ageBand', defaults.ageBand),
       daysPerWeek: named(
@@ -153,7 +156,7 @@ final class ReviewFormState {
         defaults.sessionMinutes,
       ),
       goal: named(Goal.values, 'goal', defaults.goal),
-      emphasis: named(Emphasis.values, 'emphasis', defaults.emphasis),
+      emphasis: decodedEmphasis,
       experienceTier: named(
         ProfileExperienceTier.values,
         'experienceTier',

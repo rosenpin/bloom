@@ -19,8 +19,7 @@ String goalLabel(Goal value) => switch (value) {
 };
 
 String emphasisLabel(Emphasis value) => switch (value) {
-  Emphasis.none => 'None',
-  Emphasis.balanced => 'Balanced',
+  Emphasis.balanced => 'Keep it balanced',
   Emphasis.glutes => 'Glutes',
   Emphasis.back => 'Back',
   Emphasis.arms => 'Arms',
