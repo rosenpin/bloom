@@ -1,9 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/ulid.dart';
+import '../../../data/analytics/app_events_logger.dart';
 import '../../../data/db/app_database.dart';
 import '../../../data/db/schema.dart';
+import '../../../data/sync/outbox_repository.dart';
 import '../../onboarding/data/onboarding_repository.dart';
 import '../../onboarding/domain/onboarding_answers.dart';
 import '../../plan/data/plan_repository.dart';
@@ -168,7 +173,10 @@ final class SessionLifecycleService {
     this._onboardingRepository,
     this._contentSeeder,
     this._ulid,
-    this._clock, [
+    this._clock,
+    this._outbox,
+    this._events,
+    this._requestSync, [
     this._config = const engine.ProgrammingConfig(),
   ]);
 
@@ -179,6 +187,9 @@ final class SessionLifecycleService {
   final UlidGenerator _ulid;
   final DateTime Function() _clock;
   final engine.ProgrammingConfig _config;
+  final OutboxSink _outbox;
+  final AppEventsLogger _events;
+  final void Function() _requestSync;
 
   Future<SessionPreview?> preview() async {
     await _contentSeeder.seedIfEmpty();
@@ -246,26 +257,37 @@ final class SessionLifecycleService {
     final startedAt = _clock();
     final sessionId = _ulid.generate(timestamp: startedAt);
     final state = previewValue.state;
-    await _database
-        .into(_database.sessionRecords)
-        .insert(
-          SessionRecordsCompanion.insert(
-            id: sessionId,
-            planId: previewValue.document.row.id,
-            planRef: Value(state.planRef),
-            dayIndex: state.dayIndex,
-            mesocycleIndex: Value(state.mesocycleIndex),
-            mesocycleWeekIndex: Value(state.mesocycleWeekIndex),
-            absoluteWeekIndex: Value(state.absoluteWeekIndex),
-            weekKind: Value(state.weekKind),
-            startedAt: startedAt,
-          ),
-        );
-    return SessionRuntime.fromPreview(
+    final row = SessionRecordRow(
+      id: sessionId,
+      planId: previewValue.document.row.id,
+      planRef: state.planRef,
+      dayIndex: state.dayIndex,
+      mesocycleIndex: state.mesocycleIndex,
+      mesocycleWeekIndex: state.mesocycleWeekIndex,
+      absoluteWeekIndex: state.absoluteWeekIndex,
+      weekKind: state.weekKind,
+      startedAt: startedAt,
+      completedAt: null,
+      abandonedAt: null,
+    );
+    await _database.transaction(() async {
+      await _database.into(_database.sessionRecords).insert(row);
+      await _outbox.enqueue(
+        targetTable: 'session_records',
+        rowId: row.id,
+        payload: _sessionRecordPayload(row),
+      );
+    });
+    final runtime = SessionRuntime.fromPreview(
       sessionId: sessionId,
       startedAt: startedAt,
       preview: previewValue,
     );
+    _events.sessionStarted();
+    if (runtime.isComeback) {
+      _events.comebackShown(_comebackTier(runtime.state.reasonCodes));
+    }
+    return runtime;
   }
 
   Future<SessionRuntime> advance(
@@ -278,11 +300,16 @@ final class SessionLifecycleService {
     final unitSystemAtEntry = event is engine.SetCompleted
         ? event.unitSystem
         : runtime.displayUnitSystem;
+    final eventId = _ulid.generate(timestamp: recordedAt);
+    final completed =
+        !runtime.isComplete &&
+        nextState.exercises.isNotEmpty &&
+        nextState.exercises.every((entry) => entry.isTerminal);
 
     await _database.transaction(() async {
       await _database.appendSessionEvent(
         SessionEventsCompanion.insert(
-          id: _ulid.generate(timestamp: recordedAt),
+          id: eventId,
           sessionId: runtime.sessionId,
           seq: runtime.state.events.length,
           type: encoded.type,
@@ -290,6 +317,19 @@ final class SessionLifecycleService {
           recordedAt: recordedAt,
           unitSystemAtEntry: unitSystemAtEntry,
         ),
+      );
+      await _outbox.enqueue(
+        targetTable: 'session_events',
+        rowId: eventId,
+        payload: {
+          'id': eventId,
+          'session_id': runtime.sessionId,
+          'seq': runtime.state.events.length,
+          'type': encoded.type.name,
+          'payload': jsonDecode(encoded.payloadJson),
+          'recorded_at': recordedAt.toUtc().toIso8601String(),
+          'unit_system_at_entry': unitSystemAtEntry.name,
+        },
       );
 
       if (event is engine.PainReported) {
@@ -303,20 +343,63 @@ final class SessionLifecycleService {
                 updatedAt: recordedAt,
               ),
             );
+        await _outbox.enqueue(
+          targetTable: 'user_exercise_prefs',
+          rowId:
+              '${event.exerciseId}|${UserExercisePreferenceSource.pain.name}',
+          payload: {
+            'exercise_id': event.exerciseId,
+            'excluded': true,
+            'source': UserExercisePreferenceSource.pain.name,
+            'updated_at': recordedAt.toUtc().toIso8601String(),
+          },
+        );
       }
 
       if (event is engine.SessionAbandoned) {
         await (_database.update(_database.sessionRecords)
               ..where((row) => row.id.equals(runtime.sessionId)))
             .write(SessionRecordsCompanion(abandonedAt: Value(recordedAt)));
-      } else if (nextState.exercises.isNotEmpty &&
-          nextState.exercises.every((entry) => entry.isTerminal)) {
+        final record = await (_database.select(
+          _database.sessionRecords,
+        )..where((row) => row.id.equals(runtime.sessionId))).getSingle();
+        await _outbox.enqueue(
+          targetTable: 'session_records',
+          rowId: record.id,
+          payload: _sessionRecordPayload(record),
+        );
+      } else if (completed) {
         await (_database.update(_database.sessionRecords)
               ..where((row) => row.id.equals(runtime.sessionId)))
             .write(SessionRecordsCompanion(completedAt: Value(recordedAt)));
+        final record = await (_database.select(
+          _database.sessionRecords,
+        )..where((row) => row.id.equals(runtime.sessionId))).getSingle();
+        await _outbox.enqueue(
+          targetTable: 'session_records',
+          rowId: record.id,
+          payload: _sessionRecordPayload(record),
+        );
       }
     });
 
+    switch (event) {
+      case engine.SetCompleted():
+        _events.setLogged();
+      case engine.EffortReported(:final level):
+        _events.effortReported(level);
+      case engine.SessionAbandoned():
+        _events.sessionAbandoned();
+      default:
+        break;
+    }
+    if (completed) {
+      _events.sessionCompleted(
+        durationMinutes: recordedAt.difference(runtime.startedAt).inMinutes,
+        exercises: nextState.exercises.length,
+      );
+      _requestSync();
+    }
     return runtime.copyWith(state: nextState);
   }
 
@@ -339,7 +422,10 @@ final class SessionLifecycleService {
         next,
         engine.SwapRequested(exerciseId: sourceId, reason: reason),
       );
-      if (next.activeEntry?.exerciseId == candidate.exerciseId) return next;
+      if (next.activeEntry?.exerciseId == candidate.exerciseId) {
+        _events.swapUsed(reason: reason, tier: candidate.tier);
+        return next;
+      }
       if (next.activeEntry?.exerciseId == before &&
           _pendingSwapSource(next.state) == null) {
         return next;
@@ -355,9 +441,19 @@ final class SessionLifecycleService {
     if (suggestion is! engine.KeepSwapPlanEditSuggestion) return runtime;
     final edited = engine.applyPlanEdit(runtime.document.plan, suggestion.edit);
     final document = await _planRepository.update(runtime.document, edited);
-    await (_database.update(_database.sessionRecords)
-          ..where((row) => row.id.equals(runtime.sessionId)))
-        .write(SessionRecordsCompanion(planRef: Value(edited.reference)));
+    await _database.transaction(() async {
+      await (_database.update(_database.sessionRecords)
+            ..where((row) => row.id.equals(runtime.sessionId)))
+          .write(SessionRecordsCompanion(planRef: Value(edited.reference)));
+      final record = await (_database.select(
+        _database.sessionRecords,
+      )..where((row) => row.id.equals(runtime.sessionId))).getSingle();
+      await _outbox.enqueue(
+        targetTable: 'session_records',
+        rowId: record.id,
+        payload: _sessionRecordPayload(record),
+      );
+    });
     return runtime.copyWith(document: document);
   }
 
@@ -384,14 +480,7 @@ final class SessionLifecycleService {
   }
 
   Future<void> markUnitPromptSeen() async {
-    await (_database.update(
-      _database.profiles,
-    )..where((row) => row.id.equals('local'))).write(
-      ProfilesCompanion(
-        unitPromptSeen: const Value(true),
-        updatedAt: Value(_clock()),
-      ),
-    );
+    await _onboardingRepository.markUnitPromptSeen();
   }
 
   SessionRuntime overrideLoad(
@@ -584,6 +673,26 @@ final class SessionLifecycleService {
 
   static String? _pendingSwapSource(engine.SessionState state) =>
       state.pendingSwapSuggestions.firstOrNull?.sourceExerciseId;
+
+  static Map<String, Object?> _sessionRecordPayload(SessionRecordRow row) => {
+    'id': row.id,
+    'plan_id': row.planId,
+    'plan_ref': row.planRef,
+    'day_index': row.dayIndex,
+    'mesocycle_index': row.mesocycleIndex,
+    'mesocycle_week_index': row.mesocycleWeekIndex,
+    'absolute_week_index': row.absoluteWeekIndex,
+    'week_kind': row.weekKind.name,
+    'started_at': row.startedAt.toUtc().toIso8601String(),
+    'completed_at': row.completedAt?.toUtc().toIso8601String(),
+    'abandoned_at': row.abandonedAt?.toUtc().toIso8601String(),
+  };
+
+  static int _comebackTier(Iterable<engine.ReasonCode> codes) {
+    if (codes.contains(engine.ReasonCode.layoffTier3)) return 3;
+    if (codes.contains(engine.ReasonCode.layoffTier2)) return 2;
+    return 1;
+  }
 }
 
 extension<T> on Iterable<T> {

@@ -21,6 +21,7 @@ part 'app_database.g.dart';
     UserExercisePrefs,
     Outbox,
     SyncCursors,
+    VersionGateConfigs,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -29,7 +30,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -49,6 +50,10 @@ class AppDatabase extends _$AppDatabase {
         );
         await migrator.addColumn(sessionRecords, sessionRecords.weekKind);
         await migrator.addColumn(sessionRecords, sessionRecords.abandonedAt);
+      }
+      if (from < 3) {
+        await migrator.addColumn(outbox, outbox.nextAttemptAt);
+        await migrator.createTable(versionGateConfigs);
       }
     },
     beforeOpen: (details) async {

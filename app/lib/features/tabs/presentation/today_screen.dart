@@ -10,14 +10,22 @@ import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../plan/domain/plan_presentation.dart';
 import '../../session/application/session_controller.dart';
 
-class TodayScreen extends ConsumerWidget {
+class TodayScreen extends ConsumerStatefulWidget {
   const TodayScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TodayScreen> createState() => _TodayScreenState();
+}
+
+class _TodayScreenState extends ConsumerState<TodayScreen> {
+  bool _updateNudgeDismissed = false;
+
+  @override
+  Widget build(BuildContext context) {
     final documentState = ref.watch(latestPlanProvider);
     final answersState = ref.watch(onboardingAnswersProvider);
     final previewState = ref.watch(sessionPreviewProvider);
+    final gateDecision = ref.watch(startupVersionGateProvider).value;
     if (documentState.isLoading ||
         answersState.isLoading ||
         previewState.isLoading) {
@@ -26,7 +34,13 @@ class TodayScreen extends ConsumerWidget {
     final document = documentState.value;
     final answers = answersState.value;
     if (document == null || answers == null) {
-      return _NoPlanToday(onCreatePlan: () => context.go('/onboarding'));
+      return _NoPlanToday(
+        onCreatePlan: () => context.go('/onboarding'),
+        showUpdateNudge:
+            gateDecision?.updateRecommended == true && !_updateNudgeDismissed,
+        updateMessage: gateDecision?.message,
+        onDismissUpdate: () => setState(() => _updateNudgeDismissed = true),
+      );
     }
 
     final preview = previewState.value;
@@ -67,6 +81,15 @@ class TodayScreen extends ConsumerWidget {
                     const BloomMark(showWordmark: false),
                   ],
                 ),
+                if (gateDecision?.updateRecommended == true &&
+                    !_updateNudgeDismissed) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _VersionUpdateNudge(
+                    message: gateDecision?.message,
+                    onDismiss: () =>
+                        setState(() => _updateNudgeDismissed = true),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 ClipRRect(
                   borderRadius: AppRadii.largeBorder,
@@ -176,52 +199,111 @@ class TodayScreen extends ConsumerWidget {
 }
 
 class _NoPlanToday extends StatelessWidget {
-  const _NoPlanToday({required this.onCreatePlan});
+  const _NoPlanToday({
+    required this.onCreatePlan,
+    required this.showUpdateNudge,
+    required this.onDismissUpdate,
+    this.updateMessage,
+  });
 
   final VoidCallback onCreatePlan;
+  final bool showUpdateNudge;
+  final String? updateMessage;
+  final VoidCallback onDismissUpdate;
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       key: const ValueKey('today-screen'),
       minimum: const EdgeInsets.all(AppSpacing.lg),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                decoration: const BoxDecoration(
-                  color: AppColors.blushSoft,
-                  shape: BoxShape.circle,
+      child: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showUpdateNudge) ...[
+                  _VersionUpdateNudge(
+                    message: updateMessage,
+                    onDismiss: onDismissUpdate,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  decoration: const BoxDecoration(
+                    color: AppColors.blushSoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const BloomMark(showWordmark: false),
                 ),
-                child: const BloomMark(showWordmark: false),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Walk in knowing exactly what to do.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineLarge,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Seven quick questions, then your first week is ready.',
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(color: AppColors.inkSoft),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton(
-                key: const ValueKey('today-create-plan'),
-                onPressed: onCreatePlan,
-                child: const Text('Make my plan'),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  'Walk in knowing exactly what to do.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineLarge,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Seven quick questions, then your first week is ready.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: AppColors.inkSoft),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                FilledButton(
+                  key: const ValueKey('today-create-plan'),
+                  onPressed: onCreatePlan,
+                  child: const Text('Make my plan'),
+                ),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _VersionUpdateNudge extends StatelessWidget {
+  const _VersionUpdateNudge({required this.onDismiss, this.message});
+
+  final String? message;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('version-update-nudge'),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.xs,
+        AppSpacing.sm,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.lavenderSoft,
+        borderRadius: AppRadii.mediumBorder,
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.system_update_rounded, color: AppColors.lavender),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              message ?? 'An app update is ready when you are.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('dismiss-version-update-nudge'),
+            tooltip: 'Dismiss',
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
       ),
     );
   }

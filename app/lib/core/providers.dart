@@ -8,7 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../data/analytics/app_events_logger.dart';
+import '../data/auth/anonymous_auth_service.dart';
 import '../data/db/app_database.dart';
+import '../data/sync/outbox_repository.dart';
+import '../data/sync/sync_remote.dart';
+import '../data/sync/sync_service.dart';
 import '../features/onboarding/data/onboarding_repository.dart';
 import '../features/onboarding/domain/onboarding_answers.dart';
 import '../features/plan/application/plan_generation_service.dart';
@@ -50,14 +55,32 @@ programming.ContentCatalog contentCatalog(Ref ref) => programming.catalogV1;
 UlidGenerator ulid(Ref ref) => UlidGenerator(clock: ref.watch(clockProvider));
 
 @Riverpod(keepAlive: true)
-OnboardingRepository onboardingRepository(Ref ref) =>
-    OnboardingRepository(ref.watch(databaseProvider), ref.watch(clockProvider));
+OutboxRepository outboxRepository(Ref ref) => OutboxRepository(
+  ref.watch(databaseProvider),
+  ref.watch(ulidProvider),
+  ref.watch(clockProvider),
+);
+
+@Riverpod(keepAlive: true)
+AppEventsLogger appEventsLogger(Ref ref) => AppEventsLogger(
+  ref.watch(outboxRepositoryProvider),
+  ref.watch(clockProvider),
+  randomUuidV4,
+);
+
+@Riverpod(keepAlive: true)
+OnboardingRepository onboardingRepository(Ref ref) => OnboardingRepository(
+  ref.watch(databaseProvider),
+  ref.watch(clockProvider),
+  ref.watch(outboxRepositoryProvider),
+);
 
 @Riverpod(keepAlive: true)
 PlanRepository planRepository(Ref ref) => PlanRepository(
   ref.watch(databaseProvider),
   ref.watch(ulidProvider),
   ref.watch(clockProvider),
+  ref.watch(outboxRepositoryProvider),
 );
 
 @Riverpod(keepAlive: true)
@@ -84,6 +107,9 @@ SessionLifecycleService sessionLifecycleService(Ref ref) =>
       ref.watch(exerciseContentSeederProvider),
       ref.watch(ulidProvider),
       ref.watch(clockProvider),
+      ref.watch(outboxRepositoryProvider),
+      ref.watch(appEventsLoggerProvider),
+      () => unawaited(ref.read(syncServiceProvider).syncNow()),
       ref.watch(engineProvider).config,
     );
 
@@ -108,6 +134,7 @@ PlanGenerationService planGenerationService(Ref ref) => PlanGenerationService(
   ref.watch(planRepositoryProvider),
   ref.watch(engineProvider),
   ref.watch(contentCatalogProvider),
+  ref.watch(appEventsLoggerProvider),
 );
 
 @riverpod
@@ -128,6 +155,33 @@ Duration minimumGenerationDelay(Ref ref) => const Duration(milliseconds: 2500);
 @Riverpod(keepAlive: true)
 SupabaseClient Function() supabaseClient(Ref ref) =>
     () => Supabase.instance.client;
+
+@Riverpod(keepAlive: true)
+AnonymousAuthService anonymousAuthService(Ref ref) =>
+    AnonymousAuthService(ref.watch(supabaseClientProvider));
+
+@Riverpod(keepAlive: true)
+Future<Session?> ensureAnonymousAuth(Ref ref) =>
+    ref.watch(anonymousAuthServiceProvider).ensureSession();
+
+@Riverpod(keepAlive: true)
+Stream<Session?> authState(Ref ref) =>
+    ref.watch(anonymousAuthServiceProvider).states();
+
+@Riverpod(keepAlive: true)
+SyncRemote syncRemote(Ref ref) =>
+    SupabaseSyncRemote(ref.watch(supabaseClientProvider));
+
+@Riverpod(keepAlive: true)
+SyncService syncService(Ref ref) {
+  final service = SyncService(
+    ref.watch(databaseProvider),
+    ref.watch(syncRemoteProvider),
+    ref.watch(clockProvider),
+  );
+  ref.onDispose(service.dispose);
+  return service;
+}
 
 @Riverpod(keepAlive: true)
 SharedPreferencesAsync sharedPreferences(Ref ref) => SharedPreferencesAsync();

@@ -220,6 +220,7 @@ class Outbox extends Table {
   TextColumn get payloadJson => text()();
   DateTimeColumn get createdAt => dateTime()();
   IntColumn get attempts => integer().withDefault(const Constant(0))();
+  DateTimeColumn get nextAttemptAt => dateTime().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -232,4 +233,19 @@ class SyncCursors extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {targetTable};
+}
+
+@DataClassName('VersionGateMirrorRow')
+class VersionGateConfigs extends Table {
+  @override
+  String get tableName => 'version_gate';
+
+  BoolColumn get id => boolean().withDefault(const Constant(true))();
+  TextColumn get recommendedVersion => text()();
+  TextColumn get minSupportedVersion => text()();
+  TextColumn get message => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
 }

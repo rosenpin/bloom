@@ -12,6 +12,16 @@ import '../../../core/theme/app_spacing.dart';
 import '../domain/onboarding_answers.dart';
 import 'onboarding_widgets.dart';
 
+void _completeStep(
+  WidgetRef ref,
+  BuildContext context,
+  int step,
+  String nextPath,
+) {
+  ref.read(appEventsLoggerProvider).onboardingStepCompleted(step);
+  context.go(nextPath);
+}
+
 class WelcomeScreen extends ConsumerStatefulWidget {
   const WelcomeScreen({super.key});
 
@@ -124,7 +134,7 @@ class AgeScreen extends ConsumerWidget {
             "Every decade starts differently. We'll pace your plan to yours.",
         onContinue: answers.ageBand == null
             ? null
-            : () => context.go('/onboarding/goal'),
+            : () => _completeStep(ref, context, 1, '/onboarding/goal'),
         child: Column(
           children: [
             GridView.count(
@@ -191,7 +201,7 @@ class GoalScreen extends ConsumerWidget {
         subtitle: 'You can change this anytime.',
         onContinue: answers.goal == null
             ? null
-            : () => context.go('/onboarding/days'),
+            : () => _completeStep(ref, context, 2, '/onboarding/days'),
         child: Column(
           children: [
             for (final choice in choices.entries)
@@ -224,7 +234,8 @@ class DaysScreen extends ConsumerWidget {
         subtitle: 'Be honest, not ambitious.',
         onContinue: answers.daysPerWeek == null
             ? null
-            : () => context.go('/onboarding/session-length'),
+            : () =>
+                  _completeStep(ref, context, 3, '/onboarding/session-length'),
         child: Column(
           children: [
             Row(
@@ -281,7 +292,7 @@ class SessionLengthScreen extends ConsumerWidget {
         subtitle: 'Workouts should fit your life, not the other way around.',
         onContinue: answers.sessionMinutes == null
             ? null
-            : () => context.go('/onboarding/experience'),
+            : () => _completeStep(ref, context, 4, '/onboarding/experience'),
         child: Column(
           children: [
             Row(
@@ -351,7 +362,7 @@ class ExperienceScreen extends ConsumerWidget {
         subtitle: 'This shapes how much guidance we build in.',
         onContinue: answers.experienceTier == null || answers.gymComfort == null
             ? null
-            : () => context.go('/onboarding/emphasis'),
+            : () => _completeStep(ref, context, 5, '/onboarding/emphasis'),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -462,7 +473,7 @@ class EmphasisScreen extends ConsumerWidget {
         subtitle: "You'll train everything. This just tilts the balance.",
         onContinue: answers.emphasis == null
             ? null
-            : () => context.go('/onboarding/activities'),
+            : () => _completeStep(ref, context, 6, '/onboarding/activities'),
         child: Column(
           children: [
             _BodyMap(emphasis: answers.emphasis),
@@ -580,7 +591,8 @@ class ActivitiesScreen extends ConsumerWidget {
         step: 7,
         title: 'What else do you do?',
         subtitle: "So your gym days land where you've got the energy for them.",
-        onContinue: () => context.go('/onboarding/menstrual'),
+        onContinue: () =>
+            _completeStep(ref, context, 7, '/onboarding/menstrual'),
         child: Column(
           children: [
             for (final choice in choices.entries)
