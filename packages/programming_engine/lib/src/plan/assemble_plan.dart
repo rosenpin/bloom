@@ -14,16 +14,8 @@ import 'result.dart';
 
 const String currentEngineVersion = '1.0.0-session-step-5';
 
-/// §8's DRAFT machine-affinity score, clamped to [0, 1].
-///
-/// The 50+ "new to it" edge is forced to 1.0 rather than merely reaching it by
-/// addition, so tuning any draft contribution cannot accidentally relax it.
+/// §8's DRAFT additive machine-affinity score, clamped to [0, 1].
 double machineAffinityFor(Profile profile, ProgrammingConfig config) {
-  if (profile.ageBand.minimumAge >= config.machineAffinityForcedAge &&
-      profile.experienceTier == ProfileExperienceTier.newToIt) {
-    return 1;
-  }
-
   final experience = switch (profile.experienceTier) {
     ProfileExperienceTier.newToIt => config.machineAffinityNewToIt,
     ProfileExperienceTier.beenAWhile => config.machineAffinityBeenAWhile,
@@ -48,6 +40,11 @@ Result<Plan> assemblePlan(
   ProgrammingConfig config,
   ContentCatalog catalog,
 ) {
+  config.assertParametricConfiguration();
+  assert(
+    config.warmUpMinutesByAgeBand.length == AgeBand.values.length,
+    'warm-up table must contain one value per age band',
+  );
   // Decided 2026-07-25: otherActivities is stored and stamped, but deliberately
   // does not affect selection. The quiz lacks activity-day placement, so changing
   // volume or plan days from this answer would be guesswork.
@@ -208,7 +205,7 @@ final class _AssemblyContext {
         role: slot.role,
         isEmphasis: slot.isEmphasis,
         dropPriority: 0,
-        machineVariantRequired: machineRequirements[index],
+        machinePreference: machineRequirements[index],
       );
     }
 
@@ -231,9 +228,7 @@ final class _AssemblyContext {
     return PlanDay(
       dayIndex: dayIndex,
       kind: kind,
-      warmUpMinutes: profile.ageBand.isAtLeast60
-          ? config.olderWarmUpMinutes
-          : config.warmUpMinutes,
+      warmUpMinutes: config.warmUpMinutesByAgeBand[profile.ageBand.index],
       hasCardioFinisher: hasCardioFinisher,
       exercises: selected,
     );
@@ -246,13 +241,13 @@ final class _AssemblyContext {
     required BlockRole role,
     required bool isEmphasis,
     required int dropPriority,
-    bool? machineVariantRequired,
+    bool? machinePreference,
   }) {
     final pick = _pickExercise(
       dayIndex: dayIndex,
       role: role,
       dayExerciseIds: dayExerciseIds,
-      machineVariantRequired: machineVariantRequired,
+      machinePreference: machinePreference,
     );
     if (pick == null) return;
     dayExerciseIds.add(pick.exercise.id);
@@ -268,10 +263,9 @@ final class _AssemblyContext {
     );
   }
 
-  /// Chooses which primary positions carry the machine quota. Prefer the exact
-  /// rounded target; if the eligible catalog cannot express it without a
-  /// same-day duplicate, use the nearest feasible mix. Within that constraint,
-  /// retain as many authored baseline picks as possible.
+  /// Converts the scalar affinity into a deterministic daily target. This is
+  /// planning data for the common candidate scorer, not a population-specific
+  /// exercise-selection path.
   List<bool> _machineRequirements(
     List<_Slot> slots,
     int machineTarget,
@@ -353,7 +347,7 @@ final class _AssemblyContext {
     required int dayIndex,
     required BlockRole role,
     required Set<String> dayExerciseIds,
-    bool? machineVariantRequired,
+    bool? machinePreference,
   }) {
     final profiles = <({Profile profile, List<WarningCode> warningCodes})>[
       (profile: profile, warningCodes: const <WarningCode>[]),
@@ -366,34 +360,40 @@ final class _AssemblyContext {
     ];
 
     for (final attempt in profiles) {
-      final allCandidates = _orderedCandidates(role, attempt.profile);
+      final allCandidates = _orderedCandidates(
+        role,
+        attempt.profile,
+        machinePreference: machinePreference,
+      );
       final candidates = allCandidates
           .where((exercise) => !dayExerciseIds.contains(exercise.id))
           .toList(growable: false);
       if (candidates.isEmpty) continue;
 
-      final preferred = machineVariantRequired == null
-          ? candidates
-          : candidates
-                .where(
-                  (exercise) =>
-                      exercise.machineLeanOk == machineVariantRequired,
-                )
-                .toList(growable: false);
-      final selectionPool = preferred.isEmpty ? candidates : preferred;
-      final allPreferred = machineVariantRequired == null
+      final preferredRotation = machinePreference == null
           ? allCandidates
           : allCandidates
                 .where(
-                  (exercise) =>
-                      exercise.machineLeanOk == machineVariantRequired,
+                  (exercise) => exercise.machineLeanOk == machinePreference,
                 )
                 .toList(growable: false);
-      final rotationPool = allPreferred.isEmpty ? allCandidates : allPreferred;
+      final rotationPool = preferredRotation.isEmpty
+          ? allCandidates
+          : preferredRotation;
       final rotationCandidateIds = rotationPool
           .map((exercise) => exercise.id)
           .toList(growable: false);
-      final rotated = _rotated(selectionPool, role);
+      final selectionPool = machinePreference == null
+          ? candidates
+          : candidates
+                .where(
+                  (exercise) => exercise.machineLeanOk == machinePreference,
+                )
+                .toList(growable: false);
+      final rotated = _rotated(
+        selectionPool.isEmpty ? candidates : selectionPool,
+        role,
+      );
       var selected = rotated
           .where((exercise) => !_weekExerciseIds.contains(exercise.id))
           .firstOrNull;
@@ -427,29 +427,68 @@ final class _AssemblyContext {
     return null;
   }
 
-  List<Exercise> _orderedCandidates(BlockRole role, Profile eligibleProfile) {
-    final indexed = <({Exercise exercise, int index})>[
-      for (var index = 0; index < catalog.exercises.length; index++)
-        if (catalog.exercises[index].blockRole == role &&
-            eligible(catalog.exercises[index], eligibleProfile))
-          (exercise: catalog.exercises[index], index: index),
-    ];
+  List<Exercise> _orderedCandidates(
+    BlockRole role,
+    Profile eligibleProfile, {
+    bool? machinePreference,
+  }) {
+    final indexed = <({Exercise exercise, int rank})>[];
+    for (final exercise in catalog.exercises) {
+      if (exercise.blockRole == role && eligible(exercise, eligibleProfile)) {
+        indexed.add((exercise: exercise, rank: indexed.length));
+      }
+    }
+    final candidateCount = indexed.length;
     indexed.sort((left, right) {
-      final preference = _preferenceScore(
-        left.exercise,
-      ).compareTo(_preferenceScore(right.exercise));
-      return preference != 0 ? preference : left.index.compareTo(right.index);
+      final preference =
+          _preferenceScore(
+            left.exercise,
+            authoredRank: left.rank,
+            candidateCount: candidateCount,
+            machinePreference: machinePreference,
+          ).compareTo(
+            _preferenceScore(
+              right.exercise,
+              authoredRank: right.rank,
+              candidateCount: candidateCount,
+              machinePreference: machinePreference,
+            ),
+          );
+      return preference != 0 ? preference : left.rank.compareTo(right.rank);
     });
     return indexed.map((entry) => entry.exercise).toList(growable: false);
   }
 
-  int _preferenceScore(Exercise exercise) {
-    var score = 0;
-    if (profile.ageBand.minimumAge >= config.seatedPreferenceAge &&
-        !exercise.seatedVariant) {
-      score += 1;
-    }
-    return score;
+  double _preferenceScore(
+    Exercise exercise, {
+    required int authoredRank,
+    required int candidateCount,
+    required bool? machinePreference,
+  }) {
+    final machineFeature =
+        exercise.blockRole.isPrimary && exercise.machineLeanOk ? 1.0 : 0.0;
+    final seatedFeature = exercise.seatedVariant ? 1.0 : 0.0;
+    final seatedAgeScale =
+        ((profile.ageBand.minimumAge - config.seatedPreferenceStartAge) /
+                (config.seatedPreferenceFullAge -
+                    config.seatedPreferenceStartAge))
+            .clamp(0.0, 1.0);
+    final desiredMachine = machinePreference == null
+        ? machineFeature
+        : machinePreference
+        ? 1.0
+        : 0.0;
+    final machineMismatch = (machineFeature - desiredMachine).abs();
+    final machinePenalty =
+        machineMismatch *
+        candidateCount *
+        (1 + machineAffinityFor(profile, config));
+    final seatedBonus =
+        seatedFeature *
+        config.seatedPreferenceWeight *
+        seatedAgeScale *
+        candidateCount;
+    return authoredRank + machinePenalty - seatedBonus;
   }
 
   List<Exercise> _rotated(List<Exercise> candidates, BlockRole role) {
@@ -474,7 +513,7 @@ final class _AssemblyContext {
       profile.goal,
       weeksTrained: profile.weeksTrained,
     );
-    final doses = _dosesFor(exercise, scheme, isEmphasis: isEmphasis);
+    final baseDose = _baseDoseFor(exercise, scheme, isEmphasis: isEmphasis);
     final range = exercise.metricType == MetricType.timed
         ? null
         : config.rangeFor(exercise, scheme);
@@ -503,51 +542,29 @@ final class _AssemblyContext {
         eligibleProfile,
         isEmphasis: isEmphasis,
       ),
-      doseByWeekKind: doses,
+      baseDose: baseDose,
       repRange: range,
     );
   }
 
-  WeekDoses _dosesFor(
+  Dose _baseDoseFor(
     Exercise exercise,
     RepScheme scheme, {
     required bool isEmphasis,
   }) {
     final baseSets =
         scheme.maxSets + (isEmphasis && scheme.extraSetOnEmphasis ? 1 : 0);
-    final easierSets = baseSets + config.easierWeekSetsDelta;
-    assert(
-      easierSets >= 1 && easierSets <= baseSets,
-      'easier-week set delta must preserve a positive, non-increasing dose',
-    );
     if (exercise.metricType == MetricType.timed) {
       config.assertTimedDoseConfiguration();
-      return WeekDoses(
-        build: TimedDose(sets: baseSets, hold: config.timedHoldFloor),
-        easier: TimedDose(sets: easierSets, hold: config.timedHoldFloor),
-        push: TimedDose(sets: baseSets, hold: config.timedHoldFloor),
-        deload: TimedDose(sets: easierSets, hold: config.timedHoldFloor),
-      );
+      return TimedDose(sets: baseSets, hold: config.timedHoldFloor);
     }
 
     final range = config.rangeFor(exercise, scheme);
-    RepsDose dose(int sets, EffortTarget effort) => RepsDose(
-      sets: sets,
+    return RepsDose(
+      sets: baseSets,
       range: range,
-      effort: effort,
+      effort: scheme.effort,
       targetReps: range.min,
-    );
-    return WeekDoses(
-      build: dose(baseSets, scheme.effort),
-      easier: dose(
-        easierSets,
-        scheme.effort.easierBy(config.easierWeekRpeDelta.abs()),
-      ),
-      push: dose(baseSets, scheme.effort),
-      deload: dose(
-        baseSets,
-        scheme.effort.easierBy(config.deloadWeekRpeDelta.abs()),
-      ),
     );
   }
 
@@ -598,7 +615,7 @@ final class _AssemblyContext {
             loadStepOverride: resolvedTarget.loadStepOverride,
             tier: edge.tier,
             rank: edge.rank,
-            doseByWeekKind: _dosesFor(
+            baseDose: _baseDoseFor(
               resolvedTarget,
               scheme,
               isEmphasis: isEmphasis,
@@ -644,7 +661,7 @@ final class _AssemblyContext {
           loadStepOverride: target.loadStepOverride,
           tier: 2,
           rank: fallbackRank++,
-          doseByWeekKind: _dosesFor(target, scheme, isEmphasis: isEmphasis),
+          baseDose: _baseDoseFor(target, scheme, isEmphasis: isEmphasis),
           repRange: target.metricType == MetricType.timed
               ? null
               : config.rangeFor(target, scheme),
@@ -834,29 +851,26 @@ String _configCanonical(ProgrammingConfig config) {
     '${config.isolationRange}',
     '${config.isolationRestartRange}',
     '${config.dropBridgeBackOffReps}',
-    '${config.noviceWeeks}',
-    '${config.noviceMaxSets}',
-    '${config.noviceMaxRpe}',
+    '${config.rpeRampBase}',
+    '${config.rpeRampPerWeek}',
+    '${config.setsRampBase}',
+    '${config.setsRampPerWeek}',
     _loadTableCanonical(config.metricLoads),
     _loadTableCanonical(config.imperialLoads),
     '${config.mesocycleWeeks}',
-    '${config.easierWeekIndex}',
-    '${config.deloadWeekIndex}',
-    '${config.easierWeekSetsDelta}',
-    '${config.easierWeekRpeDelta}',
-    '${config.deloadWeekRpeDelta}',
-    '${config.deloadWeekLoadFraction}',
+    config.weekSetsDelta.join(','),
+    config.weekRpeDelta.join(','),
+    config.weekLoadScale.join(','),
     '${config.newMesocycleStepUp}',
-    '${config.layoffTier1Days}',
-    '${config.layoffTier2Days}',
-    '${config.layoffTier3Days}',
-    '${config.layoffTier2LoadFraction}',
-    '${config.layoffTier3LoadFraction}',
+    '${config.layoffGraceDays}',
+    '${config.layoffSlopePerDay}',
+    '${config.layoffFloor}',
     '${config.calibrationProbeReps}',
     '${config.calibrationMaxTestSets}',
-    '${config.calibrationProbeStepJump}',
-    '${config.lowerBodyMachineProbeJumpMin}',
-    '${config.lowerBodyMachineProbeJumpMax}',
+    '${config.calibrationJumpFraction}',
+    for (final movementClass in MovementClass.values)
+      '${movementClass.name}:'
+          '${config.probeLoadFractionByMovementClass[movementClass]}',
     '${config.calibrationMinCleanReps}',
     '${config.calibrationRegimeMaxRpe}',
     '${config.calibrationMaxIncreaseFraction}',
@@ -878,8 +892,7 @@ String _configCanonical(ProgrammingConfig config) {
     '${config.bodyweightRepStep}',
     for (final minutes in (config.exerciseCountByMinutes.keys.toList()..sort()))
       '$minutes:${config.exerciseCountByMinutes[minutes]}',
-    '${config.warmUpMinutes}',
-    '${config.olderWarmUpMinutes}',
+    config.warmUpMinutesByAgeBand.join(','),
     '${config.machineAffinityNewToIt}',
     '${config.machineAffinityBeenAWhile}',
     '${config.machineAffinityTrainsRegularly}',
@@ -888,8 +901,9 @@ String _configCanonical(ProgrammingConfig config) {
     '${config.machineAffinityLowComfort}',
     '${config.machineAffinityMostlyFineComfort}',
     '${config.machineAffinityTotallyAtHomeComfort}',
-    '${config.machineAffinityForcedAge}',
-    '${config.seatedPreferenceAge}',
+    '${config.seatedPreferenceWeight}',
+    '${config.seatedPreferenceStartAge}',
+    '${config.seatedPreferenceFullAge}',
     for (final level in EffortLevel.values)
       '${level.name}:${config.reportedRpeByLevel[level]}:'
           '${config.rpeBandByLevel[level]}',

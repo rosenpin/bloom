@@ -82,14 +82,13 @@ enum ReasonCode {
   missedBottomSameSessionDrop,
 
   // ── Layoff (§6) ────────────────────────────────────────────────────────────
-  /// 7–13 days away: repeat last weights, no increase.
-  layoffTier1,
+  /// Time away exceeded the grace period, so progression was suppressed and the
+  /// continuous layoff multiplier was applied.
+  layoffAdjusted,
 
-  /// 14–27 days away: −10% on working weights.
-  layoffTier2,
-
-  /// 28+ days away: −20%, and the compound lifts re-calibrate.
-  layoffTier3,
+  /// The continuous layoff multiplier reached its floor, so a compound lift
+  /// re-enters calibration.
+  layoffFloorRecalibration,
 
   // ── Mesocycle (§5b) ────────────────────────────────────────────────────────
   /// Week 4 of 6: reduced volume, weights held.

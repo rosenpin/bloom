@@ -1,6 +1,8 @@
 /// Mid-session time: one total, deterministic reducer.
 library;
 
+import 'dart:math' as math;
+
 import 'package:meta/meta.dart';
 
 import '../config/programming_config.dart';
@@ -186,6 +188,7 @@ final class _SessionReducer {
                 current,
                 state.config,
                 state.unitSystem,
+                state.bodyMass.isPositive ? state.bodyMass : null,
               );
               calibration = calibration.copyWith(
                 phase: CalibrationPhase.awaitingProbe,
@@ -604,17 +607,22 @@ Kg _nextCalibrationProbe(
   Kg current,
   ProgrammingConfig config,
   UnitSystem unitSystem,
+  Kg? bodyMass,
 ) {
   final loads = config.availableLoads(profile, unitSystem);
-  final isLowerBodyMachine =
-      profile.resistanceEquipment == ResistanceEquipment.machine &&
-      profile.movementClass.isLowerBody;
-  if (!isLowerBodyMachine) {
-    return loads.shift(current, config.calibrationProbeStepJump);
-  }
-
-  final jump = config.lowerBodyMachineProbeJumpMax;
-  final target = current * (1 + jump);
+  final oneStep = loads.stepAt(current);
+  final probeLoadFraction =
+      config.probeLoadFractionByMovementClass[profile.movementClass];
+  assert(probeLoadFraction != null);
+  final expectedWorkingLoad =
+      probeLoadFraction! *
+      (bodyMass?.value ?? 0) *
+      (1 - profile.bwContribution);
+  final jump = math.max(
+    oneStep.value,
+    config.calibrationJumpFraction * expectedWorkingLoad,
+  );
+  final target = current + Kg(jump);
   var snapped = loads.snapDown(target);
   if (snapped <= current) snapped = loads.shift(current, 1);
   return snapped;
@@ -668,7 +676,10 @@ _ResolvedPrescription _prescribeCandidate(
   SessionState state,
   PlanSwapCandidate candidate,
 ) {
-  var dose = candidate.doseFor(state.weekKind);
+  var dose = state.config.doseForWeek(
+    candidate.baseDose,
+    state.mesocycleWeekIndex,
+  );
   final range = dose is RepsDose ? dose.range : const RepRange(1, 1);
   final decision = LoadSuggester(state.config).suggest(
     ProgressionInput(
@@ -726,7 +737,7 @@ PlanExercise _candidatePlanExercise(
   orderedSwapCandidates: source.planExercise.orderedSwapCandidates.where(
     (item) => item.exerciseId != candidate.exerciseId,
   ),
-  doseByWeekKind: candidate.doseByWeekKind,
+  baseDose: candidate.baseDose,
   repRange: candidate.repRange,
 );
 

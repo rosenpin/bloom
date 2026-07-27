@@ -100,6 +100,10 @@ void main() {
         weeksTrained: 0,
         mesocycleIndex: 1,
       ),
+      config: const ProgrammingConfig(
+        machineAffinityNewToIt: 0,
+        machineAffinityLowComfort: 0,
+      ),
     );
     final shoulderPress = plan.days
         .expand((day) => day.exercises)
@@ -112,10 +116,7 @@ void main() {
           candidate.tier == 3,
     );
     expect(lateralRaise.repRange, const RepRange(10, 15));
-    expect(
-      (lateralRaise.doseFor(MesocycleWeekKind.build) as RepsDose).range,
-      const RepRange(10, 15),
-    );
+    expect((lateralRaise.baseDose as RepsDose).range, const RepRange(10, 15));
   });
 
   test('swap ranks are unique per from id and tier', () {

@@ -203,7 +203,7 @@ PlanExercise _replacementFor(
   orderedSwapCandidates: source.orderedSwapCandidates.where(
     (candidate) => candidate.exerciseId != replacement.exerciseId,
   ),
-  doseByWeekKind: replacement.doseByWeekKind,
+  baseDose: replacement.baseDose,
   repRange: replacement.repRange,
 );
 

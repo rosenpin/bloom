@@ -5,6 +5,8 @@
 /// stamped with `configHash` so a replay can tell which numbers produced them.
 library;
 
+import 'dart:math' as math;
+
 import '../content/exercise.dart';
 import '../core/dose.dart';
 import '../core/effort.dart';
@@ -51,21 +53,6 @@ final class RepScheme {
   /// false; emphasis-driven volume comes from plan assembly.
   final bool extraSetOnEmphasis;
 
-  /// §2 RESOLVED: novices in their first 4 weeks are capped at 3 sets and 3+ RIR
-  /// regardless of goal. Goal schemes unlock from week 5.
-  RepScheme cappedForNovice(ProgrammingConfig config) => RepScheme(
-    minSets: minSets > config.noviceMaxSets ? config.noviceMaxSets : minSets,
-    maxSets: maxSets > config.noviceMaxSets ? config.noviceMaxSets : maxSets,
-    range: range,
-    effort: effort.rpe > config.noviceMaxRpe
-        ? EffortTarget(config.noviceMaxRpe)
-        : effort,
-    rest: rest,
-    // A scheme-level emphasis bonus must never bypass the explicit
-    // first-four-weeks cap of 3 sets.
-    extraSetOnEmphasis: false,
-  );
-
   /// The opening dose for this scheme: top of the set count, bottom of the rep
   /// range (double progression climbs from there).
   RepsDose openingDose({bool isEmphasis = false}) => RepsDose(
@@ -103,29 +90,25 @@ final class ProgrammingConfig {
     this.isolationRange = const RepRange(10, 15),
     this.isolationRestartRange = const RepRange(8, 10),
     this.dropBridgeBackOffReps = const RepRange(4, 5),
-    this.noviceWeeks = 4,
-    this.noviceMaxSets = 3,
-    this.noviceMaxRpe = 7,
+    this.rpeRampBase = 7,
+    this.rpeRampPerWeek = 0.25,
+    this.setsRampBase = 3,
+    this.setsRampPerWeek = 0.25,
     this.metricLoads = _metricLoads,
     this.imperialLoads = _imperialLoads,
     this.mesocycleWeeks = 6,
-    this.easierWeekIndex = 4,
-    this.deloadWeekIndex = 6,
-    this.easierWeekSetsDelta = -1,
-    this.easierWeekRpeDelta = -1,
-    this.deloadWeekRpeDelta = -2,
-    this.deloadWeekLoadFraction = 0.80,
+    this.weekSetsDelta = _defaultWeekSetsDelta,
+    this.weekRpeDelta = _defaultWeekRpeDelta,
+    this.weekLoadScale = _defaultWeekLoadScale,
     this.newMesocycleStepUp = 1,
-    this.layoffTier1Days = 7,
-    this.layoffTier2Days = 14,
-    this.layoffTier3Days = 28,
-    this.layoffTier2LoadFraction = 0.90,
-    this.layoffTier3LoadFraction = 0.80,
+    this.layoffGraceDays = 7,
+    this.layoffSlopePerDay = 0.0075,
+    this.layoffFloor = 0.80,
     this.calibrationProbeReps = 8,
     this.calibrationMaxTestSets = 2,
-    this.calibrationProbeStepJump = 2,
-    this.lowerBodyMachineProbeJumpMin = 0.50,
-    this.lowerBodyMachineProbeJumpMax = 1.00,
+    this.calibrationJumpFraction = 0.15,
+    this.probeLoadFractionByMovementClass =
+        _defaultProbeLoadFractionByMovementClass,
     this.calibrationMinCleanReps = 5,
     this.calibrationRegimeMaxRpe = 4,
     this.calibrationMaxIncreaseFraction = 0.15,
@@ -146,41 +129,32 @@ final class ProgrammingConfig {
     this.timedHoldCeiling = const Duration(seconds: 60),
     this.bodyweightRepStep = 1,
     this.exerciseCountByMinutes = const {30: 4, 45: 6, 60: 8},
-    this.warmUpMinutes = 5,
-    this.olderWarmUpMinutes = 7,
-    this.machineAffinityNewToIt = 0.5,
+    this.warmUpMinutesByAgeBand = _defaultWarmUpMinutesByAgeBand,
+    this.machineAffinityNewToIt = 0.6,
     this.machineAffinityBeenAWhile = 0.3,
     this.machineAffinityTrainsRegularly = 0.1,
-    this.machineAffinityAge50To59 = 0.3,
-    this.machineAffinityAge60Plus = 0.4,
+    this.machineAffinityAge50To59 = 0.4,
+    this.machineAffinityAge60Plus = 0.5,
     this.machineAffinityLowComfort = 0.2,
     this.machineAffinityMostlyFineComfort = 0.1,
     this.machineAffinityTotallyAtHomeComfort = 0,
-    this.machineAffinityForcedAge = 50,
-    this.seatedPreferenceAge = 60,
+    this.seatedPreferenceWeight = 1,
+    this.seatedPreferenceStartAge = 50,
+    this.seatedPreferenceFullAge = 60,
     this.reportedRpeByLevel = _defaultReportedRpe,
     this.rpeBandByLevel = _defaultRpeBands,
   }) : assert(mesocycleWeeks >= 1),
-       assert(easierWeekIndex >= 1 && easierWeekIndex <= mesocycleWeeks),
-       assert(deloadWeekIndex >= 1 && deloadWeekIndex <= mesocycleWeeks),
-       assert(easierWeekSetsDelta <= 0),
-       assert(easierWeekRpeDelta <= 0),
-       assert(deloadWeekRpeDelta <= 0),
-       assert(deloadWeekLoadFraction > 0 && deloadWeekLoadFraction < 1),
+       assert(rpeRampBase >= 1 && rpeRampBase <= 10),
+       assert(rpeRampPerWeek >= 0),
+       assert(setsRampBase >= 1),
+       assert(setsRampPerWeek >= 0),
        assert(newMesocycleStepUp > 0),
-       assert(layoffTier1Days > 0),
-       assert(layoffTier2Days > layoffTier1Days),
-       assert(layoffTier3Days > layoffTier2Days),
-       assert(layoffTier2LoadFraction > 0 && layoffTier2LoadFraction < 1),
-       assert(
-         layoffTier3LoadFraction > 0 &&
-             layoffTier3LoadFraction < layoffTier2LoadFraction,
-       ),
+       assert(layoffGraceDays >= 0),
+       assert(layoffSlopePerDay > 0 && layoffSlopePerDay < 1),
+       assert(layoffFloor > 0 && layoffFloor < 1),
        assert(calibrationProbeReps > 0),
        assert(calibrationMaxTestSets > 0),
-       assert(calibrationProbeStepJump > 0),
-       assert(lowerBodyMachineProbeJumpMin > 0),
-       assert(lowerBodyMachineProbeJumpMax >= lowerBodyMachineProbeJumpMin),
+       assert(calibrationJumpFraction > 0 && calibrationJumpFraction < 1),
        assert(calibrationMinCleanReps > 0),
        assert(
          calibrationMaxIncreaseFraction > 0 &&
@@ -198,8 +172,6 @@ final class ProgrammingConfig {
        assert(missedBottomDropFraction > 0 && missedBottomDropFraction < 1),
        assert(lowEnergyLoadFraction > 0 && lowEnergyLoadFraction < 1),
        assert(bodyweightRepStep > 0),
-       assert(warmUpMinutes > 0),
-       assert(olderWarmUpMinutes >= warmUpMinutes),
        assert(machineAffinityNewToIt >= 0 && machineAffinityNewToIt <= 1),
        assert(machineAffinityBeenAWhile >= 0 && machineAffinityBeenAWhile <= 1),
        assert(
@@ -216,7 +188,9 @@ final class ProgrammingConfig {
        assert(
          machineAffinityTotallyAtHomeComfort >= 0 &&
              machineAffinityTotallyAtHomeComfort <= 1,
-       );
+       ),
+       assert(seatedPreferenceWeight >= 0),
+       assert(seatedPreferenceFullAge > seatedPreferenceStartAge);
 
   // ── §2 Rep/set schemes by goal ─────────────────────────────────────────────
   final Map<Goal, RepScheme> repSchemes;
@@ -231,12 +205,11 @@ final class ProgrammingConfig {
   /// §3.4 drop-set bridge: back off to the old weight for another 4–5 reps.
   final RepRange dropBridgeBackOffReps;
 
-  /// §2 RESOLVED: the novice cap applies for this many weeks.
-  final int noviceWeeks;
-  final int noviceMaxSets;
-
-  /// RPE 7 = 3+ RIR. §4 "Beginner intensity policy".
-  final int noviceMaxRpe;
+  /// §2 RESOLVED 2026-07-27: experience feeds one dose ramp.
+  final double rpeRampBase;
+  final double rpeRampPerWeek;
+  final double setsRampBase;
+  final double setsRampPerWeek;
 
   // ── §3 Weight increments ───────────────────────────────────────────────────
   final EquipmentLoadTable metricLoads;
@@ -245,45 +218,30 @@ final class ProgrammingConfig {
   // ── §5b Mesocycle ──────────────────────────────────────────────────────────
   final int mesocycleWeeks;
 
-  /// Week 4 of 6 is the easier week: reduced volume, weights held.
-  final int easierWeekIndex;
-
-  /// Week 6 of 6 is meaningfully lighter, then the next mesocycle starts fresh.
-  final int deloadWeekIndex;
-
-  final int easierWeekSetsDelta;
-  final int easierWeekRpeDelta;
-  final int deloadWeekRpeDelta;
-  final double deloadWeekLoadFraction;
+  /// Per-week data applied to the one base dose held by a plan exercise.
+  final List<int> weekSetsDelta;
+  final List<int> weekRpeDelta;
+  final List<double> weekLoadScale;
 
   /// Equipment steps up from where she left off when a new mesocycle starts.
   final int newMesocycleStepUp;
 
-  // ── §6 Layoff tiers ────────────────────────────────────────────────────────
-  /// 7–13 days away: repeat last weights, no increase.
-  final int layoffTier1Days;
-
-  /// 14–27 days away: −10%.
-  final int layoffTier2Days;
-
-  /// 28+ days away: −20% and re-calibrate the compound lifts.
-  final int layoffTier3Days;
-  final double layoffTier2LoadFraction;
-  final double layoffTier3LoadFraction;
+  // ── §6 Layoff curve ────────────────────────────────────────────────────────
+  final int layoffGraceDays;
+  final double layoffSlopePerDay;
+  final double layoffFloor;
 
   // ── §7 Starting-weight calibration ─────────────────────────────────────────
   /// "Ask for 8 easy reps at that load, then one feel tap." RESOLVED: stays.
   final int calibrationProbeReps;
   final int calibrationMaxTestSets;
 
-  /// Probe jump on "too easy": +2 steps.
-  final int calibrationProbeStepJump;
+  /// DRAFT §7: fraction of expected working load used for each probe jump.
+  final double calibrationJumpFraction;
 
-  /// RESOLVED: on lower-body machines only, probe jumps are +50–100% per test set —
-  /// the floor on a leg press is so far below any working weight that overshoot
-  /// risk is minimal.
-  final double lowerBodyMachineProbeJumpMin;
-  final double lowerBodyMachineProbeJumpMax;
+  /// DRAFT §7 body-mass coefficients by movement class. Together with
+  /// `(1 - bwContribution)` they estimate external working load.
+  final Map<MovementClass, double> probeLoadFractionByMovementClass;
 
   /// §7.5 / §11: can't do this many clean reps at the floor → swap the pattern.
   final int calibrationMinCleanReps;
@@ -341,13 +299,8 @@ final class ProgrammingConfig {
   // ── §8 Assembly ────────────────────────────────────────────────────────────
   final Map<int, int> exerciseCountByMinutes;
 
-  /// One generic 5 minutes, bike or incline walk. RESOLVED: no per-exercise ramp
-  /// sets in v1.
-  final int warmUpMinutes;
-
-  /// The spec says 60+ gets a longer warm-up but does not pin a duration. Seven
-  /// minutes is the v1 authored default and remains configurable.
-  final int olderWarmUpMinutes;
+  /// DRAFT §8, ordered like `AgeBand.values`: 5, 5, 5, 6, 7 minutes.
+  final List<int> warmUpMinutesByAgeBand;
 
   /// DRAFT §8 scoring contribution for "new to it".
   final double machineAffinityNewToIt;
@@ -373,11 +326,10 @@ final class ProgrammingConfig {
   /// DRAFT §8 scoring contribution for "totally at home" gym comfort.
   final double machineAffinityTotallyAtHomeComfort;
 
-  /// §8 forced edge: this age or older plus "new to it" has affinity 1.0.
-  final int machineAffinityForcedAge;
-
-  /// 60+: longer warm-up, seated variants preferred where equivalent.
-  final int seatedPreferenceAge;
+  /// DRAFT §8 additive candidate-score contribution for seated variants.
+  final double seatedPreferenceWeight;
+  final int seatedPreferenceStartAge;
+  final int seatedPreferenceFullAge;
 
   // ── §4 Feedback capture ────────────────────────────────────────────────────
   /// The RPE each of the five taps is read as: the end of the band that implies
@@ -390,12 +342,28 @@ final class ProgrammingConfig {
 
   // ── Derived helpers (pure, no state) ───────────────────────────────────────
 
-  /// The scheme for [goal], with the novice cap applied when she is inside her
-  /// first [noviceWeeks] weeks of training.
+  /// The scheme for [goal], computed through the same experience ramp for every
+  /// non-negative [weeksTrained] value.
   RepScheme schemeFor(Goal goal, {int weeksTrained = 999}) {
     final scheme = repSchemes[goal];
     assert(scheme != null, 'missing rep scheme for ${goal.name}');
-    return weeksTrained < noviceWeeks ? scheme!.cappedForNovice(this) : scheme!;
+    assert(weeksTrained >= 0);
+    final targetSets = math.min(
+      scheme!.maxSets,
+      (setsRampBase + setsRampPerWeek * weeksTrained).floor(),
+    );
+    final targetRpe = math.min(
+      scheme.effort.rpe,
+      (rpeRampBase + rpeRampPerWeek * weeksTrained).floor(),
+    );
+    return RepScheme(
+      minSets: math.min(scheme.minSets, targetSets),
+      maxSets: targetSets,
+      range: scheme.range,
+      effort: EffortTarget(targetRpe),
+      rest: scheme.rest,
+      extraSetOnEmphasis: scheme.extraSetOnEmphasis,
+    );
   }
 
   void assertTimedDoseConfiguration() {
@@ -416,15 +384,91 @@ final class ProgrammingConfig {
   AvailableLoads availableLoads(LoadProfile profile, UnitSystem unitSystem) =>
       loadTable(unitSystem).loadsFor(profile);
 
-  /// 1-based week inside the mesocycle → what kind of week it is (§5b).
-  /// Weeks past the mesocycle wrap, so week 7 is week 1 of the next one.
+  int _weekOffset(int weekIndex) {
+    assert(weekIndex >= 1);
+    return (weekIndex - 1) % mesocycleWeeks;
+  }
+
+  int weekSetsDeltaFor(int weekIndex) => weekSetsDelta[_weekOffset(weekIndex)];
+
+  int weekRpeDeltaFor(int weekIndex) => weekRpeDelta[_weekOffset(weekIndex)];
+
+  double weekLoadScaleFor(int weekIndex) =>
+      weekLoadScale[_weekOffset(weekIndex)];
+
+  /// Derives telemetry/UI labels from the vectors. The label never selects a
+  /// training computation.
   MesocycleWeekKind weekKind(int weekIndex) {
-    final week = ((weekIndex - 1) % mesocycleWeeks) + 1;
-    if (week == deloadWeekIndex) return MesocycleWeekKind.deload;
-    if (week == easierWeekIndex) return MesocycleWeekKind.easier;
-    if (week == easierWeekIndex + 1) return MesocycleWeekKind.push;
+    final offset = _weekOffset(weekIndex);
+    if (weekLoadScale[offset] < 1) return MesocycleWeekKind.deload;
+    if (weekSetsDelta[offset] < 0 || weekRpeDelta[offset] < 0) {
+      return MesocycleWeekKind.easier;
+    }
+    final previous = (offset - 1) % mesocycleWeeks;
+    if (weekLoadScale[previous] == 1 &&
+        (weekSetsDelta[previous] < 0 || weekRpeDelta[previous] < 0)) {
+      return MesocycleWeekKind.push;
+    }
     return MesocycleWeekKind.build;
   }
+
+  /// Applies the configured week vector to the plan's one base dose.
+  Dose doseForWeek(Dose baseDose, int weekIndex) {
+    final sets = baseDose.sets + weekSetsDeltaFor(weekIndex);
+    assert(sets >= 1, 'week set delta must preserve a positive dose');
+    return switch (baseDose) {
+      RepsDose(:final range, :final effort, :final targetReps) => RepsDose(
+        sets: sets,
+        range: range,
+        effort: EffortTarget(
+          (effort.rpe + weekRpeDeltaFor(weekIndex)).clamp(1, 10),
+        ),
+        targetReps: targetReps,
+      ),
+      TimedDose(:final hold) => TimedDose(sets: sets, hold: hold),
+    };
+  }
+
+  void assertParametricConfiguration() {
+    assert(weekSetsDelta.length == mesocycleWeeks);
+    assert(weekRpeDelta.length == mesocycleWeeks);
+    assert(weekLoadScale.length == mesocycleWeeks);
+    assert(weekLoadScale.every((scale) => scale > 0 && scale <= 1));
+    assert(warmUpMinutesByAgeBand.every((minutes) => minutes > 0));
+    assert(
+      MovementClass.values.every(
+        (movementClass) =>
+            probeLoadFractionByMovementClass[movementClass] != null &&
+            probeLoadFractionByMovementClass[movementClass]!.isFinite &&
+            probeLoadFractionByMovementClass[movementClass]! >= 0,
+      ),
+      'every movement class needs a non-negative probe-load coefficient',
+    );
+  }
+
+  static const List<int> _defaultWeekSetsDelta = <int>[0, 0, 0, -1, 0, 0];
+  static const List<int> _defaultWeekRpeDelta = <int>[0, 0, 0, -1, 0, -2];
+  static const List<double> _defaultWeekLoadScale = <double>[
+    1,
+    1,
+    1,
+    1,
+    1,
+    0.8,
+  ];
+
+  static const List<int> _defaultWarmUpMinutesByAgeBand = <int>[5, 5, 5, 6, 7];
+
+  static const Map<MovementClass, double>
+  _defaultProbeLoadFractionByMovementClass = <MovementClass, double>{
+    MovementClass.compoundLower: 0.6,
+    MovementClass.compoundUpperPush: 0.3,
+    MovementClass.compoundUpperPull: 0.3,
+    MovementClass.isolationLower: 0.15,
+    MovementClass.isolationUpper: 0.15,
+    MovementClass.core: 0.15,
+    MovementClass.cardio: 0.15,
+  };
 
   static const Map<Goal, RepScheme> _defaultRepSchemes = {
     // "leave 2–3 reps in the tank", 60–90s rest

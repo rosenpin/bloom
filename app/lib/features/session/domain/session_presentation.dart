@@ -46,20 +46,6 @@ abstract final class SessionPresentation {
     return 'Move slowly and keep the position steady';
   }
 
-  static String? imageAsset(String exerciseId) {
-    if (exerciseId.contains('goblet-squat')) {
-      return 'assets/images/goblet-squat-2.jpg';
-    }
-    if (exerciseId.contains('hip-thrust') ||
-        exerciseId.contains('glute-bridge')) {
-      return 'assets/images/hip-thrust-2.jpg';
-    }
-    if (exerciseId.contains('lateral-raise')) {
-      return 'assets/images/lateral-raise-2.jpg';
-    }
-    return null;
-  }
-
   static String feelQuestion(engine.SessionExerciseEntry entry) {
     final dose = entry.prescription.dose;
     if (dose is engine.RepsDose && dose.effort.rir >= 4) {

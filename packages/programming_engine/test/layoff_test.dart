@@ -1,6 +1,4 @@
-/// §6 "Layoff handling", encoded 1:1 — plus the monotonicity invariant.
-///
-/// "Never punish absence": the tier is applied before progression, silently.
+/// §6 continuous layoff curve, encoded 1:1 with its monotonicity invariant.
 library;
 
 import 'package:programming_engine/programming_engine.dart';
@@ -8,71 +6,42 @@ import 'package:test/test.dart';
 
 import 'support/fixtures.dart';
 
-typedef Tier = ({String rule, int days, LayoffTier tier, double loadFraction});
+typedef CurvePoint = ({String rule, int days, double multiplier});
 
 void main() {
-  group('§6 the layoff table', () {
-    const tiers = <Tier>[
+  group('§6 layoff curve', () {
+    const points = <CurvePoint>[
+      (rule: 'day 0 is normal', days: 0, multiplier: 1),
+      (rule: 'day 7 is the grace anchor', days: 7, multiplier: 1),
+      (rule: 'day 8 starts the slope', days: 8, multiplier: 0.9925),
       (
-        rule: '0 days away: normal progression',
-        days: 0,
-        tier: LayoffTier.none,
-        loadFraction: 1,
-      ),
-      (
-        rule: '6 days away: still normal progression',
-        days: 6,
-        tier: LayoffTier.none,
-        loadFraction: 1,
-      ),
-      (
-        rule: '7 days away: repeat last weights, no increase',
-        days: 7,
-        tier: LayoffTier.hold,
-        loadFraction: 1,
-      ),
-      (
-        rule: '13 days away: still repeat, no increase',
+        rule: 'day 13 preserves the provenance anchor',
         days: 13,
-        tier: LayoffTier.hold,
-        loadFraction: 1,
+        multiplier: 0.955,
       ),
-      (
-        rule: '14 days away: −10% on all working weights',
-        days: 14,
-        tier: LayoffTier.reduce,
-        loadFraction: 0.9,
-      ),
-      (
-        rule: '27 days away: still −10%',
-        days: 27,
-        tier: LayoffTier.reduce,
-        loadFraction: 0.9,
-      ),
-      (
-        rule: '28 days away: −20% and re-calibrate the compound lifts',
-        days: 28,
-        tier: LayoffTier.reCalibrate,
-        loadFraction: 0.8,
-      ),
-      (
-        rule: 'a year away: still the 28+ tier',
-        days: 365,
-        tier: LayoffTier.reCalibrate,
-        loadFraction: 0.8,
-      ),
+      (rule: 'day 20 remains continuous', days: 20, multiplier: 0.9025),
+      (rule: 'day 33 is still above the floor', days: 33, multiplier: 0.805),
+      (rule: 'day 34 reaches the floor', days: 34, multiplier: 0.8),
+      (rule: 'a year away stays at the floor', days: 365, multiplier: 0.8),
     ];
 
-    for (final entry in tiers) {
-      test(entry.rule, () {
-        final tier = layoffTierFor(entry.days, config);
-        expect(tier, entry.tier);
-        expect(layoffLoadFraction(tier, config), entry.loadFraction);
+    for (final point in points) {
+      test(point.rule, () {
+        expect(
+          layoffMultiplier(point.days, config),
+          closeTo(point.multiplier, 1e-12),
+        );
       });
     }
 
-    test('a negative day count is treated as no layoff, not as an error', () {
-      expect(layoffTierFor(-30, config), LayoffTier.none);
+    test('negative elapsed days naturally use the day-zero endpoint', () {
+      expect(layoffMultiplier(-30, config), 1);
+      expect(layoffSuppressesProgression(-30, config), isFalse);
+    });
+
+    test('suppression begins strictly after the grace period', () {
+      expect(layoffSuppressesProgression(7, config), isFalse);
+      expect(layoffSuppressesProgression(8, config), isTrue);
     });
   });
 
@@ -87,26 +56,22 @@ void main() {
       daysSinceLastSession: days,
     );
 
-    test(
-      '7–13 days: identical load and reps, even on a "way too easy" report',
-      () {
-        final decision = suggester.suggest(gobletAfter(9));
-        expect(decision.regime, ProgressionRegime.layoff);
-        expect(decision.externalLoad, const Kg(12));
-        expect(decision.targetReps, 12);
-        expect(decision.stepsMoved, 0);
-        expect(decision.why, contains(ReasonCode.layoffTier1));
-      },
-    );
-
-    test('14–27 days: −10%, snapped down to a real dumbbell', () {
-      final decision = suggester.suggest(gobletAfter(20));
-      // 12 kg × 0.9 = 10.8 → the 10 kg dumbbells.
+    test('the first sloped day suppresses an otherwise licensed increase', () {
+      final decision = suggester.suggest(gobletAfter(8));
+      expect(decision.regime, ProgressionRegime.layoff);
       expect(decision.externalLoad, const Kg(10));
-      expect(decision.why, contains(ReasonCode.layoffTier2));
+      expect(decision.targetReps, 12);
+      expect(decision.why, contains(ReasonCode.layoffAdjusted));
     });
 
-    test('28+ days: −20% and the compound lifts re-find their weights', () {
+    test('day 20 scales continuously, then snaps down to real equipment', () {
+      final decision = suggester.suggest(gobletAfter(20));
+      // 12 kg × 0.9025 = 10.83 → the 10 kg dumbbells.
+      expect(decision.externalLoad, const Kg(10));
+      expect(decision.why, contains(ReasonCode.layoffAdjusted));
+    });
+
+    test('the floor re-calibrates compound lifts', () {
       final decision = suggester.suggest(gobletAfter(40));
       expect(decision.externalLoad, const Kg(8));
       expect(
@@ -115,10 +80,11 @@ void main() {
         reason: 'the probe restarts from history, not from the empty rack',
       );
       expect(decision.targetReps, config.calibrationProbeReps);
-      expect(decision.why, contains(ReasonCode.layoffTier3));
+      expect(decision.why, contains(ReasonCode.layoffAdjusted));
+      expect(decision.why, contains(ReasonCode.layoffFloorRecalibration));
     });
 
-    test('28+ days: isolation work just drops 20%, no probe', () {
+    test('the floor scales isolation work without a probe', () {
       final decision = suggester.suggest(
         inputFor(
           lateralRaise,
@@ -131,10 +97,14 @@ void main() {
         ),
       );
       expect(decision.suggestion, const SuggestedLoad(Kg(4)));
-      expect(decision.why, contains(ReasonCode.layoffTier3));
+      expect(decision.why, contains(ReasonCode.layoffAdjusted));
+      expect(
+        decision.why,
+        isNot(contains(ReasonCode.layoffFloorRecalibration)),
+      );
     });
 
-    test('a layoff overrides the missing feel tap too', () {
+    test('the curve overrides a missing feel tap too', () {
       final decision = suggester.suggest(
         inputFor(
           gobletSquat,
@@ -145,11 +115,11 @@ void main() {
         ),
       );
       expect(decision.externalLoad, const Kg(10));
-      expect(decision.why, contains(ReasonCode.layoffTier2));
+      expect(decision.why, contains(ReasonCode.layoffAdjusted));
       expect(decision.why, isNot(contains(ReasonCode.noFeedbackHold)));
     });
 
-    test('assisted-stack layoff reduction means more assistance, not less', () {
+    test('assisted-stack scaling means more assistance, not less', () {
       final decision = suggester.suggest(
         inputFor(
           assistedPullUp,
@@ -160,15 +130,13 @@ void main() {
           daysSinceLastSession: 20,
         ),
       );
-      // 59.5 kg body term − 30 kg assistance = 29.5 kg effective;
-      // 90% is 26.55 kg, or −32.95 kg external, snapped down to −35.
       expect(decision.externalLoad, const Kg(-35));
       expect(decision.stepsMoved, -1);
-      expect(decision.why, contains(ReasonCode.layoffTier2));
+      expect(decision.why, contains(ReasonCode.layoffAdjusted));
     });
 
-    test('layoff is monotone: more days away is never heavier', () {
-      const days = <int>[0, 3, 6, 7, 10, 13, 14, 20, 27, 28, 60, 400];
+    test('more days away never yields a heavier prescription', () {
+      const days = <int>[0, 3, 6, 7, 8, 10, 13, 14, 20, 27, 28, 34, 60, 400];
       for (final exercise in loadMetricFixtures) {
         var previous = const Kg(1e9);
         for (final away in days) {
@@ -204,31 +172,34 @@ void main() {
       }
     });
 
-    test('bodyweight and timed movements also ease back in', () {
-      final pushUps = suggester.suggest(
-        inputFor(
-          pushUp,
-          range: const RepRange(8, 15),
-          lastReps: 15,
-          targetReps: 15,
-          reported: EffortLevel.justRight,
-          daysSinceLastSession: 20,
-        ),
-      );
-      expect(pushUps.targetReps, 8);
-      expect(pushUps.why, contains(ReasonCode.layoffTier2));
+    test(
+      'reps-only and timed strategies suppress progress on the same curve',
+      () {
+        final pushUps = suggester.suggest(
+          inputFor(
+            pushUp,
+            range: const RepRange(8, 15),
+            lastReps: 15,
+            targetReps: 15,
+            reported: EffortLevel.justRight,
+            daysSinceLastSession: 20,
+          ),
+        );
+        expect(pushUps.targetReps, 15);
+        expect(pushUps.why, contains(ReasonCode.layoffAdjusted));
 
-      final planks = suggester.suggest(
-        inputFor(
-          plank,
-          range: const RepRange(1, 1),
-          lastHold: const Duration(seconds: 45),
-          reported: EffortLevel.justRight,
-          daysSinceLastSession: 20,
-        ),
-      );
-      expect(planks.hold, const Duration(seconds: 40));
-      expect(planks.why, contains(ReasonCode.layoffTier2));
-    });
+        final planks = suggester.suggest(
+          inputFor(
+            plank,
+            range: const RepRange(1, 1),
+            lastHold: const Duration(seconds: 45),
+            reported: EffortLevel.justRight,
+            daysSinceLastSession: 20,
+          ),
+        );
+        expect(planks.hold, const Duration(seconds: 45));
+        expect(planks.why, contains(ReasonCode.layoffAdjusted));
+      },
+    );
   });
 }

@@ -46,18 +46,6 @@ engine.Plan sessionTestPlan() {
     effort: engine.EffortTarget.rpe7,
     targetReps: 10,
   );
-  const doses = engine.WeekDoses(
-    build: dose,
-    easier: dose,
-    push: dose,
-    deload: dose,
-  );
-  const isolationDoses = engine.WeekDoses(
-    build: isolationDose,
-    easier: isolationDose,
-    push: isolationDose,
-    deload: isolationDose,
-  );
   return engine.Plan(
     mesocycleIndex: 1,
     stamps: const engine.PlanStamps(
@@ -112,11 +100,11 @@ engine.Plan sessionTestPlan() {
                 loadStepOverride: null,
                 tier: 1,
                 rank: 0,
-                doseByWeekKind: doses,
+                baseDose: dose,
                 repRange: const engine.RepRange(10, 12),
               ),
             ],
-            doseByWeekKind: doses,
+            baseDose: dose,
             repRange: const engine.RepRange(10, 12),
           ),
           engine.PlanExercise(
@@ -150,7 +138,7 @@ engine.Plan sessionTestPlan() {
                 loadStepOverride: null,
                 tier: 1,
                 rank: 0,
-                doseByWeekKind: isolationDoses,
+                baseDose: isolationDose,
                 repRange: const engine.RepRange(10, 15),
               ),
               engine.PlanSwapCandidate(
@@ -167,11 +155,11 @@ engine.Plan sessionTestPlan() {
                 loadStepOverride: null,
                 tier: 3,
                 rank: 0,
-                doseByWeekKind: isolationDoses,
+                baseDose: isolationDose,
                 repRange: const engine.RepRange(10, 15),
               ),
             ],
-            doseByWeekKind: isolationDoses,
+            baseDose: isolationDose,
             repRange: const engine.RepRange(10, 15),
           ),
         ],

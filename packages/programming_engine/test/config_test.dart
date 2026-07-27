@@ -98,27 +98,50 @@ void main() {
     });
   });
 
-  group('§2 RESOLVED the novice cap', () {
-    test('first 4 weeks: every scheme capped at 3 sets and 3+ RIR', () {
-      expect(config.noviceWeeks, 4);
+  group('§2 RESOLVED the novice ramp', () {
+    test('week zero starts at no more than 3 sets and RPE 7', () {
+      expect(config.rpeRampBase, 7);
+      expect(config.rpeRampPerWeek, 0.25);
+      expect(config.setsRampBase, 3);
+      expect(config.setsRampPerWeek, 0.25);
       for (final goal in Goal.values) {
-        final capped = config.schemeFor(goal, weeksTrained: 0);
-        expect(capped.maxSets, lessThanOrEqualTo(3), reason: goal.name);
-        expect(capped.effort.rpe, lessThanOrEqualTo(7), reason: goal.name);
-        expect(capped.effort.rir, greaterThanOrEqualTo(3), reason: goal.name);
+        final ramped = config.schemeFor(goal, weeksTrained: 0);
+        expect(ramped.maxSets, lessThanOrEqualTo(3), reason: goal.name);
+        expect(ramped.effort.rpe, lessThanOrEqualTo(7), reason: goal.name);
+        expect(ramped.effort.rir, greaterThanOrEqualTo(3), reason: goal.name);
       }
     });
 
-    test('the cap does not make an easier scheme harder', () {
-      final capped = config.schemeFor(Goal.feelHealthier, weeksTrained: 0);
-      expect(capped.effort.rpe, 6);
-      expect(capped.minSets, 2);
+    test('the ramp does not make an easier scheme harder', () {
+      final ramped = config.schemeFor(Goal.feelHealthier, weeksTrained: 0);
+      expect(ramped.effort.rpe, 6);
+      expect(ramped.minSets, 2);
     });
 
-    test('goal schemes unlock from week 5', () {
+    test('the goal anchor is fully reached at week 4', () {
       expect(config.schemeFor(Goal.stronger, weeksTrained: 3).maxSets, 3);
       expect(config.schemeFor(Goal.stronger, weeksTrained: 4).maxSets, 4);
       expect(config.schemeFor(Goal.stronger, weeksTrained: 4).effort.rpe, 8);
+    });
+
+    test('novice ramp is monotone in weeksTrained for every goal', () {
+      for (final goal in Goal.values) {
+        var previous = config.schemeFor(goal, weeksTrained: 0);
+        for (var week = 1; week <= 52; week++) {
+          final current = config.schemeFor(goal, weeksTrained: week);
+          expect(current.maxSets, greaterThanOrEqualTo(previous.maxSets));
+          expect(current.effort.rpe, greaterThanOrEqualTo(previous.effort.rpe));
+          expect(
+            current.maxSets,
+            lessThanOrEqualTo(config.repSchemes[goal]!.maxSets),
+          );
+          expect(
+            current.effort.rpe,
+            lessThanOrEqualTo(config.repSchemes[goal]!.effort.rpe),
+          );
+          previous = current;
+        }
+      }
     });
   });
 
@@ -146,8 +169,9 @@ void main() {
   group('§5b the 6-week mesocycle', () {
     test('build 1–3, easier 4, push 5, deload 6 — pinned, not floating', () {
       expect(config.mesocycleWeeks, 6);
-      expect(config.easierWeekIndex, 4);
-      expect(config.deloadWeekIndex, 6);
+      expect(config.weekSetsDelta, <int>[0, 0, 0, -1, 0, 0]);
+      expect(config.weekRpeDelta, <int>[0, 0, 0, -1, 0, -2]);
+      expect(config.weekLoadScale, <double>[1, 1, 1, 1, 1, 0.8]);
       expect(
         [for (var week = 1; week <= 6; week++) config.weekKind(week)],
         <MesocycleWeekKind>[
@@ -170,11 +194,25 @@ void main() {
     test(
       'the deload is meaningfully lighter and the easier week is not a stop',
       () {
-        expect(config.deloadWeekLoadFraction, lessThan(0.9));
-        expect(config.easierWeekSetsDelta, lessThan(0));
-        expect(config.easierWeekRpeDelta, lessThan(0));
+        expect(config.weekLoadScaleFor(6), lessThan(0.9));
+        expect(config.weekSetsDeltaFor(4), lessThan(0));
+        expect(config.weekRpeDeltaFor(4), lessThan(0));
       },
     );
+
+    test('week vectors apply deterministically from one base dose', () {
+      const base = RepsDose(
+        sets: 4,
+        range: RepRange(6, 8),
+        effort: EffortTarget(8),
+        targetReps: 6,
+      );
+      for (var week = 1; week <= 12; week++) {
+        expect(config.doseForWeek(base, week), config.doseForWeek(base, week));
+      }
+      expect(config.doseForWeek(base, 4), config.doseForWeek(base, 10));
+      expect(config.doseForWeek(base, 6), config.doseForWeek(base, 12));
+    });
   });
 
   group('§4 guardrail constants', () {
@@ -194,19 +232,20 @@ void main() {
       expect(config.calibrationMaxSteps, 2);
     });
 
-    test(
-      '§7 the probe: 8 reps, max 2 test sets, +2 steps, 5 clean reps minimum',
-      () {
-        expect(config.calibrationProbeReps, 8);
-        expect(config.calibrationMaxTestSets, 2);
-        expect(config.calibrationProbeStepJump, 2);
-        expect(config.calibrationMinCleanReps, 5);
-      },
-    );
-
-    test('§7 RESOLVED lower-body machines probe at +50–100% per test set', () {
-      expect(config.lowerBodyMachineProbeJumpMin, 0.50);
-      expect(config.lowerBodyMachineProbeJumpMax, 1.00);
+    test('§7 probe coefficients are one movement-class table', () {
+      expect(config.calibrationProbeReps, 8);
+      expect(config.calibrationMaxTestSets, 2);
+      expect(config.calibrationJumpFraction, 0.15);
+      expect(config.calibrationMinCleanReps, 5);
+      expect(config.probeLoadFractionByMovementClass, <MovementClass, double>{
+        MovementClass.compoundLower: 0.6,
+        MovementClass.compoundUpperPush: 0.3,
+        MovementClass.compoundUpperPull: 0.3,
+        MovementClass.isolationLower: 0.15,
+        MovementClass.isolationUpper: 0.15,
+        MovementClass.core: 0.15,
+        MovementClass.cardio: 0.15,
+      });
     });
 
     test(
@@ -221,8 +260,8 @@ void main() {
 
     test('§8 assembly numbers', () {
       expect(config.exerciseCountByMinutes, {30: 4, 45: 6, 60: 8});
-      expect(config.warmUpMinutes, 5);
-      expect(config.seatedPreferenceAge, 60);
+      expect(config.warmUpMinutesByAgeBand, <int>[5, 5, 5, 6, 7]);
+      expect(config.seatedPreferenceWeight, 1);
     });
   });
 
@@ -244,19 +283,18 @@ void main() {
     );
 
     test('all DRAFT score contributions are pinned in ProgrammingConfig', () {
-      expect(config.machineAffinityNewToIt, 0.5);
+      expect(config.machineAffinityNewToIt, 0.6);
       expect(config.machineAffinityBeenAWhile, 0.3);
       expect(config.machineAffinityTrainsRegularly, 0.1);
-      expect(config.machineAffinityAge50To59, 0.3);
-      expect(config.machineAffinityAge60Plus, 0.4);
+      expect(config.machineAffinityAge50To59, 0.4);
+      expect(config.machineAffinityAge60Plus, 0.5);
       expect(config.machineAffinityLowComfort, 0.2);
       expect(config.machineAffinityMostlyFineComfort, 0.1);
       expect(config.machineAffinityTotallyAtHomeComfort, 0);
-      expect(config.machineAffinityForcedAge, 50);
     });
 
     test('experience + age + comfort is additive and clamped to 0–1', () {
-      expect(machineAffinityFor(profile(), config), 0.7);
+      expect(machineAffinityFor(profile(), config), 0.8);
       expect(
         machineAffinityFor(
           profile(
@@ -266,7 +304,7 @@ void main() {
           ),
           config,
         ),
-        closeTo(0.7, 1e-12),
+        closeTo(0.8, 1e-12),
       );
       expect(
         machineAffinityFor(
@@ -277,7 +315,7 @@ void main() {
           ),
           config,
         ),
-        0.5,
+        0.6,
       );
       expect(
         machineAffinityFor(
@@ -291,7 +329,7 @@ void main() {
       );
     });
 
-    test('age 50+ plus new-to-it is forced to 1.0', () {
+    test('age 50+ plus new-to-it reaches 1.0 by summation', () {
       expect(
         machineAffinityFor(
           profile(age: AgeBand.age50To59, comfort: GymComfort.totallyAtHome),
@@ -306,6 +344,60 @@ void main() {
         ),
         1,
       );
+    });
+
+    test('affinity is monotone in experience, age, and comfort inputs', () {
+      final experience = <ProfileExperienceTier>[
+        ProfileExperienceTier.trainsRegularly,
+        ProfileExperienceTier.beenAWhile,
+        ProfileExperienceTier.newToIt,
+      ];
+      final ages = AgeBand.values;
+      final comfort = <GymComfort>[
+        GymComfort.totallyAtHome,
+        GymComfort.mostlyFine,
+        GymComfort.low,
+      ];
+      for (final age in ages) {
+        for (final gymComfort in comfort) {
+          final values = [
+            for (final tier in experience)
+              machineAffinityFor(
+                profile(age: age, experience: tier, comfort: gymComfort),
+                config,
+              ),
+          ];
+          expect(values[1], greaterThanOrEqualTo(values[0]));
+          expect(values[2], greaterThanOrEqualTo(values[1]));
+        }
+      }
+      for (final tier in experience) {
+        for (final gymComfort in comfort) {
+          final values = [
+            for (final age in ages)
+              machineAffinityFor(
+                profile(age: age, experience: tier, comfort: gymComfort),
+                config,
+              ),
+          ];
+          for (var index = 1; index < values.length; index++) {
+            expect(values[index], greaterThanOrEqualTo(values[index - 1]));
+          }
+        }
+      }
+      for (final age in ages) {
+        for (final tier in experience) {
+          final values = [
+            for (final gymComfort in comfort)
+              machineAffinityFor(
+                profile(age: age, experience: tier, comfort: gymComfort),
+                config,
+              ),
+          ];
+          expect(values[1], greaterThanOrEqualTo(values[0]));
+          expect(values[2], greaterThanOrEqualTo(values[1]));
+        }
+      }
     });
   });
 

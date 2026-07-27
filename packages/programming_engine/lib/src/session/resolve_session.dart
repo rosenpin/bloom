@@ -69,6 +69,7 @@ final class _ResolutionPass {
   late final String planRef = plan.reference;
 
   SessionResolution run() {
+    config.assertParametricConfiguration();
     final firstPlanDate = _firstCompletedPlanDate();
     final rawElapsedDays = firstPlanDate == null
         ? 0
@@ -98,7 +99,7 @@ final class _ResolutionPass {
       prescriptions.add(
         _prescribe(
           planned,
-          weekKind: weekKind,
+          weekIndex: mesocycleWeekIndex,
           mesocycleIndex: mesocycleIndex,
           daysSinceLastSession: daysSinceLastSession ?? 0,
         ),
@@ -176,7 +177,7 @@ final class _ResolutionPass {
           rotatesAcrossMesocycles: false,
           rotationCandidateIds: const <String>[],
           orderedSwapCandidates: planned.orderedSwapCandidates,
-          doseByWeekKind: candidate.doseByWeekKind,
+          baseDose: candidate.baseDose,
           repRange: candidate.repRange,
         );
       }
@@ -192,26 +193,32 @@ final class _ResolutionPass {
 
   ExercisePrescription _prescribe(
     PlanExercise planned, {
-    required MesocycleWeekKind weekKind,
+    required int weekIndex,
     required int mesocycleIndex,
     required int daysSinceLastSession,
   }) {
     final selected = _selectExercise(planned);
-    var dose = selected.doseFor(weekKind);
+    var dose = config.doseForWeek(selected.baseDose, weekIndex);
     final exerciseState = snapshot.exercise(selected.exerciseId);
     final range = dose is RepsDose ? dose.range : const RepRange(1, 1);
-    final layoffTier = layoffTierFor(daysSinceLastSession, config);
+    final layoffSuppressed = layoffSuppressesProgression(
+      daysSinceLastSession,
+      config,
+    );
+    final weekLoadScale = config.weekLoadScaleFor(weekIndex);
+    final easierWeek =
+        config.weekSetsDeltaFor(weekIndex) < 0 ||
+        config.weekRpeDeltaFor(weekIndex) < 0;
 
     var useWorkingAnchor = false;
     PreSuggesterAdjustment? adjustment;
-    if (weekKind == MesocycleWeekKind.deload &&
-        exerciseState.lastWorkingLoad != null) {
+    if (weekLoadScale < 1 && exerciseState.lastWorkingLoad != null) {
       useWorkingAnchor = true;
       adjustment = PreSuggesterAdjustment.fractionalDeload(
         reason: ReasonCode.deloadWeek,
-        loadFraction: config.deloadWeekLoadFraction,
+        loadFraction: weekLoadScale,
       );
-    } else if (layoffTier == LayoffTier.none &&
+    } else if (!layoffSuppressed &&
         exerciseState.lastMesocycleIndex != null &&
         exerciseState.lastMesocycleIndex! < mesocycleIndex &&
         exerciseState.lastWorkingLoad != null) {
@@ -220,13 +227,13 @@ final class _ResolutionPass {
         reason: ReasonCode.newMesocycleStep,
         steps: config.newMesocycleStepUp,
       );
-    } else if (layoffTier == LayoffTier.none &&
+    } else if (!layoffSuppressed &&
         exerciseState.consecutiveTooHardCount >= 2) {
       adjustment = PreSuggesterAdjustment.fractionalDeload(
         reason: ReasonCode.reactiveDeload,
         loadFraction: 1 - config.missedBottomDropFraction,
       );
-    } else if (layoffTier == LayoffTier.none &&
+    } else if (!layoffSuppressed &&
         exerciseState.sessionsSinceProgress >= _stallTriggerPriorSessions() &&
         !(selected.resistanceEquipment == ResistanceEquipment.assistedStack &&
             exerciseState.lastLoad?.isZero == true)) {
@@ -234,8 +241,7 @@ final class _ResolutionPass {
         reason: ReasonCode.stallDeload,
         loadFraction: 1 - config.stallDeloadFraction,
       );
-    } else if (layoffTier == LayoffTier.none &&
-        weekKind == MesocycleWeekKind.easier) {
+    } else if (!layoffSuppressed && easierWeek) {
       adjustment = const PreSuggesterAdjustment.hold(ReasonCode.easierWeek);
     }
 
@@ -262,9 +268,7 @@ final class _ResolutionPass {
         unitSystem: history.unitSystem,
         history: progressionSnapshot,
         bodyMass: history.bodyMass.isPositive ? history.bodyMass : null,
-        daysSinceLastSession: weekKind == MesocycleWeekKind.deload
-            ? 0
-            : daysSinceLastSession,
+        daysSinceLastSession: weekLoadScale < 1 ? 0 : daysSinceLastSession,
         preSuggesterAdjustment: adjustment,
       ),
     );
@@ -275,12 +279,10 @@ final class _ResolutionPass {
     }
 
     final why = <ReasonCode>[...decision.why];
-    if (weekKind == MesocycleWeekKind.easier &&
-        !why.contains(ReasonCode.easierWeek)) {
+    if (easierWeek && !why.contains(ReasonCode.easierWeek)) {
       why.add(ReasonCode.easierWeek);
     }
-    if (weekKind == MesocycleWeekKind.deload &&
-        !why.contains(ReasonCode.deloadWeek)) {
+    if (weekLoadScale < 1 && !why.contains(ReasonCode.deloadWeek)) {
       why.add(ReasonCode.deloadWeek);
     }
     if (selected.wasSwapped) why.add(ReasonCode.swapApplied);
@@ -353,12 +355,7 @@ final class _ResolutionPass {
     return null;
   }
 
-  MesocycleWeekKind _weekKind(int weekIndex) {
-    for (final week in plan.mesocycleCalendar) {
-      if (week.weekIndex == weekIndex) return week.kind;
-    }
-    return config.weekKind(weekIndex);
-  }
+  MesocycleWeekKind _weekKind(int weekIndex) => config.weekKind(weekIndex);
 
   int _stallTriggerPriorSessions() {
     final configured = config.stallSessions;
@@ -377,7 +374,7 @@ final class _SelectedExercise implements LoadProfile {
     required this.bwContribution,
     required this.loadStepOverride,
     required this.repRange,
-    required this.doseByWeekKind,
+    required this.baseDose,
     required this.wasSwapped,
   });
 
@@ -391,7 +388,7 @@ final class _SelectedExercise implements LoadProfile {
         bwContribution: exercise.bwContribution,
         loadStepOverride: exercise.loadStepOverride,
         repRange: exercise.repRange,
-        doseByWeekKind: exercise.doseByWeekKind,
+        baseDose: exercise.baseDose,
         wasSwapped: false,
       );
 
@@ -405,7 +402,7 @@ final class _SelectedExercise implements LoadProfile {
         bwContribution: exercise.bwContribution,
         loadStepOverride: exercise.loadStepOverride,
         repRange: exercise.repRange,
-        doseByWeekKind: exercise.doseByWeekKind,
+        baseDose: exercise.baseDose,
         wasSwapped: true,
       );
 
@@ -423,10 +420,8 @@ final class _SelectedExercise implements LoadProfile {
   @override
   final Kg? loadStepOverride;
   final RepRange? repRange;
-  final WeekDoses doseByWeekKind;
+  final Dose baseDose;
   final bool wasSwapped;
-
-  Dose doseFor(MesocycleWeekKind kind) => doseByWeekKind.forKind(kind);
 }
 
 int _calendarDaysBetween(DateTime earlier, DateTime later) {

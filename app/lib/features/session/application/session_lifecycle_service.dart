@@ -55,9 +55,7 @@ final class SessionPreview {
       const Duration(seconds: 75);
 
   bool get isComeback =>
-      state.reasonCodes.contains(engine.ReasonCode.layoffTier1) ||
-      state.reasonCodes.contains(engine.ReasonCode.layoffTier2) ||
-      state.reasonCodes.contains(engine.ReasonCode.layoffTier3);
+      state.reasonCodes.contains(engine.ReasonCode.layoffAdjusted);
 }
 
 final class SessionRuntime {
@@ -111,9 +109,7 @@ final class SessionRuntime {
       const Duration(seconds: 75);
 
   bool get isComeback =>
-      state.reasonCodes.contains(engine.ReasonCode.layoffTier1) ||
-      state.reasonCodes.contains(engine.ReasonCode.layoffTier2) ||
-      state.reasonCodes.contains(engine.ReasonCode.layoffTier3);
+      state.reasonCodes.contains(engine.ReasonCode.layoffAdjusted);
 
   bool get isComplete =>
       !state.isAbandoned &&
@@ -689,8 +685,8 @@ final class SessionLifecycleService {
   };
 
   static int _comebackTier(Iterable<engine.ReasonCode> codes) {
-    if (codes.contains(engine.ReasonCode.layoffTier3)) return 3;
-    if (codes.contains(engine.ReasonCode.layoffTier2)) return 2;
+    if (codes.contains(engine.ReasonCode.layoffFloorRecalibration)) return 3;
+    if (codes.contains(engine.ReasonCode.layoffAdjusted)) return 2;
     return 1;
   }
 }

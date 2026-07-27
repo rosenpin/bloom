@@ -143,7 +143,7 @@ void main() {
   group('§4 effort targets', () {
     test('RPE 7 means 3 reps in reserve — the beginner target', () {
       expect(EffortTarget.rpe7.rir, 3);
-      expect(config.noviceMaxRpe, 7);
+      expect(config.rpeRampBase, 7);
     });
 
     test('an easier week is just an easier target', () {

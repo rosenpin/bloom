@@ -125,34 +125,31 @@ void main() {
     }
   });
 
-  test('machine affinity is the rounded machine-variant fraction per day', () {
-    for (final fixture in personaFixtures) {
-      final plan = successfulPlan(fixture.profile);
-      final affinity = machineAffinityFor(fixture.profile, ProgrammingConfig());
-      for (final day in plan.days) {
-        final primaries = day.exercises
-            .where((exercise) => exercise.blockRole.isPrimary)
-            .toList(growable: false);
-        final expected = (primaries.length * affinity).round();
-        final actual = primaries
-            .where(
-              (exercise) => exercisesById[exercise.exerciseId]!.machineLeanOk,
-            )
-            .length;
-        expect(
-          (actual - expected).abs(),
-          lessThanOrEqualTo(1),
-          reason: '${fixture.name}/${day.kind.name}/affinity=$affinity',
-        );
-        if (affinity == 1) {
-          expect(
-            actual,
-            primaries.length,
-            reason: '${fixture.name}/${day.kind.name}/forced edge',
-          );
-        }
-      }
-    }
+  test('higher machine affinity never orders fewer machine primaries', () {
+    final profile = _profile(
+      experience: ProfileExperienceTier.beenAWhile,
+      comfort: GymComfort.mostlyFine,
+    );
+    int machinePrimaries(Plan plan) => plan.days
+        .expand((day) => day.exercises)
+        .where((exercise) => exercise.blockRole.isPrimary)
+        .where((exercise) => exercisesById[exercise.exerciseId]!.machineLeanOk)
+        .length;
+    final low = successfulPlan(
+      profile,
+      config: const ProgrammingConfig(
+        machineAffinityBeenAWhile: 0,
+        machineAffinityMostlyFineComfort: 0,
+      ),
+    );
+    final high = successfulPlan(
+      profile,
+      config: const ProgrammingConfig(
+        machineAffinityBeenAWhile: 1,
+        machineAffinityMostlyFineComfort: 0,
+      ),
+    );
+    expect(machinePrimaries(high), greaterThanOrEqualTo(machinePrimaries(low)));
   });
 
   test('machine affinity does not change isolation-slot selection', () {
@@ -316,8 +313,9 @@ void main() {
     },
   );
 
-  test('calendar and per-week doses are fully stamped', () {
+  test('calendar labels and weekly doses derive from config vectors', () {
     final plan = successfulPlan(personaFixtures.first.profile);
+    const config = ProgrammingConfig();
     expect(plan.mesocycleCalendar.map((week) => week.kind), const [
       MesocycleWeekKind.build,
       MesocycleWeekKind.build,
@@ -327,9 +325,9 @@ void main() {
       MesocycleWeekKind.deload,
     ]);
     for (final slot in plan.days.expand((day) => day.exercises)) {
-      expect(slot.doseByWeekKind, isA<WeekDoses>());
-      final build = slot.doseFor(MesocycleWeekKind.build);
-      final easier = slot.doseFor(MesocycleWeekKind.easier);
+      final build = config.doseForWeek(slot.baseDose, 1);
+      final easier = config.doseForWeek(slot.baseDose, 4);
+      final deload = config.doseForWeek(slot.baseDose, 6);
       if (build case RepsDose(:final effort)) {
         expect(
           (easier as RepsDose).effort.rpe,
@@ -337,17 +335,13 @@ void main() {
           reason: slot.exerciseId,
         );
         expect(
-          (slot.doseFor(MesocycleWeekKind.deload) as RepsDose).effort.rpe,
+          (deload as RepsDose).effort.rpe,
           lessThan(effort.rpe),
           reason: slot.exerciseId,
         );
       } else {
         expect(easier.sets, lessThan(build.sets), reason: slot.exerciseId);
-        expect(
-          slot.doseFor(MesocycleWeekKind.deload).sets,
-          lessThan(build.sets),
-          reason: slot.exerciseId,
-        );
+        expect(deload.sets, build.sets, reason: slot.exerciseId);
       }
     }
   });
@@ -358,7 +352,9 @@ void main() {
     final profileChange = successfulPlan(profile.copyWith(mesocycleIndex: 2));
     final configChange = successfulPlan(
       profile,
-      config: ProgrammingConfig(warmUpMinutes: 6),
+      config: const ProgrammingConfig(
+        warmUpMinutesByAgeBand: <int>[6, 6, 6, 7, 8],
+      ),
     );
     final contentChange = successfulPlan(
       profile,

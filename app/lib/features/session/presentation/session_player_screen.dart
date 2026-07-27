@@ -10,11 +10,13 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../plan/domain/plan_presentation.dart';
+import '../application/exercise_video_prefetch.dart';
 import '../application/rest_timer_foundation.dart';
 import '../application/session_controller.dart';
 import '../application/session_lifecycle_service.dart';
 import '../data/exercise_content_repository.dart';
 import '../domain/session_presentation.dart';
+import 'exercise_visual.dart';
 
 class SessionPlayerScreen extends ConsumerStatefulWidget {
   const SessionPlayerScreen({super.key});
@@ -28,6 +30,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
   bool _begun = false;
   bool _showComplete = false;
   bool _keepSwapShown = false;
+  String? _prefetchedSessionId;
   _RestPhase? _rest;
   final Map<String, int> _repOverrides = <String, int>{};
   bool _loggingSet = false;
@@ -52,6 +55,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
             if (runtime == null) {
               return _SessionError(onBack: () => context.go('/today'));
             }
+            _queueExerciseVideoPrefetch(runtime);
             if (_rest case final rest?) {
               return _RestTakeover(
                 runtime: runtime,
@@ -124,6 +128,24 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
         ),
       ),
     );
+  }
+
+  void _queueExerciseVideoPrefetch(SessionRuntime runtime) {
+    if (_prefetchedSessionId == runtime.sessionId) return;
+    _prefetchedSessionId = runtime.sessionId;
+    final exerciseIds = [
+      for (final entry in runtime.state.exercises) entry.exerciseId,
+    ];
+    unawaited(_prefetchExerciseVideos(exerciseIds));
+  }
+
+  Future<void> _prefetchExerciseVideos(List<String> exerciseIds) async {
+    try {
+      final cache = await ref.read(exerciseVideoCacheProvider.future);
+      await prefetchExerciseVideos(cache, exerciseIds);
+    } on Object {
+      // Prefetch is best effort. Each visual keeps its placeholder on failure.
+    }
   }
 
   Future<void> _completeSet(
@@ -361,9 +383,9 @@ class _SessionStart extends StatelessWidget {
   Widget build(BuildContext context) {
     final dayName = PlanPresentation.dayName(runtime.day, runtime.answers);
     final isComeback = runtime.isComeback;
-    final hasComebackReduction =
-        runtime.state.reasonCodes.contains(engine.ReasonCode.layoffTier2) ||
-        runtime.state.reasonCodes.contains(engine.ReasonCode.layoffTier3);
+    final hasComebackReduction = runtime.state.reasonCodes.contains(
+      engine.ReasonCode.layoffAdjusted,
+    );
     return SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
@@ -470,18 +492,17 @@ class _SessionStart extends StatelessWidget {
 
   static String _comebackLine(SessionRuntime runtime) {
     final days = runtime.state.daysSinceLastSession ?? 0;
-    if (runtime.state.reasonCodes.contains(engine.ReasonCode.layoffTier1)) {
-      return '$days days away. Your usual weights are ready.';
-    }
     return '$days days away, so today sits a little lighter. That is the only change.';
   }
 
-  static String _comebackAdjustment(SessionRuntime runtime) =>
-      runtime.state.reasonCodes.contains(engine.ReasonCode.layoffTier3)
-      ? 'Weights are down about 20%.'
-      : runtime.state.reasonCodes.contains(engine.ReasonCode.layoffTier2)
-      ? 'Weights are down about 10%.'
-      : 'Your usual weights are ready.';
+  static String _comebackAdjustment(SessionRuntime runtime) {
+    final multiplier = engine.layoffMultiplier(
+      runtime.state.daysSinceLastSession ?? 0,
+      runtime.state.config,
+    );
+    final reduction = ((1 - multiplier) * 100).round();
+    return 'Weights are down about $reduction%.';
+  }
 }
 
 class _ActiveExercise extends StatelessWidget {
@@ -1649,55 +1670,13 @@ class _ExerciseVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final asset = SessionPresentation.imageAsset(entry.exerciseId);
-    return ClipRRect(
-      borderRadius: AppRadii.largeBorder,
-      child: SizedBox(
-        height: height,
-        width: double.infinity,
-        child: asset == null
-            ? DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.blushSoft, AppColors.lavenderSoft],
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.fitness_center_rounded,
-                        color: AppColors.roseDeep,
-                        size: 42,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        entry.planExercise.name,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        SessionPresentation.blockRole(
-                          entry.planExercise.blockRole,
-                        ),
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(color: AppColors.inkSoft),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : Image.asset(
-                asset,
-                fit: BoxFit.cover,
-                alignment: Alignment.topCenter,
-              ),
+    return ExerciseVisual(
+      exerciseId: entry.exerciseId,
+      exerciseName: entry.planExercise.name,
+      blockRoleLabel: SessionPresentation.blockRole(
+        entry.planExercise.blockRole,
       ),
+      height: height,
     );
   }
 }

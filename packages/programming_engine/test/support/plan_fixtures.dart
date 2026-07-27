@@ -228,10 +228,9 @@ String semanticProjection(Plan plan) {
       '(warmup ${day.warmUpMinutes}m${day.hasCardioFinisher ? ', finisher' : ''})',
     );
     for (final exercise in day.exercises) {
-      final buildDose = exercise.doseFor(MesocycleWeekKind.build);
       output.writeln(
         '  ${exercise.exerciseId} [${exercise.blockRole.name}] '
-        '${_dose(buildDose)}',
+        '${_dose(exercise.baseDose)}',
       );
     }
   }

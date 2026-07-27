@@ -315,7 +315,7 @@ void main() {
   });
 
   group('§7 calibration walkthroughs', () {
-    test('normal equipment jumps two steps then settles on probe two', () {
+    test('a probe jump has a one-equipment-step natural floor', () {
       var state = _freshState();
       final source = state.exercises.firstWhere(
         (entry) =>
@@ -349,7 +349,7 @@ void main() {
       final secondProbe = _entry(state, source.exerciseId);
       final next =
           (secondProbe.prescription.suggestion as NeedsCalibration).floor;
-      expect(loads.stepsBetween(floor, next), 2);
+      expect(loads.stepsBetween(floor, next), 1);
 
       state = advanceSession(
         state,
@@ -366,16 +366,68 @@ void main() {
       expect(settled.prescription.why, contains(ReasonCode.calibrationSettled));
     });
 
-    test('lower-body machine uses the +50–100% probe jump', () {
-      var state = _freshState(profile: personaFixtures[2].profile);
+    test(
+      'body mass and movement coefficient can produce a multi-step jump',
+      () {
+        var state = _freshState(profile: personaFixtures[2].profile);
+        final source = state.exercises.firstWhere(
+          (entry) =>
+              entry.prescription.suggestion is NeedsCalibration &&
+              entry.planExercise.resistanceEquipment ==
+                  ResistanceEquipment.machine &&
+              entry.planExercise.movementClass.isLowerBody,
+        );
+        final floor =
+            (source.prescription.suggestion as NeedsCalibration).floor;
+        state = advanceSession(
+          state,
+          _completedSet(
+            source,
+            0,
+            load: floor,
+            reps: state.config.calibrationProbeReps,
+          ),
+        );
+        state = advanceSession(
+          state,
+          EffortReported(
+            exerciseId: source.exerciseId,
+            level: EffortLevel.wayTooEasy,
+          ),
+        );
+        final next =
+            ((_entry(state, source.exerciseId).prescription.suggestion)
+                    as NeedsCalibration)
+                .floor;
+        final loads = state.config.availableLoads(
+          source.planExercise,
+          state.unitSystem,
+        );
+        final coefficient =
+            state.config.probeLoadFractionByMovementClass[source
+                .planExercise
+                .movementClass]!;
+        final expectedWorkingLoad =
+            coefficient *
+            state.bodyMass.value *
+            (1 - source.planExercise.bwContribution);
+        final jump = state.config.calibrationJumpFraction * expectedWorkingLoad;
+        var expected = loads.snapDown(floor + Kg(jump));
+        if (expected <= floor) expected = loads.shift(floor, 1);
+        expect(next, expected);
+      },
+    );
+
+    test('absent body mass falls back to exactly one equipment step', () {
+      var state = _freshState(bodyMass: Kg.zero);
       final source = state.exercises.firstWhere(
-        (entry) =>
-            entry.prescription.suggestion is NeedsCalibration &&
-            entry.planExercise.resistanceEquipment ==
-                ResistanceEquipment.machine &&
-            entry.planExercise.movementClass.isLowerBody,
+        (entry) => entry.prescription.suggestion is NeedsCalibration,
       );
       final floor = (source.prescription.suggestion as NeedsCalibration).floor;
+      final loads = state.config.availableLoads(
+        source.planExercise,
+        state.unitSystem,
+      );
       state = advanceSession(
         state,
         _completedSet(
@@ -389,15 +441,14 @@ void main() {
         state,
         EffortReported(
           exerciseId: source.exerciseId,
-          level: EffortLevel.wayTooEasy,
+          level: EffortLevel.aBitEasy,
         ),
       );
       final next =
-          ((_entry(state, source.exerciseId).prescription.suggestion)
+          (_entry(state, source.exerciseId).prescription.suggestion
                   as NeedsCalibration)
               .floor;
-      final ratio = next.value / floor.value;
-      expect(ratio, inInclusiveRange(1.5, 2.0));
+      expect(loads.stepsBetween(floor, next), 1);
     });
 
     test(
@@ -547,11 +598,11 @@ exercises=dumbbell-glute-bridge:done,dumbbell-goblet-squat:done,dumbbell-romania
   });
 }
 
-SessionState _freshState({Profile? profile}) {
+SessionState _freshState({Profile? profile, Kg bodyMass = const Kg(65)}) {
   final plan = successfulPlan(profile ?? personaFixtures[0].profile);
   return resolveSession(
     plan,
-    TrainingHistory(bodyMass: const Kg(65)),
+    TrainingHistory(bodyMass: bodyMass),
     DateTime.utc(2026, 7, 20),
   );
 }

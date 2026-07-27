@@ -41,7 +41,7 @@ void main() {
     _assertJourneyInvariants(journey, plan, config);
   });
 
-  test('16-day layoff journey golden applies one tier and recovers', () {
+  test('16-day layoff journey golden applies the curve once and recovers', () {
     final plan = _journeyPlan(
       const ['machine-leg-press', 'machine-pulldown'],
       config,
@@ -84,11 +84,11 @@ void main() {
     final returnResolution = journey.resolutions[4];
     expect(returnResolution.daysSinceLastSession, 16);
     for (final prescription in returnResolution.prescriptions) {
-      expect(prescription.why, contains(ReasonCode.layoffTier2));
+      expect(prescription.why, contains(ReasonCode.layoffAdjusted));
     }
     for (final resolution in journey.resolutions.skip(5).take(2)) {
       for (final prescription in resolution.prescriptions) {
-        expect(prescription.why, isNot(contains(ReasonCode.layoffTier2)));
+        expect(prescription.why, isNot(contains(ReasonCode.layoffAdjusted)));
       }
     }
     for (final exerciseId in const ['machine-leg-press', 'machine-pulldown']) {
@@ -449,14 +449,14 @@ Plan _journeyPlan(
       PlanDay(
         dayIndex: 1,
         kind: PlanDayKind.fullBodyA,
-        warmUpMinutes: config.warmUpMinutes,
+        warmUpMinutes: config.warmUpMinutesByAgeBand.first,
         hasCardioFinisher: false,
         exercises: exercises,
       ),
       PlanDay(
         dayIndex: 2,
         kind: PlanDayKind.fullBodyB,
-        warmUpMinutes: config.warmUpMinutes,
+        warmUpMinutes: config.warmUpMinutesByAgeBand.first,
         hasCardioFinisher: false,
         exercises: exercises,
       ),
@@ -471,8 +471,6 @@ PlanExercise _planExercise(
   ProgrammingConfig config,
 ) {
   final range = config.rangeFor(exercise, scheme);
-  RepsDose dose(int sets, EffortTarget effort) =>
-      RepsDose(sets: sets, range: range, effort: effort, targetReps: range.min);
   return PlanExercise(
     exerciseId: exercise.id,
     name: exercise.name,
@@ -490,17 +488,11 @@ PlanExercise _planExercise(
     rotatesAcrossMesocycles: false,
     rotationCandidateIds: const <String>[],
     orderedSwapCandidates: const <PlanSwapCandidate>[],
-    doseByWeekKind: WeekDoses(
-      build: dose(scheme.maxSets, scheme.effort),
-      easier: dose(
-        (scheme.maxSets + config.easierWeekSetsDelta).clamp(1, scheme.maxSets),
-        scheme.effort.easierBy(config.easierWeekRpeDelta.abs()),
-      ),
-      push: dose(scheme.maxSets, scheme.effort),
-      deload: dose(
-        scheme.maxSets,
-        scheme.effort.easierBy(config.deloadWeekRpeDelta.abs()),
-      ),
+    baseDose: RepsDose(
+      sets: scheme.maxSets,
+      range: range,
+      effort: scheme.effort,
+      targetReps: range.min,
     ),
     repRange: range,
   );

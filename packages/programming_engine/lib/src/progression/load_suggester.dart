@@ -8,11 +8,13 @@
 /// The guardrails run in the order `PROGRAMMING.md` §4 lists them:
 /// calibration regime → ±10%/step cap → asymmetric down-rule → deadband →
 /// discretization, with "no feedback → identical" short-circuiting before all of
-/// them and the §6 layoff tiers applied before any of it.
+/// them and the §6 layoff curve applied before any of it.
 ///
 /// Stored data is validated at the app boundary. This layer trusts its types;
 /// programmer and configuration mistakes are assertions.
 library;
+
+import 'dart:math' as math;
 
 import 'package:meta/meta.dart';
 
@@ -178,7 +180,7 @@ enum ProgressionRegime {
   /// No prior triple: the §7 probe runs instead of the formula.
   firstExposure,
 
-  /// A §6 layoff tier applied; progression was skipped.
+  /// The §6 layoff curve applied; progression was skipped.
   layoff,
 
   /// No feel tap: repeat identical.
@@ -345,11 +347,11 @@ final class _Pass {
       );
     }
 
-    final tier = layoffTierFor(days, config);
-    if (tier != LayoffTier.none) {
+    final multiplier = layoffMultiplier(days, config);
+    if (layoffSuppressesProgression(days, config)) {
       return _applyStepLayoff(
         step,
-        tier,
+        multiplier,
         base: base,
         targetReps: targetReps,
         lastHold: lastHold,
@@ -444,24 +446,20 @@ final class _Pass {
 
   LoadDecision _applyStepLayoff(
     _DoseStep step,
-    LayoffTier tier, {
+    double multiplier, {
     required Kg? base,
     required int? targetReps,
     required Duration? lastHold,
   }) {
     switch (step) {
       case _DoseStep.loadSteps:
-        return _applyLayoff(tier, base!, targetReps!);
+        return _applyLayoff(multiplier, base!, targetReps!);
       case _DoseStep.repSteps:
-        final reason = layoffReason(tier);
-        if (reason != null) why.add(reason);
-        return _repsDecision(tier.changesLoad ? range.min : targetReps!);
+        why.add(ReasonCode.layoffAdjusted);
+        return _repsDecision(targetReps!);
       case _DoseStep.holdSteps:
-        final reason = layoffReason(tier);
-        if (reason != null) why.add(reason);
-        return _timedDecision(
-          tier.changesLoad ? _shiftHold(lastHold!, -1) : lastHold!,
-        );
+        why.add(ReasonCode.layoffAdjusted);
+        return _timedDecision(lastHold!);
     }
   }
 
@@ -638,9 +636,8 @@ final class _Pass {
       );
     }
     // No load change. §4.7: at target effort progress still has to come from
-    // somewhere, so it comes from reps. The rule row says "+1-2 reps": exactly
-    // at target earns +1; reporting easier than target earns +2, so "a bit
-    // easy" visibly outpaces "just right" and struggling visibly lags both.
+    // somewhere, so it comes from reps. Rep progress scales with the numeric RIR
+    // gap and has a one-rep floor.
     if (progressAllowed) {
       return _spendOnReps(
         base: base,
@@ -648,7 +645,7 @@ final class _Pass {
         shortfallFraction: 0,
         regime: regime,
         incrementWasTooSmall: false,
-        minExtraReps: report.rir > input.effort.rir ? 2 : 1,
+        minExtraReps: math.max(1, (report.rir - input.effort.rir).round()),
       );
     }
     return _decision(
@@ -784,51 +781,33 @@ final class _Pass {
     );
   }
 
-  LoadDecision _applyLayoff(LayoffTier tier, Kg base, int targetReps) {
-    final reason = layoffReason(tier);
-    if (reason != null) why.add(reason);
-    switch (tier) {
-      case LayoffTier.none:
-      case LayoffTier.hold:
-        return _decision(
-          suggestion: _wrapLoad(base),
-          targetReps: targetReps,
-          regime: ProgressionRegime.layoff,
-          externalLoad: base,
-        );
-      case LayoffTier.reduce:
-      case LayoffTier.reCalibrate:
-        final fraction = layoffLoadFraction(tier, config);
-        // Assistance is signed, so multiplying external load directly would move
-        // −30 toward −27 and make the exercise harder after an absence. Reduce
-        // the effective load, then convert back to the signed external value.
-        final reducedTarget =
-            input.profile.resistanceEquipment ==
-                ResistanceEquipment.assistedStack
-            ? effectiveLoad.external(effectiveLoad.effective(base) * fraction)
-            : base * fraction;
-        final reduced = loads.snapDown(reducedTarget);
-        if (reduced.isCloseTo(loads.floor)) {
-          why.add(ReasonCode.atEquipmentFloor);
-        }
-        // 28+ days: the compound lifts re-find their weights. Isolation and
-        // machine work is safe to resume at −20% without a probe.
-        final needsProbe =
-            tier == LayoffTier.reCalibrate &&
-            input.profile.movementClass.isCompound;
-        return _decision(
-          suggestion: needsProbe
-              ? NeedsCalibration(
-                  floor: reduced,
-                  probeReps: config.calibrationProbeReps,
-                )
-              : _wrapLoad(reduced),
-          targetReps: needsProbe ? config.calibrationProbeReps : targetReps,
-          regime: ProgressionRegime.layoff,
-          externalLoad: reduced,
-          base: base,
-        );
-    }
+  LoadDecision _applyLayoff(double multiplier, Kg base, int targetReps) {
+    why.add(ReasonCode.layoffAdjusted);
+    // Assistance is signed, so multiplying external load directly would move
+    // −30 toward −27 and make the exercise harder after an absence. Scale
+    // effective load, then convert back to the signed external value.
+    final reducedTarget =
+        input.profile.resistanceEquipment == ResistanceEquipment.assistedStack
+        ? effectiveLoad.external(effectiveLoad.effective(base) * multiplier)
+        : base * multiplier;
+    final reduced = loads.snapDown(reducedTarget);
+    if (reduced.isCloseTo(loads.floor)) why.add(ReasonCode.atEquipmentFloor);
+    final needsProbe =
+        layoffMultiplierIsAtFloor(multiplier, config) &&
+        input.profile.movementClass.isCompound;
+    if (needsProbe) why.add(ReasonCode.layoffFloorRecalibration);
+    return _decision(
+      suggestion: needsProbe
+          ? NeedsCalibration(
+              floor: reduced,
+              probeReps: config.calibrationProbeReps,
+            )
+          : _wrapLoad(reduced),
+      targetReps: needsProbe ? config.calibrationProbeReps : targetReps,
+      regime: ProgressionRegime.layoff,
+      externalLoad: reduced,
+      base: base,
+    );
   }
 
   LoadDecision _applyPreSuggesterAdjustment(

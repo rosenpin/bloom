@@ -72,10 +72,24 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                       Expanded(
                         child: ClipRRect(
                           borderRadius: AppRadii.largeBorder,
-                          child: Image.asset(
-                            'assets/images/goblet-squat-1.jpg',
-                            fit: BoxFit.cover,
-                            alignment: const Alignment(0, -0.55),
+                          child: const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  AppColors.blushSoft,
+                                  AppColors.lavenderSoft,
+                                ],
+                              ),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.fitness_center_rounded,
+                                size: 72,
+                                color: AppColors.roseDeep,
+                              ),
+                            ),
                           ),
                         ),
                       ),

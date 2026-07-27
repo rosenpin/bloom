@@ -1,55 +1,35 @@
-/// §6 Layoff handling — measured from her last completed session.
-///
-/// "Never punish absence": layoffs reduce load automatically and silently, and the
-/// tier is applied **before** progression, so a returning user is never asked to
-/// beat the session she did a month ago.
+/// §6 layoff handling — one continuous curve measured from the last completed
+/// session.
 library;
+
+import 'dart:math' as math;
 
 import 'package:meta/meta.dart';
 
 import '../config/programming_config.dart';
-import '../core/reason_code.dart';
 
-enum LayoffTier {
-  /// 0–6 days: normal progression, nothing said.
-  none,
-
-  /// 7–13 days: repeat last weights, no increase. "Picking up right where you
-  /// left off."
-  hold,
-
-  /// 14–27 days: −10% on all working weights. "Eased this week back a little."
-  reduce,
-
-  /// 28+ days: −20%, and the compound lifts re-calibrate. "Let's re-find your
-  /// weights — it comes back fast."
-  reCalibrate;
-
-  bool get changesLoad => this == reduce || this == reCalibrate;
-}
-
-/// A negative day count is treated as 0 by the caller as clock-skew normalization.
+/// A negative day count is clock-skew normalization and behaves like day zero.
 @useResult
-LayoffTier layoffTierFor(int daysSinceLastSession, ProgrammingConfig config) {
-  final days = daysSinceLastSession < 0 ? 0 : daysSinceLastSession;
-  if (days >= config.layoffTier3Days) return LayoffTier.reCalibrate;
-  if (days >= config.layoffTier2Days) return LayoffTier.reduce;
-  if (days >= config.layoffTier1Days) return LayoffTier.hold;
-  return LayoffTier.none;
+double layoffMultiplier(int daysSinceLastSession, ProgrammingConfig config) {
+  final days = math.max(0, daysSinceLastSession);
+  final daysPastGrace = math.max(0, days - config.layoffGraceDays);
+  return (1 - config.layoffSlopePerDay * daysPastGrace).clamp(
+    config.layoffFloor,
+    1.0,
+  );
 }
 
-/// The multiplier this tier applies to her last working load.
-double layoffLoadFraction(LayoffTier tier, ProgrammingConfig config) =>
-    switch (tier) {
-      LayoffTier.none => 1,
-      LayoffTier.hold => 1,
-      LayoffTier.reduce => config.layoffTier2LoadFraction,
-      LayoffTier.reCalibrate => config.layoffTier3LoadFraction,
-    };
+/// Progression is suppressed for every point after the grace period. Keeping
+/// this predicate next to the curve prevents resolve-time rules and the load
+/// suggester from interpreting absence differently.
+@useResult
+bool layoffSuppressesProgression(
+  int daysSinceLastSession,
+  ProgrammingConfig config,
+) =>
+    daysSinceLastSession > config.layoffGraceDays ||
+    layoffMultiplier(daysSinceLastSession, config) < 1;
 
-ReasonCode? layoffReason(LayoffTier tier) => switch (tier) {
-  LayoffTier.none => null,
-  LayoffTier.hold => ReasonCode.layoffTier1,
-  LayoffTier.reduce => ReasonCode.layoffTier2,
-  LayoffTier.reCalibrate => ReasonCode.layoffTier3,
-};
+@useResult
+bool layoffMultiplierIsAtFloor(double multiplier, ProgrammingConfig config) =>
+    multiplier <= config.layoffFloor + 1e-12;

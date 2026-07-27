@@ -168,16 +168,16 @@ day 3: fullBodyA (warmup 5m, finisher)
 day 1: lower (warmup 5m)
   dumbbell-glute-bridge [gluteIsolation] 3x10-15@7
   machine-leg-press [lowerSquat] 3x10-12@7
-  dumbbell-romanian-deadlift [lowerHinge] 3x10-12@7
+  machine-back-extension [lowerHinge] 3x10-12@7
   machine-hip-abduction [gluteIsolation] 3x10-15@7
 day 2: upper (warmup 5m)
-  dumbbell-seated-overhead-press [upperPush] 3x10-12@7
+  machine-chest-press [upperPush] 3x10-12@7
   machine-pulldown [upperPull] 3x10-12@7
   dumbbell-lateral-raise [armShoulderIsolation] 3x10-15@7
   plank [core] 3x20s
 day 3: lower (warmup 5m)
   machine-glute-kickback [gluteIsolation] 3x10-15@7
-  dumbbell-goblet-squat [lowerSquat] 3x10-12@7
+  bodyweight-squat [lowerSquat] 3x10-12@7
   machine-back-extension [lowerHinge] 3x10-12@7
   dumbbell-glute-bridge [gluteIsolation] 3x10-15@7''',
   '''
@@ -203,14 +203,14 @@ day 3: fullBodyA (warmup 5m)
   dumbbell-curl [armShoulderIsolation] 3x10-15@7
   dead-bug [core] 3x10-12@7''',
   '''
-day 1: fullBodyA (warmup 5m)
+day 1: fullBodyA (warmup 6m)
   machine-leg-press [lowerSquat] 3x6-8@7
   machine-pulldown [upperPull] 3x6-8@7
   dumbbell-bench-press [upperPush] 3x6-8@7
   dumbbell-glute-bridge [gluteIsolation] 3x10-15@7
   dumbbell-lateral-raise [armShoulderIsolation] 3x10-15@7
   machine-leg-extension [legIsolation] 3x10-15@7
-day 2: fullBodyB (warmup 5m)
+day 2: fullBodyB (warmup 6m)
   barbell-romanian-deadlift [lowerHinge] 3x6-8@7
   machine-chest-press [upperPush] 3x6-8@7
   machine-seated-cable-row [upperPull] 3x6-8@7
@@ -328,21 +328,21 @@ day 3: lower (warmup 5m)
   machine-seated-hamstring-curl [legIsolation] 3x10-15@7
   machine-glute-kickback [gluteIsolation] 3x10-15@7''',
   '''
-day 1: lower (warmup 5m)
+day 1: lower (warmup 6m)
   dumbbell-glute-bridge [gluteIsolation] 3x10-15@7
   machine-leg-press [lowerSquat] 3x10-12@7
   machine-back-extension [lowerHinge] 3x10-12@7
   bodyweight-squat [lowerSquat] 3x10-12@7
   machine-leg-extension [legIsolation] 3x10-15@7
   machine-hip-abduction [gluteIsolation] 3x10-15@7
-day 2: upper (warmup 5m)
+day 2: upper (warmup 6m)
   machine-chest-press [upperPush] 3x10-12@7
   machine-pulldown [upperPull] 3x10-12@7
   bodyweight-push-up [upperPush] 3x10-12@7
   dumbbell-lateral-raise [armShoulderIsolation] 3x10-15@7
   plank [core] 3x20s
   dumbbell-curl [armShoulderIsolation] 3x10-15@7
-day 3: lower (warmup 5m)
+day 3: lower (warmup 6m)
   machine-glute-kickback [gluteIsolation] 3x10-15@7
   machine-leg-press [lowerSquat] 3x10-12@7
   machine-back-extension [lowerHinge] 3x10-12@7

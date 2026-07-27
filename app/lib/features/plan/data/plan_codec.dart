@@ -9,7 +9,7 @@ import 'package:programming_engine/programming_engine.dart' as engine;
 /// swap, dose, warning, and replay stamp needed to train offline.
 abstract final class PlanCodec {
   static String encode(engine.Plan plan) => jsonEncode(<String, Object?>{
-    'schemaVersion': 1,
+    'schemaVersion': 2,
     'mesocycleIndex': plan.mesocycleIndex,
     'stamps': <String, Object?>{
       'engineVersion': plan.stamps.engineVersion,
@@ -127,7 +127,7 @@ abstract final class PlanCodec {
         'orderedSwapCandidates': [
           for (final swap in exercise.orderedSwapCandidates) _encodeSwap(swap),
         ],
-        'doseByWeekKind': _encodeDoses(exercise.doseByWeekKind),
+        'baseDose': _encodeDose(exercise.baseDose),
       };
 
   static engine.PlanExercise _decodeExercise(Map<String, Object?> json) {
@@ -163,9 +163,7 @@ abstract final class PlanCodec {
         for (final raw in json['orderedSwapCandidates']! as List<Object?>)
           if (raw case final Map<String, Object?> swap) _decodeSwap(swap),
       ],
-      doseByWeekKind: _decodeDoses(
-        json['doseByWeekKind']! as Map<String, Object?>,
-      ),
+      baseDose: _decodeBaseDose(json),
       repRange: _decodeRepRange(json['repRange']),
     );
   }
@@ -188,7 +186,7 @@ abstract final class PlanCodec {
         ),
         'tier': swap.tier,
         'rank': swap.rank,
-        'doseByWeekKind': _encodeDoses(swap.doseByWeekKind),
+        'baseDose': _encodeDose(swap.baseDose),
       };
 
   static engine.PlanSwapCandidate _decodeSwap(Map<String, Object?> json) {
@@ -215,9 +213,7 @@ abstract final class PlanCodec {
       loadStepOverride: _kilogramsOrNull(json['loadStepOverrideKg']),
       tier: _integer(json['tier']),
       rank: _integer(json['rank']),
-      doseByWeekKind: _decodeDoses(
-        json['doseByWeekKind']! as Map<String, Object?>,
-      ),
+      baseDose: _decodeBaseDose(json),
       repRange: _decodeRepRange(json['repRange']),
     );
   }
@@ -252,19 +248,15 @@ abstract final class PlanCodec {
         : <String, Object?>{'min': repRange.min, 'max': repRange.max},
   };
 
-  static Map<String, Object?> _encodeDoses(engine.WeekDoses doses) =>
-      <String, Object?>{
-        for (final kind in engine.MesocycleWeekKind.values)
-          kind.name: _encodeDose(doses.forKind(kind)),
-      };
-
-  static engine.WeekDoses _decodeDoses(Map<String, Object?> json) =>
-      engine.WeekDoses(
-        build: _decodeDose(json['build']! as Map<String, Object?>),
-        easier: _decodeDose(json['easier']! as Map<String, Object?>),
-        push: _decodeDose(json['push']! as Map<String, Object?>),
-        deload: _decodeDose(json['deload']! as Map<String, Object?>),
-      );
+  static engine.Dose _decodeBaseDose(Map<String, Object?> json) {
+    if (json['baseDose'] case final Map<String, Object?> dose) {
+      return _decodeDose(dose);
+    }
+    // Schema v1 stored four materialized week doses. The build dose is the
+    // lossless base from which the v2 vectors derive every week.
+    final legacy = json['doseByWeekKind']! as Map<String, Object?>;
+    return _decodeDose(legacy['build']! as Map<String, Object?>);
+  }
 
   static Map<String, Object?> _encodeDose(engine.Dose dose) => switch (dose) {
     engine.RepsDose(

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -10,7 +12,10 @@ import 'package:womens_gym/core/version_gate.dart';
 import 'package:womens_gym/data/db/app_database.dart';
 import 'package:womens_gym/data/db/schema.dart';
 import 'package:womens_gym/features/session/application/rest_timer_foundation.dart';
+import 'package:womens_gym/features/session/data/exercise_video_cache.dart';
+import 'package:womens_gym/features/session/data/exercise_video_source.dart';
 import 'package:womens_gym/features/session/data/session_event_codec.dart';
+import 'package:womens_gym/features/session/presentation/exercise_visual.dart';
 
 import 'support/session_test_support.dart';
 
@@ -124,13 +129,13 @@ void main() {
     expect(find.byKey(const ValueKey('comeback-heading')), findsOneWidget);
     expect(find.text('Where were we?'), findsOneWidget);
     expect(find.byKey(const ValueKey('use-usual-weights')), findsOneWidget);
-    expect(find.textContaining('down about 10%'), findsOneWidget);
+    expect(find.textContaining('down about 5%'), findsOneWidget);
 
     await _tap(tester, const ValueKey('use-usual-weights'));
     expect(find.text('10 kg · 10 reps'), findsOneWidget);
   });
 
-  testWidgets('the first layoff tier gets a quiet comeback start', (
+  testWidgets('the first day after grace gets the continuous adjustment', (
     tester,
   ) async {
     final harness = await _SessionHarness.create(
@@ -141,8 +146,8 @@ void main() {
 
     await _tap(tester, const ValueKey('start-workout'));
     expect(find.byKey(const ValueKey('comeback-heading')), findsOneWidget);
-    expect(find.textContaining('usual weights are ready'), findsWidgets);
-    expect(find.byKey(const ValueKey('use-usual-weights')), findsNothing);
+    expect(find.textContaining('down about 1%'), findsOneWidget);
+    expect(find.byKey(const ValueKey('use-usual-weights')), findsOneWidget);
   });
 
   testWidgets('pain stops the exercise, persists it and offers a warm swap', (
@@ -207,6 +212,12 @@ final class _SessionHarness {
           (ref) async => const VersionGateDecision.allowed(),
         ),
         restNotificationSchedulerProvider.overrideWithValue(_SilentScheduler()),
+        exerciseVideoCacheProvider.overrideWith(
+          (ref) async => _SilentVideoCache(),
+        ),
+        exerciseVideoPlaybackBuilderProvider.overrideWithValue(
+          _silentVideoPlaybackBuilder,
+        ),
       ],
     );
     final document = await storeSessionTestPlan(container);
@@ -296,4 +307,20 @@ final class _SilentScheduler implements RestNotificationScheduler {
     required String title,
     required String body,
   }) async {}
+}
+
+Widget _silentVideoPlaybackBuilder({
+  required Key key,
+  required String exerciseId,
+  required ExerciseVideoSource source,
+  required Widget placeholder,
+}) => ColoredBox(key: key, color: Colors.transparent);
+
+final class _SilentVideoCache implements ExerciseVideoCache {
+  @override
+  Future<File> getFile(String remoteUrl) =>
+      throw UnsupportedError('Video files are not loaded in widget tests.');
+
+  @override
+  Future<void> prefetch(Iterable<String> remoteUrls) async {}
 }

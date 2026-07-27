@@ -202,7 +202,7 @@ void main() {
         tap: EffortLevel.justRight,
         daysSince: 16,
       );
-      expect(backAfterTwoWeeks.why, contains(ReasonCode.layoffTier2));
+      expect(backAfterTwoWeeks.why, contains(ReasonCode.layoffAdjusted));
       expect(
         chain.load,
         const Kg(12),

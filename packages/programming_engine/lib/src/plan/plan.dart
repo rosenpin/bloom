@@ -6,7 +6,6 @@ import 'package:collection/collection.dart';
 import '../config/programming_config.dart';
 import '../content/exercise.dart';
 import '../core/dose.dart';
-import '../core/effort.dart';
 import '../core/prescription.dart';
 import '../core/units.dart';
 import '../core/warnings.dart';
@@ -85,42 +84,6 @@ final class PlanWeek {
   int get hashCode => Object.hash(weekIndex, kind);
 }
 
-/// The complete plan-time dose set for one exercise.
-///
-/// Every mesocycle week kind is present by construction, so session resolution
-/// never needs to guess a replacement dose.
-final class WeekDoses {
-  const WeekDoses({
-    required this.build,
-    required this.easier,
-    required this.push,
-    required this.deload,
-  });
-
-  final Dose build;
-  final Dose easier;
-  final Dose push;
-  final Dose deload;
-
-  Dose forKind(MesocycleWeekKind kind) => switch (kind) {
-    MesocycleWeekKind.build => build,
-    MesocycleWeekKind.easier => easier,
-    MesocycleWeekKind.push => push,
-    MesocycleWeekKind.deload => deload,
-  };
-
-  @override
-  bool operator ==(Object other) =>
-      other is WeekDoses &&
-      other.build == build &&
-      other.easier == easier &&
-      other.push == push &&
-      other.deload == deload;
-
-  @override
-  int get hashCode => Object.hash(build, easier, push, deload);
-}
-
 final class PlanSwapCandidate implements LoadProfile {
   PlanSwapCandidate({
     required this.exerciseId,
@@ -136,7 +99,7 @@ final class PlanSwapCandidate implements LoadProfile {
     required this.loadStepOverride,
     required this.tier,
     required this.rank,
-    required this.doseByWeekKind,
+    required this.baseDose,
     required this.repRange,
   }) : assert(tier >= 1 && tier <= 3),
        assert(bwContribution >= 0 && bwContribution <= 1),
@@ -171,10 +134,8 @@ final class PlanSwapCandidate implements LoadProfile {
 
   /// The target exercise keeps its own prescription world. A cross-pattern swap
   /// never inherits the source exercise's rep window.
-  final WeekDoses doseByWeekKind;
+  final Dose baseDose;
   final RepRange? repRange;
-
-  Dose doseFor(MesocycleWeekKind kind) => doseByWeekKind.forKind(kind);
 
   @override
   bool operator ==(Object other) =>
@@ -192,7 +153,7 @@ final class PlanSwapCandidate implements LoadProfile {
       other.loadStepOverride == loadStepOverride &&
       other.tier == tier &&
       other.rank == rank &&
-      other.doseByWeekKind == doseByWeekKind &&
+      other.baseDose == baseDose &&
       other.repRange == repRange;
 
   @override
@@ -210,7 +171,7 @@ final class PlanSwapCandidate implements LoadProfile {
     loadStepOverride,
     tier,
     rank,
-    doseByWeekKind,
+    baseDose,
     repRange,
   );
 }
@@ -235,7 +196,7 @@ final class PlanExercise implements LoadProfile {
     required this.rotatesAcrossMesocycles,
     required Iterable<String> rotationCandidateIds,
     required Iterable<PlanSwapCandidate> orderedSwapCandidates,
-    required this.doseByWeekKind,
+    required this.baseDose,
     required this.repRange,
   }) : rotationCandidateIds = List<String>.unmodifiable(rotationCandidateIds),
        orderedSwapCandidates = List<PlanSwapCandidate>.unmodifiable(
@@ -276,15 +237,8 @@ final class PlanExercise implements LoadProfile {
   /// Null only for timed work.
   final RepRange? repRange;
 
-  /// Includes build, easier, push and deload values; no session-time weight.
-  final WeekDoses doseByWeekKind;
-
-  Dose doseFor(MesocycleWeekKind kind) => doseByWeekKind.forKind(kind);
-
-  EffortTarget? effortFor(MesocycleWeekKind kind) {
-    final dose = doseFor(kind);
-    return dose is RepsDose ? dose.effort : null;
-  }
+  /// One base dose. Mesocycle week vectors are applied at session resolution.
+  final Dose baseDose;
 
   @override
   bool operator ==(Object other) =>
@@ -311,7 +265,7 @@ final class PlanExercise implements LoadProfile {
         other.orderedSwapCandidates,
         orderedSwapCandidates,
       ) &&
-      other.doseByWeekKind == doseByWeekKind &&
+      other.baseDose == baseDose &&
       other.repRange == repRange;
 
   @override
@@ -332,7 +286,7 @@ final class PlanExercise implements LoadProfile {
     rotatesAcrossMesocycles,
     Object.hashAll(rotationCandidateIds),
     Object.hashAll(orderedSwapCandidates),
-    doseByWeekKind,
+    baseDose,
     repRange,
   );
 }
@@ -448,14 +402,11 @@ final class Plan {
                       '${candidate.bwContribution}.'
                       '${candidate.loadStepOverride?.value ?? 'null'}.'
                       '${candidate.repRange ?? 'timed'}.'
-                      '${MesocycleWeekKind.values.map((kind) => '${kind.name}=${_doseText(candidate.doseFor(kind))}').join(';')}',
+                      'base=${_doseText(candidate.baseDose)}',
                 )
                 .join(','),
           );
-        for (final kind in MesocycleWeekKind.values) {
-          output.write(':${kind.name}=${_doseText(exercise.doseFor(kind))}');
-        }
-        output.writeln();
+        output.writeln(':base=${_doseText(exercise.baseDose)}');
       }
     }
     for (final warning in warnings) {
