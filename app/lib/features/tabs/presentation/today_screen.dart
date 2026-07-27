@@ -98,21 +98,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     children: [
                       AspectRatio(
                         aspectRatio: 0.92,
-                        child: const DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [AppColors.blush, AppColors.lavender],
-                            ),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              Icons.fitness_center_rounded,
-                              size: 72,
-                              color: AppColors.paper,
-                            ),
-                          ),
+                        child: Image.asset(
+                          'assets/images/hip-thrust-2.jpg',
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topCenter,
                         ),
                       ),
                       Positioned.fill(

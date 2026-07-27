@@ -36,20 +36,12 @@ class PlanDayCard extends StatelessWidget {
           if (showImage) ...[
             ClipRRect(
               borderRadius: AppRadii.smallBorder,
-              child: Container(
+              child: Image.asset(
+                _imageFor(day.dayIndex),
                 width: AppSpacing.xxl,
                 height: AppSpacing.xxl,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.blushSoft, AppColors.lavenderSoft],
-                  ),
-                ),
-                child: const Icon(
-                  Icons.fitness_center_rounded,
-                  color: AppColors.roseDeep,
-                ),
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -100,4 +92,10 @@ class PlanDayCard extends StatelessWidget {
       ),
     );
   }
+
+  String _imageFor(int index) => switch (index % 3) {
+    1 => 'assets/images/hip-thrust-2.jpg',
+    2 => 'assets/images/lateral-raise-2.jpg',
+    _ => 'assets/images/goblet-squat-2.jpg',
+  };
 }
