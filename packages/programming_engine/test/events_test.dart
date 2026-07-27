@@ -21,7 +21,7 @@ String describe(SessionEvent event) => switch (event) {
 };
 
 void main() {
-  const events = <SessionEvent>[
+  final events = <SessionEvent>[
     SetCompleted(
       exerciseId: 'dumbbell-goblet-squat',
       setIndex: 2,
@@ -49,14 +49,14 @@ void main() {
       expect(event == event, isTrue);
     }
     expect(
-      const SetCompleted(
+      SetCompleted(
         exerciseId: 'a',
         setIndex: 0,
         load: Kg(10),
         reps: 8,
         unitSystem: UnitSystem.imperial,
       ),
-      const SetCompleted(
+      SetCompleted(
         exerciseId: 'a',
         setIndex: 0,
         load: Kg(10),
@@ -65,14 +65,14 @@ void main() {
       ),
     );
     expect(
-      const SetCompleted(
+      SetCompleted(
             exerciseId: 'a',
             setIndex: 0,
             load: Kg(10),
             reps: 8,
             unitSystem: UnitSystem.imperial,
           ) ==
-          const SetCompleted(
+          SetCompleted(
             exerciseId: 'a',
             setIndex: 0,
             load: Kg(10),
@@ -83,7 +83,7 @@ void main() {
       reason: 'the unit system in force at entry is part of the event',
     );
     expect(
-      const SetCompleted(
+      SetCompleted(
             exerciseId: 'a',
             setIndex: 0,
             load: Kg(10),
@@ -93,7 +93,7 @@ void main() {
             targetRpe: 7,
             prescribedLoad: Kg(12),
           ) ==
-          const SetCompleted(
+          SetCompleted(
             exerciseId: 'a',
             setIndex: 0,
             load: Kg(10),
@@ -262,7 +262,7 @@ void main() {
 
   group('the content interfaces', () {
     test('mirror the EXERCISES.md schema', () {
-      const goblet = ExerciseData(
+      final goblet = ExerciseData(
         id: 'dumbbell-goblet-squat',
         slug: 'dumbbell-goblet-squat',
         name: 'Goblet Squat',
@@ -348,12 +348,12 @@ void main() {
 
   test('an engine warning prints its code and detail', () {
     expect(
-      const EngineWarning(WarningCode.invalidReps, '-3').toString(),
-      'EngineWarning(invalidReps: -3)',
+      const EngineWarning(WarningCode.sessionEventIgnored, 'stale').toString(),
+      'EngineWarning(sessionEventIgnored: stale)',
     );
     expect(
-      const EngineWarning(WarningCode.invalidReps),
-      const EngineWarning(WarningCode.invalidReps),
+      const EngineWarning(WarningCode.sessionEventIgnored),
+      const EngineWarning(WarningCode.sessionEventIgnored),
     );
   });
 }

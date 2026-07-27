@@ -252,20 +252,19 @@ abstract final class PlanCodec {
         : <String, Object?>{'min': repRange.min, 'max': repRange.max},
   };
 
-  static Map<String, Object?> _encodeDoses(
-    Map<engine.MesocycleWeekKind, engine.Dose> doses,
-  ) => <String, Object?>{
-    for (final entry in doses.entries) entry.key.name: _encodeDose(entry.value),
-  };
+  static Map<String, Object?> _encodeDoses(engine.WeekDoses doses) =>
+      <String, Object?>{
+        for (final kind in engine.MesocycleWeekKind.values)
+          kind.name: _encodeDose(doses.forKind(kind)),
+      };
 
-  static Map<engine.MesocycleWeekKind, engine.Dose> _decodeDoses(
-    Map<String, Object?> json,
-  ) => <engine.MesocycleWeekKind, engine.Dose>{
-    for (final entry in json.entries)
-      _enum(engine.MesocycleWeekKind.values, entry.key): _decodeDose(
-        entry.value! as Map<String, Object?>,
-      ),
-  };
+  static engine.WeekDoses _decodeDoses(Map<String, Object?> json) =>
+      engine.WeekDoses(
+        build: _decodeDose(json['build']! as Map<String, Object?>),
+        easier: _decodeDose(json['easier']! as Map<String, Object?>),
+        push: _decodeDose(json['push']! as Map<String, Object?>),
+        deload: _decodeDose(json['deload']! as Map<String, Object?>),
+      );
 
   static Map<String, Object?> _encodeDose(engine.Dose dose) => switch (dose) {
     engine.RepsDose(

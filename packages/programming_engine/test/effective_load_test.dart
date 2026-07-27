@@ -100,7 +100,7 @@ void main() {
   group('the guardrails run on effective load', () {
     /// The same report and history on two exercises that differ only in
     /// `bw_contribution`.
-    const externalOnlyTwin = ExerciseData(
+    final externalOnlyTwin = ExerciseData(
       id: 'goblet-twin-without-bw',
       name: 'Goblet Squat (bw ignored)',
       blockRole: BlockRole.lowerSquat,

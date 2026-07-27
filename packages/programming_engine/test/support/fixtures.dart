@@ -8,7 +8,7 @@ import 'package:programming_engine/programming_engine.dart';
 
 /// #1 Goblet Squat — the `bw_contribution` case: 0.65 of body mass rides along, so
 /// +2 kg is ~4% of the load moved for a 70 kg user, not 20%.
-const gobletSquat = ExerciseData(
+final gobletSquat = ExerciseData(
   id: 'dumbbell-goblet-squat',
   slug: 'dumbbell-goblet-squat',
   name: 'Goblet Squat',
@@ -28,7 +28,7 @@ const gobletSquat = ExerciseData(
 );
 
 /// #31 Dumbbell Lateral Raise — the §3 coarse-step case: 4 → 6 kg is +50%.
-const lateralRaise = ExerciseData(
+final lateralRaise = ExerciseData(
   id: 'dumbbell-lateral-raise',
   slug: 'dumbbell-lateral-raise',
   name: 'Dumbbell Lateral Raise',
@@ -41,7 +41,7 @@ const lateralRaise = ExerciseData(
 );
 
 /// #2 Barbell Back Squat — 5 kg steps (lower body), 20 kg bar floor.
-const barbellSquat = ExerciseData(
+final barbellSquat = ExerciseData(
   id: 'barbell-squat',
   slug: 'barbell-squat',
   name: 'Barbell Back Squat',
@@ -58,7 +58,7 @@ const barbellSquat = ExerciseData(
 );
 
 /// #21 Barbell Bench Press — 2.5 kg steps (upper body).
-const barbellBench = ExerciseData(
+final barbellBench = ExerciseData(
   id: 'barbell-bench-press',
   slug: 'barbell-bench-press',
   name: 'Barbell Bench Press',
@@ -72,7 +72,7 @@ const barbellBench = ExerciseData(
 
 /// #3 Leg Press — fine pins relative to the load, so the ±10% cap binds before the
 /// step ceiling does.
-const legPress = ExerciseData(
+final legPress = ExerciseData(
   id: 'machine-leg-press',
   slug: 'machine-leg-press',
   name: 'Leg Press',
@@ -86,7 +86,7 @@ const legPress = ExerciseData(
 );
 
 /// #17 Leg Extension — machine isolation.
-const legExtension = ExerciseData(
+final legExtension = ExerciseData(
   id: 'machine-leg-extension',
   slug: 'machine-leg-extension',
   name: 'Leg Extension',
@@ -100,7 +100,7 @@ const legExtension = ExerciseData(
 );
 
 /// #20 Dumbbell Bench Press — the lb-market case.
-const dumbbellBench = ExerciseData(
+final dumbbellBench = ExerciseData(
   id: 'dumbbell-bench-press',
   slug: 'dumbbell-bench-press',
   name: 'Dumbbell Bench Press',
@@ -114,7 +114,7 @@ const dumbbellBench = ExerciseData(
 
 /// #29 Assisted Pull-Up — assistance is a negative external load on a signed
 /// stack. Progression moves toward zero.
-const assistedPullUp = ExerciseData(
+final assistedPullUp = ExerciseData(
   id: 'bodyweight-assisted-chin-up',
   slug: 'bodyweight-assisted-chin-up',
   name: 'Assisted Pull-Up',
@@ -127,7 +127,7 @@ const assistedPullUp = ExerciseData(
 );
 
 /// #28 Single-Arm Dumbbell Row — per side, so it takes the isolation rep window.
-const singleArmRow = ExerciseData(
+final singleArmRow = ExerciseData(
   id: 'dumbbell-row-unilateral',
   slug: 'dumbbell-row-unilateral',
   name: 'Single-Arm Dumbbell Row',
@@ -141,7 +141,7 @@ const singleArmRow = ExerciseData(
 );
 
 /// #33 Cable Rope Pushdown — 2.5 kg cable pins.
-const cablePushdown = ExerciseData(
+final cablePushdown = ExerciseData(
   id: 'cable-rope-pushdown',
   slug: 'cable-rope-pushdown',
   name: 'Cable Rope Pushdown',
@@ -154,7 +154,7 @@ const cablePushdown = ExerciseData(
 
 /// #14 Hip Abduction Machine with an authored 2.5 kg pin — the per-exercise step
 /// override.
-const hipAbduction = ExerciseData(
+final hipAbduction = ExerciseData(
   id: 'machine-hip-abduction',
   slug: 'machine-hip-abduction',
   name: 'Hip Abduction Machine',
@@ -169,7 +169,7 @@ const hipAbduction = ExerciseData(
 );
 
 /// #25 Push-Up — reps-only.
-const pushUp = ExerciseData(
+final pushUp = ExerciseData(
   id: 'bodyweight-push-up',
   name: 'Push-Up',
   blockRole: BlockRole.upperPush,
@@ -180,7 +180,7 @@ const pushUp = ExerciseData(
 );
 
 /// #34 Plank — timed.
-const plank = ExerciseData(
+final plank = ExerciseData(
   id: 'plank',
   slug: 'plank',
   name: 'Plank',
@@ -194,7 +194,7 @@ const plank = ExerciseData(
 
 /// #13 Dumbbell Glute Bridge, treated as a bodyweight movement carrying added load —
 /// exercises the `BodyweightOnly(added:)` branch.
-const gluteBridgeAdded = ExerciseData(
+final gluteBridgeAdded = ExerciseData(
   id: 'dumbbell-glute-bridge',
   slug: 'dumbbell-glute-bridge',
   name: 'Dumbbell Glute Bridge',
@@ -206,14 +206,14 @@ const gluteBridgeAdded = ExerciseData(
   supportEquipment: SupportEquipment.mat,
 );
 
-const config = ProgrammingConfig();
-const suggester = LoadSuggester(config);
+final config = ProgrammingConfig();
+final suggester = LoadSuggester(config);
 
 /// A 70 kg user — the reference body mass in `EXERCISES.md`'s worked example.
 const referenceBodyMass = Kg(70);
 
 /// Every load-metric fixture, for sweeps.
-const loadMetricFixtures = <ExerciseData>[
+final loadMetricFixtures = <ExerciseData>[
   gobletSquat,
   lateralRaise,
   barbellSquat,

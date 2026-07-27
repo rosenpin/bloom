@@ -100,8 +100,21 @@ final class ExerciseContentRepository {
   );
 }
 
+/// A malformed external catalog was rejected before entering engine/database
+/// state.
+final class ContentCatalogLoadError implements Exception {
+  const ContentCatalogLoadError(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'ContentCatalogLoadError: $message';
+}
+
 final class ExerciseContentSeeder {
-  ExerciseContentSeeder(this._database, this._catalog, this._clock);
+  ExerciseContentSeeder(this._database, this._catalog, this._clock) {
+    _validateCatalog(_catalog);
+  }
 
   final AppDatabase _database;
   final engine.ContentCatalog _catalog;
@@ -185,9 +198,11 @@ final class ExerciseContentSeeder {
             );
       }
 
-      final rankBySource = <String, int>{};
+      // The engine rank is tier-local. The Drift key is source/reason/rank, so
+      // flatten the already validated authorial order for storage.
+      final storedRankBySource = <String, int>{};
       for (final edge in _catalog.swapEdges) {
-        final rank = rankBySource.update(
+        final storedRank = storedRankBySource.update(
           edge.fromId,
           (value) => value + 1,
           ifAbsent: () => 0,
@@ -200,7 +215,7 @@ final class ExerciseContentSeeder {
                   fromId: edge.fromId,
                   toId: edge.toId,
                   reason: reason,
-                  rank: rank,
+                  rank: storedRank,
                   tier: edge.tier,
                   updatedAt: updatedAt,
                 ),
@@ -208,5 +223,70 @@ final class ExerciseContentSeeder {
         }
       }
     });
+  }
+
+  static void _validateCatalog(engine.ContentCatalog catalog) {
+    if (catalog.contentVersion.isEmpty) {
+      throw const ContentCatalogLoadError('contentVersion must not be empty');
+    }
+    if (catalog.exercises.isEmpty) {
+      throw const ContentCatalogLoadError('catalog must contain exercises');
+    }
+
+    final exercisesById = <String, engine.Exercise>{};
+    for (final exercise in catalog.exercises) {
+      if (exercise.id.isEmpty) {
+        throw const ContentCatalogLoadError('exercise id must not be empty');
+      }
+      if (exercisesById[exercise.id] != null) {
+        throw ContentCatalogLoadError('duplicate exercise id: ${exercise.id}');
+      }
+      if (!exercise.bwContribution.isFinite ||
+          exercise.bwContribution < 0 ||
+          exercise.bwContribution > 1) {
+        throw ContentCatalogLoadError(
+          '${exercise.id} has invalid bwContribution',
+        );
+      }
+      final step = exercise.loadStepOverride;
+      if (step != null && (!step.isFinite || !step.isPositive)) {
+        throw ContentCatalogLoadError(
+          '${exercise.id} has invalid loadStepOverride',
+        );
+      }
+      exercisesById[exercise.id] = exercise;
+    }
+
+    final targetsBySource = <String>{};
+    final ranks = <String>{};
+    for (final edge in catalog.swapEdges) {
+      final from = exercisesById[edge.fromId];
+      final to = exercisesById[edge.toId];
+      if (from == null || to == null || from.isRetired || to.isRetired) {
+        throw ContentCatalogLoadError(
+          'swap ${edge.fromId}->${edge.toId} must join active exercises',
+        );
+      }
+      if (from.blockRole.swapRegionPurpose != to.blockRole.swapRegionPurpose) {
+        throw ContentCatalogLoadError(
+          'swap ${edge.fromId}->${edge.toId} crosses session purpose',
+        );
+      }
+      if (edge.tier < 1 || edge.tier > 3 || edge.rank < 0) {
+        throw ContentCatalogLoadError(
+          'swap ${edge.fromId}->${edge.toId} has an invalid tier/rank',
+        );
+      }
+      if (!targetsBySource.add('${edge.fromId}\u0000${edge.toId}')) {
+        throw ContentCatalogLoadError(
+          'duplicate swap ${edge.fromId}->${edge.toId}',
+        );
+      }
+      if (!ranks.add('${edge.fromId}\u0000${edge.tier}\u0000${edge.rank}')) {
+        throw ContentCatalogLoadError(
+          'duplicate swap rank for ${edge.fromId}, tier ${edge.tier}',
+        );
+      }
+    }
   }
 }

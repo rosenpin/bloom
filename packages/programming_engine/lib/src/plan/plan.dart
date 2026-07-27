@@ -85,6 +85,42 @@ final class PlanWeek {
   int get hashCode => Object.hash(weekIndex, kind);
 }
 
+/// The complete plan-time dose set for one exercise.
+///
+/// Every mesocycle week kind is present by construction, so session resolution
+/// never needs to guess a replacement dose.
+final class WeekDoses {
+  const WeekDoses({
+    required this.build,
+    required this.easier,
+    required this.push,
+    required this.deload,
+  });
+
+  final Dose build;
+  final Dose easier;
+  final Dose push;
+  final Dose deload;
+
+  Dose forKind(MesocycleWeekKind kind) => switch (kind) {
+    MesocycleWeekKind.build => build,
+    MesocycleWeekKind.easier => easier,
+    MesocycleWeekKind.push => push,
+    MesocycleWeekKind.deload => deload,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is WeekDoses &&
+      other.build == build &&
+      other.easier == easier &&
+      other.push == push &&
+      other.deload == deload;
+
+  @override
+  int get hashCode => Object.hash(build, easier, push, deload);
+}
+
 final class PlanSwapCandidate implements LoadProfile {
   PlanSwapCandidate({
     required this.exerciseId,
@@ -100,11 +136,14 @@ final class PlanSwapCandidate implements LoadProfile {
     required this.loadStepOverride,
     required this.tier,
     required this.rank,
-    required Map<MesocycleWeekKind, Dose> doseByWeekKind,
+    required this.doseByWeekKind,
     required this.repRange,
   }) : assert(tier >= 1 && tier <= 3),
-       doseByWeekKind = Map<MesocycleWeekKind, Dose>.unmodifiable(
-         doseByWeekKind,
+       assert(bwContribution >= 0 && bwContribution <= 1),
+       assert(
+         loadStepOverride == null ||
+             (loadStepOverride.value > 0 &&
+                 loadStepOverride.value < double.infinity),
        );
 
   final String exerciseId;
@@ -132,10 +171,10 @@ final class PlanSwapCandidate implements LoadProfile {
 
   /// The target exercise keeps its own prescription world. A cross-pattern swap
   /// never inherits the source exercise's rep window.
-  final Map<MesocycleWeekKind, Dose> doseByWeekKind;
+  final WeekDoses doseByWeekKind;
   final RepRange? repRange;
 
-  Dose? doseFor(MesocycleWeekKind kind) => doseByWeekKind[kind];
+  Dose doseFor(MesocycleWeekKind kind) => doseByWeekKind.forKind(kind);
 
   @override
   bool operator ==(Object other) =>
@@ -153,10 +192,7 @@ final class PlanSwapCandidate implements LoadProfile {
       other.loadStepOverride == loadStepOverride &&
       other.tier == tier &&
       other.rank == rank &&
-      const MapEquality<MesocycleWeekKind, Dose>().equals(
-        other.doseByWeekKind,
-        doseByWeekKind,
-      ) &&
+      other.doseByWeekKind == doseByWeekKind &&
       other.repRange == repRange;
 
   @override
@@ -174,11 +210,7 @@ final class PlanSwapCandidate implements LoadProfile {
     loadStepOverride,
     tier,
     rank,
-    Object.hashAll(
-      MesocycleWeekKind.values.map(
-        (kind) => Object.hash(kind, doseByWeekKind[kind]),
-      ),
-    ),
+    doseByWeekKind,
     repRange,
   );
 }
@@ -203,14 +235,17 @@ final class PlanExercise implements LoadProfile {
     required this.rotatesAcrossMesocycles,
     required Iterable<String> rotationCandidateIds,
     required Iterable<PlanSwapCandidate> orderedSwapCandidates,
-    required Map<MesocycleWeekKind, Dose> doseByWeekKind,
+    required this.doseByWeekKind,
     required this.repRange,
   }) : rotationCandidateIds = List<String>.unmodifiable(rotationCandidateIds),
        orderedSwapCandidates = List<PlanSwapCandidate>.unmodifiable(
          orderedSwapCandidates,
        ),
-       doseByWeekKind = Map<MesocycleWeekKind, Dose>.unmodifiable(
-         doseByWeekKind,
+       assert(bwContribution >= 0 && bwContribution <= 1),
+       assert(
+         loadStepOverride == null ||
+             (loadStepOverride.value > 0 &&
+                 loadStepOverride.value < double.infinity),
        );
 
   final String exerciseId;
@@ -242,9 +277,9 @@ final class PlanExercise implements LoadProfile {
   final RepRange? repRange;
 
   /// Includes build, easier, push and deload values; no session-time weight.
-  final Map<MesocycleWeekKind, Dose> doseByWeekKind;
+  final WeekDoses doseByWeekKind;
 
-  Dose doseFor(MesocycleWeekKind kind) => doseByWeekKind[kind]!;
+  Dose doseFor(MesocycleWeekKind kind) => doseByWeekKind.forKind(kind);
 
   EffortTarget? effortFor(MesocycleWeekKind kind) {
     final dose = doseFor(kind);
@@ -276,10 +311,7 @@ final class PlanExercise implements LoadProfile {
         other.orderedSwapCandidates,
         orderedSwapCandidates,
       ) &&
-      const MapEquality<MesocycleWeekKind, Dose>().equals(
-        other.doseByWeekKind,
-        doseByWeekKind,
-      ) &&
+      other.doseByWeekKind == doseByWeekKind &&
       other.repRange == repRange;
 
   @override
@@ -300,11 +332,7 @@ final class PlanExercise implements LoadProfile {
     rotatesAcrossMesocycles,
     Object.hashAll(rotationCandidateIds),
     Object.hashAll(orderedSwapCandidates),
-    Object.hashAll(
-      MesocycleWeekKind.values.map(
-        (kind) => Object.hash(kind, doseByWeekKind[kind]),
-      ),
-    ),
+    doseByWeekKind,
     repRange,
   );
 }
@@ -356,6 +384,8 @@ final class Plan {
     required Iterable<EngineWarning> warnings,
     Iterable<PlanEditStamp> editStamps = const <PlanEditStamp>[],
   }) : assert(mesocycleIndex >= 1),
+       assert(days.isNotEmpty),
+       assert(days.every((day) => day.exercises.isNotEmpty)),
        mesocycleCalendar = List<PlanWeek>.unmodifiable(mesocycleCalendar),
        days = List<PlanDay>.unmodifiable(days),
        warnings = List<EngineWarning>.unmodifiable(warnings),
@@ -418,7 +448,7 @@ final class Plan {
                       '${candidate.bwContribution}.'
                       '${candidate.loadStepOverride?.value ?? 'null'}.'
                       '${candidate.repRange ?? 'timed'}.'
-                      '${MesocycleWeekKind.values.map((kind) => '${kind.name}=${candidate.doseFor(kind) == null ? 'missing' : _doseText(candidate.doseFor(kind)!)}').join(';')}',
+                      '${MesocycleWeekKind.values.map((kind) => '${kind.name}=${_doseText(candidate.doseFor(kind))}').join(';')}',
                 )
                 .join(','),
           );

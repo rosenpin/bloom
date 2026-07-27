@@ -330,7 +330,7 @@ final class ExerciseData implements Exercise {
     this.findIt = '',
     this.dos = const <String>[],
     this.donts = const <String>[],
-  });
+  }) : assert(bwContribution >= 0 && bwContribution <= 1);
 
   @override
   final String id;

@@ -107,16 +107,17 @@ final class ExercisePrescription {
 
   @override
   int get hashCode => Object.hash(
-        exerciseId,
-        dose,
-        suggestion,
-        laterality,
-        bridge,
-        Object.hashAll(why),
-      );
+    exerciseId,
+    dose,
+    suggestion,
+    laterality,
+    bridge,
+    Object.hashAll(why),
+  );
 
   @override
-  String toString() => 'ExercisePrescription($exerciseId, $dose, $suggestion, '
+  String toString() =>
+      'ExercisePrescription($exerciseId, $dose, $suggestion, '
       '${laterality.name}${bridge == null ? '' : ', $bridge'}, why: '
       '[${why.map((r) => r.name).join(', ')}])';
 }

@@ -12,8 +12,10 @@ final class EffectiveLoad {
   const EffectiveLoad({required this.bwContribution, required this.bodyMass});
 
   /// External load only — for a leg extension, or when body mass is unknown.
-  static const EffectiveLoad externalOnly =
-      EffectiveLoad(bwContribution: 0, bodyMass: Kg.zero);
+  static const EffectiveLoad externalOnly = EffectiveLoad(
+    bwContribution: 0,
+    bodyMass: Kg.zero,
+  );
 
   /// Fraction of body mass in the lift, 0..1.
   final double bwContribution;

@@ -10,10 +10,27 @@ typedef EncodedSessionEvent = ({
   String payloadJson,
 });
 
+/// The one failure shape for malformed stored session events.
+final class SessionEventDecodeError implements Exception {
+  const SessionEventDecodeError({
+    required this.type,
+    required this.message,
+    required this.cause,
+  });
+
+  final StoredSessionEventType type;
+  final String message;
+  final Object cause;
+
+  @override
+  String toString() => 'SessionEventDecodeError(${type.name}): $message';
+}
+
 /// The app-owned boundary between Drift rows and the engine event vocabulary.
 ///
 /// Keep this mapping exhaustive. The stored log is the source of truth for
-/// session replay and progression.
+/// session replay and progression. Decode validates external values exactly
+/// once; engine events are trusted after this point.
 abstract final class SessionEventCodec {
   static EncodedSessionEvent encode(engine.SessionEvent event) =>
       switch (event) {
@@ -84,57 +101,110 @@ abstract final class SessionEventCodec {
     required String payloadJson,
     required engine.UnitSystem unitSystemAtEntry,
   }) {
-    final payload = jsonDecode(payloadJson) as Map<String, Object?>;
-    return switch (type) {
-      StoredSessionEventType.setCompleted => engine.SetCompleted(
-        exerciseId: _string(payload, 'exerciseId'),
-        setIndex: _integer(payload, 'setIndex'),
-        load: engine.Kg(_number(payload, 'loadKg')),
-        reps: _integer(payload, 'reps'),
-        unitSystem: unitSystemAtEntry,
-        targetReps: _optionalInteger(payload['targetReps']),
-        targetRpe: _optionalInteger(payload['targetRpe']),
-        prescribedLoad: _optionalKg(payload['prescribedLoadKg']),
-      ),
-      StoredSessionEventType.effortReported => engine.EffortReported(
-        exerciseId: _string(payload, 'exerciseId'),
-        level: engine.EffortLevel.clampFromValue(_integer(payload, 'level')),
-      ),
-      StoredSessionEventType.swapRequested => engine.SwapRequested(
-        exerciseId: _string(payload, 'exerciseId'),
-        reason: _enum(engine.SwapReason.values, _string(payload, 'reason')),
-      ),
-      StoredSessionEventType.shorten => engine.Shorten(
-        _integer(payload, 'minutes'),
-      ),
-      StoredSessionEventType.lowEnergy => const engine.LowEnergy(),
-      StoredSessionEventType.painReported => engine.PainReported(
-        exerciseId: _string(payload, 'exerciseId'),
-        site: _enum(engine.PainSite.values, _string(payload, 'site')),
-      ),
-      StoredSessionEventType.sessionAbandoned =>
-        const engine.SessionAbandoned(),
-    };
+    try {
+      final decoded = jsonDecode(payloadJson);
+      if (decoded is! Map<String, Object?>) {
+        throw const FormatException('payload must be a JSON object');
+      }
+      return switch (type) {
+        StoredSessionEventType.setCompleted => engine.SetCompleted(
+          exerciseId: _string(decoded, 'exerciseId'),
+          setIndex: _integer(decoded, 'setIndex', minimum: 0),
+          load: engine.Kg(_number(decoded, 'loadKg')),
+          reps: _integer(decoded, 'reps', minimum: 1),
+          unitSystem: unitSystemAtEntry,
+          targetReps: _optionalInteger(decoded, 'targetReps', minimum: 1),
+          targetRpe: _optionalInteger(
+            decoded,
+            'targetRpe',
+            minimum: 1,
+            maximum: 10,
+          ),
+          prescribedLoad: _optionalKg(decoded, 'prescribedLoadKg'),
+        ),
+        StoredSessionEventType.effortReported => engine.EffortReported(
+          exerciseId: _string(decoded, 'exerciseId'),
+          level:
+              engine.EffortLevel.fromValue(_integer(decoded, 'level')) ??
+              (throw FormatException(
+                'unknown EffortLevel value: ${decoded['level']}',
+              )),
+        ),
+        StoredSessionEventType.swapRequested => engine.SwapRequested(
+          exerciseId: _string(decoded, 'exerciseId'),
+          reason: _enum(engine.SwapReason.values, _string(decoded, 'reason')),
+        ),
+        StoredSessionEventType.shorten => engine.Shorten(
+          _integer(decoded, 'minutes', minimum: 1),
+        ),
+        StoredSessionEventType.lowEnergy => const engine.LowEnergy(),
+        StoredSessionEventType.painReported => engine.PainReported(
+          exerciseId: _string(decoded, 'exerciseId'),
+          site: _enum(engine.PainSite.values, _string(decoded, 'site')),
+        ),
+        StoredSessionEventType.sessionAbandoned =>
+          const engine.SessionAbandoned(),
+      };
+    } on SessionEventDecodeError {
+      rethrow;
+    } catch (error) {
+      throw SessionEventDecodeError(
+        type: type,
+        message: 'invalid stored event payload',
+        cause: error,
+      );
+    }
   }
 
-  static String _string(Map<String, Object?> payload, String key) =>
-      payload[key]! as String;
+  static String _string(Map<String, Object?> payload, String key) {
+    final value = payload[key];
+    if (value is! String || value.isEmpty) {
+      throw FormatException('$key must be a non-empty string');
+    }
+    return value;
+  }
 
-  static int _integer(Map<String, Object?> payload, String key) =>
-      (payload[key]! as num).toInt();
+  static int _integer(
+    Map<String, Object?> payload,
+    String key, {
+    int? minimum,
+    int? maximum,
+  }) {
+    final value = payload[key];
+    if (value is! num || !value.isFinite || value != value.truncateToDouble()) {
+      throw FormatException('$key must be a finite integer');
+    }
+    final integer = value.toInt();
+    if (minimum != null && integer < minimum) {
+      throw FormatException('$key must be at least $minimum');
+    }
+    if (maximum != null && integer > maximum) {
+      throw FormatException('$key must be at most $maximum');
+    }
+    return integer;
+  }
 
-  static double _number(Map<String, Object?> payload, String key) =>
-      (payload[key]! as num).toDouble();
+  static double _number(Map<String, Object?> payload, String key) {
+    final value = payload[key];
+    if (value is! num || !value.isFinite) {
+      throw FormatException('$key must be finite');
+    }
+    return value.toDouble();
+  }
 
-  static int? _optionalInteger(Object? value) =>
-      value == null ? null : (value as num).toInt();
+  static int? _optionalInteger(
+    Map<String, Object?> payload,
+    String key, {
+    int? minimum,
+    int? maximum,
+  }) {
+    if (payload[key] == null) return null;
+    return _integer(payload, key, minimum: minimum, maximum: maximum);
+  }
 
-  static double? _optionalNumber(Object? value) =>
-      value == null ? null : (value as num).toDouble();
-
-  static engine.Kg? _optionalKg(Object? value) {
-    final number = _optionalNumber(value);
-    return number == null ? null : engine.Kg(number);
+  static engine.Kg? _optionalKg(Map<String, Object?> payload, String key) {
+    if (payload[key] == null) return null;
+    return engine.Kg(_number(payload, key));
   }
 
   static T _enum<T extends Enum>(List<T> values, String name) {

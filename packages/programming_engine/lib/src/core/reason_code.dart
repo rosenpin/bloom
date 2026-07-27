@@ -101,6 +101,10 @@ enum ReasonCode {
   /// First week of a new mesocycle: a small step up from where she left off.
   newMesocycleStep,
 
+  /// Every planned day in this calendar week is complete, so the specified
+  /// repeat-last-day flow was selected.
+  planWeekCompleteRepeat,
+
   // ── Bodyweight and timed ───────────────────────────────────────────────────
   /// Rep target on a bodyweight movement went up.
   bodyweightRepProgress,

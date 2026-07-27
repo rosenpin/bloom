@@ -208,10 +208,14 @@ const personaFixtures = <PersonaFixture>[
 
 Plan successfulPlan(
   Profile profile, {
-  ProgrammingConfig config = const ProgrammingConfig(),
+  ProgrammingConfig? config,
   ContentCatalog? catalog,
 }) {
-  final result = assemblePlan(profile, config, catalog ?? catalogV1);
+  final result = assemblePlan(
+    profile,
+    config ?? ProgrammingConfig(),
+    catalog ?? catalogV1,
+  );
   if (result case Success<Plan>(:final value)) return value;
   throw StateError((result as Failure<Plan>).error.toString());
 }

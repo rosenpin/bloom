@@ -113,7 +113,7 @@ void main() {
     );
     expect(lateralRaise.repRange, const RepRange(10, 15));
     expect(
-      (lateralRaise.doseFor(MesocycleWeekKind.build)! as RepsDose).range,
+      (lateralRaise.doseFor(MesocycleWeekKind.build) as RepsDose).range,
       const RepRange(10, 15),
     );
   });

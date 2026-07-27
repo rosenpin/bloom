@@ -24,6 +24,34 @@ void main() {
       expect(second.absoluteWeekIndex, 1);
     });
 
+    test('a complete plan week repeats the last day as a reasoned flow', () {
+      final plan = successfulPlan(personaFixtures[1].profile);
+      final date = DateTime.utc(2026, 1, 5);
+      var history = TrainingHistory(bodyMass: const Kg(65));
+      for (var index = 0; index < plan.days.length; index++) {
+        final session = resolveSession(
+          plan,
+          history,
+          date.add(Duration(days: index)),
+        );
+        history = history.add(
+          session.toRecord(
+            sessionId: 'complete-$index',
+            events: _completedEvents(session),
+          ),
+        );
+      }
+
+      final repeated = resolveSession(
+        plan,
+        history,
+        date.add(Duration(days: plan.days.length)),
+      );
+      expect(repeated.dayIndex, plan.days.last.dayIndex);
+      expect(repeated.reasonCodes, contains(ReasonCode.planWeekCompleteRepeat));
+      expect(repeated.warnings, isEmpty);
+    });
+
     test('run twice is equal and byte-identical', () {
       final plan = successfulPlan(personaFixtures[0].profile);
       final history = TrainingHistory(bodyMass: const Kg(65));
@@ -36,7 +64,7 @@ void main() {
     });
 
     test('every prescription explains itself and is representable', () {
-      const config = ProgrammingConfig();
+      final config = ProgrammingConfig();
       final plan = successfulPlan(personaFixtures[0].profile, config: config);
       final resolution = resolveSession(
         plan,
@@ -144,29 +172,21 @@ void main() {
       expect(_loadOf(prescription.suggestion).value, lessThan(30));
     });
 
-    test('empty plan returns a value and warning', () {
-      final plan = Plan(
-        mesocycleIndex: 1,
-        stamps: const PlanStamps(
-          engineVersion: 'test',
-          configHash: 'config',
-          contentHash: 'content',
-          profileHash: 'profile',
-        ),
-        mesocycleCalendar: const <PlanWeek>[],
-        days: const <PlanDay>[],
-        warnings: const <EngineWarning>[],
-      );
-
-      final resolution = resolveSession(
-        plan,
-        TrainingHistory(),
-        DateTime.utc(2026, 1, 5),
-      );
-      expect(resolution.prescriptions, isEmpty);
+    test('a plan cannot represent an empty training week', () {
       expect(
-        resolution.warnings.map((warning) => warning.code),
-        contains(WarningCode.noPlanDayAvailable),
+        () => Plan(
+          mesocycleIndex: 1,
+          stamps: const PlanStamps(
+            engineVersion: 'test',
+            configHash: 'config',
+            contentHash: 'content',
+            profileHash: 'profile',
+          ),
+          mesocycleCalendar: const <PlanWeek>[],
+          days: const <PlanDay>[],
+          warnings: const <EngineWarning>[],
+        ),
+        throwsA(isA<AssertionError>()),
       );
     });
   });

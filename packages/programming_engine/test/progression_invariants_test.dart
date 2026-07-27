@@ -174,7 +174,7 @@ void main() {
         if (decision.regime != ProgressionRegime.normal) continue;
         final loads = config.availableLoads(input.profile, input.unitSystem);
         final base = loads.snapDown(input.history!.lastLoad);
-        final bodyTerm = input.bodyMass * input.profile.bwContribution;
+        final bodyTerm = input.bodyMass! * input.profile.bwContribution;
         final effective = base + bodyTerm;
         if (loads.stepAt(base) < effective * config.maxChangeFraction) continue;
         checked++;
@@ -199,7 +199,7 @@ void main() {
       if (load == null) continue;
       final loads = config.availableLoads(input.profile, input.unitSystem);
       final base = loads.snapDown(input.history!.lastLoad);
-      final bodyTerm = input.bodyMass * input.profile.bwContribution;
+      final bodyTerm = input.bodyMass! * input.profile.bwContribution;
       final oneStep = loads.stepAt(base);
       final calibrating = decision.regime == ProgressionRegime.calibration;
       final fraction = calibrating
@@ -255,7 +255,6 @@ void main() {
       expect(second.stepsMoved, first.stepsMoved);
       expect(second.bridge, first.bridge);
       expect(second.why, first.why);
-      expect(second.warnings, first.warnings);
       expect(second.toString(), first.toString());
     }
   });

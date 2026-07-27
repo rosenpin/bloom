@@ -31,20 +31,24 @@ final class SessionModifiers {
   int get hashCode => (SessionModifiers).hashCode;
 }
 
-/// Total session resolver. Malformed/partial plan state degrades to a stable
-/// value plus structured warnings; it never intentionally throws.
+/// Session resolver for a validated plan and event history.
 @useResult
 SessionResolution resolveSession(
   Plan plan,
   TrainingHistory history,
   DateTime date, {
   SessionModifiers modifiers = const SessionModifiers(),
-  ProgrammingConfig config = const ProgrammingConfig(),
+  ProgrammingConfig? config,
 }) {
   // Read the empty modifiers object so adding a field later cannot accidentally
   // leave the parameter ignored by analysis.
   final _ = modifiers;
-  return _ResolutionPass(plan, history, date, config).run();
+  return _ResolutionPass(
+    plan,
+    history,
+    date,
+    config ?? ProgrammingConfig(),
+  ).run();
 }
 
 final class _ResolutionPass {
@@ -59,19 +63,19 @@ final class _ResolutionPass {
   final TrainingSnapshot snapshot;
   final LoadSuggester loadSuggester;
   final warnings = <EngineWarning>[];
+  final resolutionReasons = <ReasonCode>[];
 
-  late final int mesocycleWeeks = _mesocycleWeeks();
+  late final int mesocycleWeeks = config.mesocycleWeeks;
   late final String planRef = plan.reference;
 
   SessionResolution run() {
     final firstPlanDate = _firstCompletedPlanDate();
-    var elapsedDays = firstPlanDate == null
+    final rawElapsedDays = firstPlanDate == null
         ? 0
         : _calendarDaysBetween(firstPlanDate, date);
-    if (elapsedDays < 0) {
-      warnings.add(EngineWarning(WarningCode.negativeLayoff, '$elapsedDays'));
-      elapsedDays = 0;
-    }
+    // A device clock can move backwards after a stored session. Treat that
+    // clock-skew interval as no elapsed days; it is not training telemetry.
+    final elapsedDays = rawElapsedDays < 0 ? 0 : rawElapsedDays;
 
     final absoluteWeekIndex = elapsedDays ~/ 7 + 1;
     final mesocycleWeekIndex = ((absoluteWeekIndex - 1) % mesocycleWeeks) + 1;
@@ -80,47 +84,14 @@ final class _ResolutionPass {
     final weekKind = _weekKind(mesocycleWeekIndex);
     final planDay = _nextDay(absoluteWeekIndex);
 
-    var daysSinceLastSession = snapshot.lastCompletedSessionDate == null
+    final rawDaysSinceLastSession = snapshot.lastCompletedSessionDate == null
         ? null
         : _calendarDaysBetween(snapshot.lastCompletedSessionDate!, date);
-    if (daysSinceLastSession != null && daysSinceLastSession < 0) {
-      warnings.add(
-        EngineWarning(WarningCode.negativeLayoff, '$daysSinceLastSession'),
-      );
-      daysSinceLastSession = 0;
-    }
-
-    if (planDay == null) {
-      warnings.add(const EngineWarning(WarningCode.noPlanDayAvailable));
-      return SessionResolution(
-        date: date,
-        planRef: planRef,
-        mesocycleIndex: mesocycleIndex,
-        mesocycleWeekIndex: mesocycleWeekIndex,
-        absoluteWeekIndex: absoluteWeekIndex,
-        weekKind: weekKind,
-        dayIndex: 0,
-        dayKind: null,
-        daysSinceLastSession: daysSinceLastSession,
-        exercises: const <SessionExerciseEntry>[],
-        budget: const SessionBudgetInfo(
-          plannedMinutes: 0,
-          availableMinutes: 0,
-          completedSetCount: 0,
-        ),
-        warnings: warnings,
-        reasonCodes: const <ReasonCode>[],
-        pendingPlanEditSuggestions: const <PendingPlanEditSuggestion>[],
-        pendingSwapSuggestions: const <SessionSwapSuggestion>[],
-        pendingExclusions: const <String>{},
-        excludedExerciseIds: snapshot.excludedExerciseIds,
-        events: const <SessionEvent>[],
-        historySnapshot: snapshot,
-        unitSystem: history.unitSystem,
-        bodyMass: history.bodyMass,
-        config: config,
-      );
-    }
+    // Same clock-skew policy as the plan age above.
+    final daysSinceLastSession =
+        rawDaysSinceLastSession != null && rawDaysSinceLastSession < 0
+        ? 0
+        : rawDaysSinceLastSession;
 
     final prescriptions = <ExercisePrescription>[];
     for (final planned in planDay.exercises) {
@@ -144,7 +115,7 @@ final class _ResolutionPass {
           prescription: prescriptions[index],
         ),
     ];
-    final reasonCodes = <ReasonCode>[];
+    final reasonCodes = <ReasonCode>[...resolutionReasons];
     for (final prescription in prescriptions) {
       for (final reason in prescription.why) {
         if (!reasonCodes.contains(reason)) reasonCodes.add(reason);
@@ -226,11 +197,9 @@ final class _ResolutionPass {
     required int daysSinceLastSession,
   }) {
     final selected = _selectExercise(planned);
-    var dose = _doseFor(selected, weekKind);
+    var dose = selected.doseFor(weekKind);
     final exerciseState = snapshot.exercise(selected.exerciseId);
-    final range = dose is RepsDose
-        ? dose.range
-        : selected.repRange ?? const RepRange(8, 12);
+    final range = dose is RepsDose ? dose.range : const RepRange(1, 1);
     final layoffTier = layoffTierFor(daysSinceLastSession, config);
 
     var useWorkingAnchor = false;
@@ -292,15 +261,13 @@ final class _ResolutionPass {
         effort: dose is RepsDose ? dose.effort : const EffortTarget(7),
         unitSystem: history.unitSystem,
         history: progressionSnapshot,
-        bodyMass: history.bodyMass,
+        bodyMass: history.bodyMass.isPositive ? history.bodyMass : null,
         daysSinceLastSession: weekKind == MesocycleWeekKind.deload
             ? 0
             : daysSinceLastSession,
         preSuggesterAdjustment: adjustment,
       ),
     );
-    warnings.addAll(decision.warnings);
-
     if (dose is RepsDose) {
       dose = dose.copyWith(targetReps: decision.targetReps);
     } else if (dose is TimedDose && decision.hold != null) {
@@ -364,49 +331,7 @@ final class _ResolutionPass {
     return _SelectedExercise.fromPlan(planned);
   }
 
-  Dose _doseFor(_SelectedExercise exercise, MesocycleWeekKind weekKind) {
-    final exact = exercise.doseByWeekKind[weekKind];
-    if (exact != null) return exact;
-    final build = exercise.doseByWeekKind[MesocycleWeekKind.build];
-    if (build != null) {
-      warnings.add(
-        EngineWarning(
-          WarningCode.missingWeekDose,
-          '${exercise.exerciseId}/${weekKind.name}->build',
-        ),
-      );
-      return build;
-    }
-    if (exercise.doseByWeekKind.values.isNotEmpty) {
-      warnings.add(
-        EngineWarning(
-          WarningCode.missingWeekDose,
-          '${exercise.exerciseId}/${weekKind.name}->first',
-        ),
-      );
-      return exercise.doseByWeekKind.values.first;
-    }
-
-    warnings.add(
-      EngineWarning(
-        WarningCode.missingWeekDose,
-        '${exercise.exerciseId}/${weekKind.name}->synthetic',
-      ),
-    );
-    if (exercise.metricType == MetricType.timed) {
-      return TimedDose(sets: 1, hold: config.timedHoldFloor);
-    }
-    final range = exercise.repRange ?? const RepRange(8, 12);
-    return RepsDose(
-      sets: 1,
-      range: range,
-      effort: const EffortTarget(7),
-      targetReps: range.min,
-    );
-  }
-
-  PlanDay? _nextDay(int absoluteWeekIndex) {
-    if (plan.days.isEmpty) return null;
+  PlanDay _nextDay(int absoluteWeekIndex) {
     final completed = <int>{
       for (final record in history.records)
         if (record.planRef == planRef &&
@@ -417,12 +342,7 @@ final class _ResolutionPass {
     for (final day in plan.days) {
       if (!completed.contains(day.dayIndex)) return day;
     }
-    warnings.add(
-      EngineWarning(
-        WarningCode.planWeekAlreadyComplete,
-        'week $absoluteWeekIndex',
-      ),
-    );
+    resolutionReasons.add(ReasonCode.planWeekCompleteRepeat);
     return plan.days.last;
   }
 
@@ -433,22 +353,10 @@ final class _ResolutionPass {
     return null;
   }
 
-  int _mesocycleWeeks() {
-    if (config.mesocycleWeeks >= 1) return config.mesocycleWeeks;
-    warnings.add(
-      EngineWarning(
-        WarningCode.invalidMesocycleConfiguration,
-        '${config.mesocycleWeeks}->1',
-      ),
-    );
-    return 1;
-  }
-
   MesocycleWeekKind _weekKind(int weekIndex) {
     for (final week in plan.mesocycleCalendar) {
       if (week.weekIndex == weekIndex) return week.kind;
     }
-    if (config.mesocycleWeeks < 1) return MesocycleWeekKind.build;
     return config.weekKind(weekIndex);
   }
 
@@ -515,8 +423,10 @@ final class _SelectedExercise implements LoadProfile {
   @override
   final Kg? loadStepOverride;
   final RepRange? repRange;
-  final Map<MesocycleWeekKind, Dose> doseByWeekKind;
+  final WeekDoses doseByWeekKind;
   final bool wasSwapped;
+
+  Dose doseFor(MesocycleWeekKind kind) => doseByWeekKind.forKind(kind);
 }
 
 int _calendarDaysBetween(DateTime earlier, DateTime later) {

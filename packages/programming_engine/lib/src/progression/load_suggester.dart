@@ -10,8 +10,8 @@
 /// discretization, with "no feedback → identical" short-circuiting before all of
 /// them and the §6 layoff tiers applied before any of it.
 ///
-/// Total by construction: no input makes this throw. Weird-but-possible values are
-/// sanitized and reported as [EngineWarning]s.
+/// Stored data is validated at the app boundary. This layer trusts its types;
+/// programmer and configuration mistakes are assertions.
 library;
 
 import 'package:meta/meta.dart';
@@ -25,20 +25,25 @@ import '../core/load_suggestion.dart';
 import '../core/prescription.dart';
 import '../core/reason_code.dart';
 import '../core/units.dart';
-import '../core/warnings.dart';
 import 'effective_load.dart';
 import 'effort_mapping.dart';
 import 'layoff.dart';
 
 /// What the fold over the event log knows about one exercise from last time.
 final class ExerciseSnapshot {
-  const ExerciseSnapshot({
+  ExerciseSnapshot({
     required this.lastLoad,
     required this.lastReps,
     required this.targetReps,
     this.reportedEffort,
     this.lastHold,
-  });
+  }) : assert(
+         lastLoad.value > double.negativeInfinity &&
+             lastLoad.value < double.infinity,
+       ),
+       assert(lastReps >= 1),
+       assert(targetReps >= 1),
+       assert(lastHold == null || lastHold.inMicroseconds > 0);
 
   /// External load actually used, canonical kg.
   final Kg lastLoad;
@@ -78,16 +83,19 @@ final class ExerciseSnapshot {
 /// Everything one load decision needs. No clock, no catalog, no history beyond the
 /// small window the rules actually use.
 final class ProgressionInput {
-  const ProgressionInput({
+  ProgressionInput({
     required this.profile,
     required this.range,
     required this.effort,
     required this.unitSystem,
     this.history,
-    this.bodyMass = Kg.zero,
+    this.bodyMass,
     this.daysSinceLastSession = 0,
     this.preSuggesterAdjustment,
-  });
+  }) : assert(
+         bodyMass == null ||
+             (bodyMass.value > 0 && bodyMass.value < double.infinity),
+       );
 
   final LoadProfile profile;
 
@@ -102,7 +110,10 @@ final class ProgressionInput {
   final ExerciseSnapshot? history;
 
   /// Needed only for movements with `bw_contribution > 0`.
-  final Kg bodyMass;
+  ///
+  /// Absence is a designed state: effective-load math then uses the external
+  /// load only.
+  final Kg? bodyMass;
 
   /// Days since her last completed session — injected, never read from a clock.
   final int daysSinceLastSession;
@@ -130,14 +141,16 @@ final class PreSuggesterAdjustment {
     required this.loadFraction,
     this.strictlyLighter = true,
   }) : kind = PreSuggesterAdjustmentKind.fractionalDeload,
-       steps = 0;
+       steps = 0,
+       assert(loadFraction > 0 && loadFraction < 1);
 
   const PreSuggesterAdjustment.stepUp({
     required this.reason,
     required this.steps,
   }) : kind = PreSuggesterAdjustmentKind.stepUp,
        loadFraction = 1,
-       strictlyLighter = false;
+       strictlyLighter = false,
+       assert(steps > 0);
 
   final PreSuggesterAdjustmentKind kind;
   final ReasonCode reason;
@@ -195,7 +208,6 @@ final class LoadDecision {
     this.bridge,
     this.stepsMoved = 0,
     this.why = const <ReasonCode>[],
-    this.warnings = const <EngineWarning>[],
   });
 
   final LoadSuggestion suggestion;
@@ -218,7 +230,6 @@ final class LoadDecision {
   final int stepsMoved;
 
   final List<ReasonCode> why;
-  final List<EngineWarning> warnings;
 
   bool get loadChanged => stepsMoved != 0;
 
@@ -226,7 +237,7 @@ final class LoadDecision {
   String toString() =>
       'LoadDecision($suggestion, $targetReps reps, '
       '${regime.name}, steps $stepsMoved, why [${why.map((r) => r.name).join(', ')}]'
-      '${warnings.isEmpty ? '' : ', warnings $warnings'})';
+      ')';
 }
 
 /// §4's decision logic. Const-constructible and stateless — the same inputs always
@@ -240,7 +251,9 @@ final class LoadSuggester {
   LoadDecision suggest(ProgressionInput input) => _Pass(config, input).run();
 }
 
-/// One invocation's sanitized context plus its accumulating explanation. Private:
+enum _DoseStep { loadSteps, repSteps, holdSteps }
+
+/// One invocation's trusted context plus its accumulating explanation. Private:
 /// the public surface is [LoadSuggester.suggest].
 final class _Pass {
   _Pass(this.config, this.input)
@@ -251,19 +264,20 @@ final class _Pass {
   final AvailableLoads loads;
 
   final List<ReasonCode> why = <ReasonCode>[];
-  final List<EngineWarning> warnings = <EngineWarning>[];
 
-  /// Sanitized lazily, so a warning is only raised about a value the decision
-  /// actually depended on. The access order is fixed per branch, so two identical
-  /// inputs still produce identical warning lists.
-  late final RepRange range = _sanitizedRange(input.range);
+  late final RepRange range = input.range;
 
   /// The reps we may legally prescribe. Isolation work can sit below the range's
   /// bottom right after a weight jump (§3: "restart at 8–10 reps" under a 10–15
   /// range).
   late final RepRange window = _prescribableWindow();
-  late final EffectiveLoad effectiveLoad = _sanitizedEffectiveLoad();
-  late final int days = _sanitizedDays();
+  late final EffectiveLoad effectiveLoad = _effectiveLoad();
+
+  /// A stored session can appear in the future after device clock skew. This is
+  /// elapsed-time normalization, not a training-data warning.
+  late final int days = input.daysSinceLastSession < 0
+      ? 0
+      : input.daysSinceLastSession;
 
   bool get isIsolationLike =>
       input.profile.movementClass.isIsolation ||
@@ -292,25 +306,88 @@ final class _Pass {
       report.rir > input.effort.rir;
 
   LoadDecision run() {
-    switch (input.profile.metricType) {
-      case MetricType.timed:
-        return _timed();
-      case MetricType.repsOnly:
-        return _repsOnly();
-      case MetricType.loadReps:
-        return _loadReps();
+    if (input.profile.metricType == MetricType.timed) {
+      config.assertTimedDoseConfiguration();
     }
+    return _progress(switch (input.profile.metricType) {
+      MetricType.loadReps => _DoseStep.loadSteps,
+      MetricType.repsOnly => _DoseStep.repSteps,
+      MetricType.timed => _DoseStep.holdSteps,
+    });
   }
 
-  // ── Load × reps: the §4 pipeline ──────────────────────────────────────────
-
-  LoadDecision _loadReps() {
+  /// The shared §4 decision skeleton. Each strategy supplies only how its dose
+  /// starts, holds, decreases, and progresses; ordering stays identical:
+  /// first exposure → preselected session rule → layoff → no feedback →
+  /// effort interpretation → progress/hold/decrease.
+  LoadDecision _progress(_DoseStep step) {
     final history = input.history;
+    if (history == null) return _firstExposure(step);
 
-    // Cold start: the formula needs a prior (load, reps, effort) triple.
-    if (history == null) {
-      why.add(ReasonCode.firstExposure);
-      return _decision(
+    final base = step == _DoseStep.loadSteps
+        ? _baseLoad(history.lastLoad)
+        : null;
+    final targetReps = step == _DoseStep.holdSteps
+        ? null
+        : _targetReps(history.targetReps);
+    final lastHold = step == _DoseStep.holdSteps
+        ? history.lastHold ?? config.timedHoldFloor
+        : null;
+
+    final adjustment = input.preSuggesterAdjustment;
+    if (adjustment != null) {
+      return _applyStepAdjustment(
+        step,
+        adjustment,
+        base: base,
+        targetReps: targetReps,
+        lastHold: lastHold,
+      );
+    }
+
+    final tier = layoffTierFor(days, config);
+    if (tier != LayoffTier.none) {
+      return _applyStepLayoff(
+        step,
+        tier,
+        base: base,
+        targetReps: targetReps,
+        lastHold: lastHold,
+      );
+    }
+
+    final level = history.reportedEffort;
+    if (level == null) {
+      why.add(ReasonCode.noFeedbackHold);
+      return _holdStep(
+        step,
+        base: base,
+        targetReps: targetReps,
+        lastHold: lastHold,
+      );
+    }
+
+    final report = interpretEffort(level, config);
+    return switch (step) {
+      _DoseStep.loadSteps => _interpretLoad(
+        history,
+        report,
+        base: base!,
+        targetReps: targetReps!,
+      ),
+      _DoseStep.repSteps => _interpretReps(
+        history,
+        report,
+        targetReps: targetReps!,
+      ),
+      _DoseStep.holdSteps => _interpretHold(report, lastHold: lastHold!),
+    };
+  }
+
+  LoadDecision _firstExposure(_DoseStep step) {
+    why.add(ReasonCode.firstExposure);
+    return switch (step) {
+      _DoseStep.loadSteps => _decision(
         suggestion: NeedsCalibration(
           floor: loads.floor,
           probeReps: config.calibrationProbeReps,
@@ -318,35 +395,101 @@ final class _Pass {
         targetReps: config.calibrationProbeReps,
         regime: ProgressionRegime.firstExposure,
         externalLoad: loads.floor,
-      );
+      ),
+      _DoseStep.repSteps => _decision(
+        suggestion: RepOrDurationTarget.reps(range.min),
+        targetReps: range.min,
+        regime: ProgressionRegime.repsOnly,
+      ),
+      _DoseStep.holdSteps => _timedDecision(config.timedHoldFloor),
+    };
+  }
+
+  LoadDecision _applyStepAdjustment(
+    _DoseStep step,
+    PreSuggesterAdjustment adjustment, {
+    required Kg? base,
+    required int? targetReps,
+    required Duration? lastHold,
+  }) {
+    switch (step) {
+      case _DoseStep.loadSteps:
+        return _applyPreSuggesterAdjustment(adjustment, base!, targetReps!);
+      case _DoseStep.repSteps:
+        why.add(adjustment.reason);
+        return switch (adjustment.kind) {
+          PreSuggesterAdjustmentKind.hold => _repsDecision(targetReps!),
+          PreSuggesterAdjustmentKind.fractionalDeload => _repsDecision(
+            range.min,
+          ),
+          PreSuggesterAdjustmentKind.stepUp => _repsDecision(
+            window.clamp(
+              targetReps! + config.bodyweightRepStep * adjustment.steps,
+            ),
+          ),
+        };
+      case _DoseStep.holdSteps:
+        why.add(adjustment.reason);
+        return switch (adjustment.kind) {
+          PreSuggesterAdjustmentKind.hold => _timedDecision(lastHold!),
+          PreSuggesterAdjustmentKind.fractionalDeload => _timedDecision(
+            _shiftHold(lastHold!, -1),
+          ),
+          PreSuggesterAdjustmentKind.stepUp => _timedDecision(
+            _shiftHold(lastHold!, adjustment.steps),
+          ),
+        };
     }
+  }
 
-    final base = _sanitizedBaseLoad(history.lastLoad);
-    final targetReps = _sanitizedTargetReps(history.targetReps);
-
-    final preAdjustment = input.preSuggesterAdjustment;
-    if (preAdjustment != null) {
-      return _applyPreSuggesterAdjustment(preAdjustment, base, targetReps);
+  LoadDecision _applyStepLayoff(
+    _DoseStep step,
+    LayoffTier tier, {
+    required Kg? base,
+    required int? targetReps,
+    required Duration? lastHold,
+  }) {
+    switch (step) {
+      case _DoseStep.loadSteps:
+        return _applyLayoff(tier, base!, targetReps!);
+      case _DoseStep.repSteps:
+        final reason = layoffReason(tier);
+        if (reason != null) why.add(reason);
+        return _repsDecision(tier.changesLoad ? range.min : targetReps!);
+      case _DoseStep.holdSteps:
+        final reason = layoffReason(tier);
+        if (reason != null) why.add(reason);
+        return _timedDecision(
+          tier.changesLoad ? _shiftHold(lastHold!, -1) : lastHold!,
+        );
     }
+  }
 
-    // §6 layoff tiers, before progression.
-    final tier = layoffTierFor(days, config);
-    if (tier != LayoffTier.none) return _applyLayoff(tier, base, targetReps);
+  LoadDecision _holdStep(
+    _DoseStep step, {
+    required Kg? base,
+    required int? targetReps,
+    required Duration? lastHold,
+  }) => switch (step) {
+    _DoseStep.loadSteps => _decision(
+      suggestion: _wrapLoad(base!),
+      targetReps: targetReps!,
+      regime: ProgressionRegime.noFeedback,
+      externalLoad: base,
+    ),
+    _DoseStep.repSteps => _repsDecision(targetReps!),
+    _DoseStep.holdSteps => _timedDecision(lastHold!),
+  };
 
-    // §4.6 no feedback → repeat identical.
-    final level = history.reportedEffort;
-    if (level == null) {
-      why.add(ReasonCode.noFeedbackHold);
-      return _decision(
-        suggestion: _wrapLoad(base),
-        targetReps: targetReps,
-        regime: ProgressionRegime.noFeedback,
-        externalLoad: base,
-      );
-    }
+  // ── Load × reps: the §4 formula and guardrail pipeline ─────────────────────
 
-    final report = interpretEffort(level, config);
-    final lastReps = _sanitizedReps(history.lastReps);
+  LoadDecision _interpretLoad(
+    ExerciseSnapshot history,
+    InterpretedEffort report, {
+    required Kg base,
+    required int targetReps,
+  }) {
+    final lastReps = history.lastReps;
     final calibrating = isCalibrationReport(report, config);
     final regime = calibrating
         ? ProgressionRegime.calibration
@@ -374,13 +517,8 @@ final class _Pass {
           base: base,
         );
       }
-      // Nothing to scale — a bodyweight-metric movement with no body mass known.
-      warnings.add(
-        const EngineWarning(
-          WarningCode.invalidBodyMass,
-          'effective load is zero; holding',
-        ),
-      );
+      // With body mass absent, a zero external load has no scale for percentage
+      // math. External-only mode therefore holds until a load or mass exists.
       why.add(ReasonCode.deadbandHold);
       return _decision(
         suggestion: _wrapLoad(base),
@@ -609,8 +747,9 @@ final class _Pass {
     if (targetReps < range.max) {
       final compensating = (shortfallFraction / config.loadFractionPerRep)
           .floor();
-      final extraReps =
-          compensating < minExtraReps ? minExtraReps : compensating;
+      final extraReps = compensating < minExtraReps
+          ? minExtraReps
+          : compensating;
       if (incrementWasTooSmall) why.add(ReasonCode.incrementTooSmallForStep);
       why.add(ReasonCode.repsProgress);
       return _decision(
@@ -721,10 +860,7 @@ final class _Pass {
           base: base,
         );
       case PreSuggesterAdjustmentKind.fractionalDeload:
-        var fraction = adjustment.loadFraction;
-        if (!fraction.isFinite || fraction <= 0 || fraction >= 1) {
-          fraction = 1 - config.stallDeloadFraction;
-        }
+        final fraction = adjustment.loadFraction;
         final lastEffective = effectiveLoad.effective(base);
         final desired = lastEffective.isPositive
             ? effectiveLoad.external(lastEffective * fraction)
@@ -747,68 +883,14 @@ final class _Pass {
     }
   }
 
-  // ── Bodyweight and timed: no load to resolve ──────────────────────────────
+  // ── Bodyweight and timed strategy steps ───────────────────────────────────
 
-  LoadDecision _repsOnly() {
-    final history = input.history;
-    if (history == null) {
-      why.add(ReasonCode.firstExposure);
-      return _decision(
-        suggestion: RepOrDurationTarget.reps(range.min),
-        targetReps: range.min,
-        regime: ProgressionRegime.repsOnly,
-      );
-    }
-    final targetReps = _sanitizedTargetReps(history.targetReps);
-    final lastReps = _sanitizedReps(history.lastReps);
-
-    final preAdjustment = input.preSuggesterAdjustment;
-    if (preAdjustment != null) {
-      why.add(preAdjustment.reason);
-      final next = switch (preAdjustment.kind) {
-        PreSuggesterAdjustmentKind.hold => targetReps,
-        PreSuggesterAdjustmentKind.fractionalDeload => range.min,
-        PreSuggesterAdjustmentKind.stepUp => window.clamp(
-          targetReps +
-              config.bodyweightRepStep * preAdjustment.steps.clamp(0, 1000),
-        ),
-      };
-      return _decision(
-        suggestion: RepOrDurationTarget.reps(next),
-        targetReps: next,
-        regime: ProgressionRegime.repsOnly,
-      );
-    }
-
-    final tier = layoffTierFor(days, config);
-    if (tier.changesLoad) {
-      final reason = layoffReason(tier);
-      if (reason != null) why.add(reason);
-      return _decision(
-        suggestion: RepOrDurationTarget.reps(range.min),
-        targetReps: range.min,
-        regime: ProgressionRegime.repsOnly,
-      );
-    }
-    if (tier == LayoffTier.hold) {
-      why.add(ReasonCode.layoffTier1);
-      return _decision(
-        suggestion: RepOrDurationTarget.reps(targetReps),
-        targetReps: targetReps,
-        regime: ProgressionRegime.repsOnly,
-      );
-    }
-
-    final level = history.reportedEffort;
-    if (level == null) {
-      why.add(ReasonCode.noFeedbackHold);
-      return _decision(
-        suggestion: RepOrDurationTarget.reps(targetReps),
-        targetReps: targetReps,
-        regime: ProgressionRegime.repsOnly,
-      );
-    }
-    final report = interpretEffort(level, config);
+  LoadDecision _interpretReps(
+    ExerciseSnapshot history,
+    InterpretedEffort report, {
+    required int targetReps,
+  }) {
+    final lastReps = history.lastReps;
     if (!supportsProgress(report)) {
       // Harder than target: meet her where she is, never above the target.
       final next =
@@ -851,45 +933,10 @@ final class _Pass {
     );
   }
 
-  LoadDecision _timed() {
-    final history = input.history;
-    final lastHold = history?.lastHold ?? config.timedHoldFloor;
-    if (history == null) {
-      why.add(ReasonCode.firstExposure);
-      return _timedDecision(config.timedHoldFloor);
-    }
-
-    final preAdjustment = input.preSuggesterAdjustment;
-    if (preAdjustment != null) {
-      why.add(preAdjustment.reason);
-      final next = switch (preAdjustment.kind) {
-        PreSuggesterAdjustmentKind.hold => lastHold,
-        PreSuggesterAdjustmentKind.fractionalDeload => _shiftHold(lastHold, -1),
-        PreSuggesterAdjustmentKind.stepUp => _shiftHold(
-          lastHold,
-          preAdjustment.steps.clamp(0, 1000),
-        ),
-      };
-      return _timedDecision(next);
-    }
-
-    final tier = layoffTierFor(days, config);
-    if (tier.changesLoad) {
-      final reason = layoffReason(tier);
-      if (reason != null) why.add(reason);
-      return _timedDecision(_shiftHold(lastHold, -1));
-    }
-    if (tier == LayoffTier.hold) {
-      why.add(ReasonCode.layoffTier1);
-      return _timedDecision(lastHold);
-    }
-
-    final level = history.reportedEffort;
-    if (level == null) {
-      why.add(ReasonCode.noFeedbackHold);
-      return _timedDecision(lastHold);
-    }
-    final report = interpretEffort(level, config);
+  LoadDecision _interpretHold(
+    InterpretedEffort report, {
+    required Duration lastHold,
+  }) {
     if (!supportsProgress(report)) {
       if (report.rpe >= 9) {
         why.add(ReasonCode.loadDecrease);
@@ -913,6 +960,12 @@ final class _Pass {
     if (shifted > config.timedHoldCeiling) return config.timedHoldCeiling;
     return shifted;
   }
+
+  LoadDecision _repsDecision(int reps) => _decision(
+    suggestion: RepOrDurationTarget.reps(reps),
+    targetReps: reps,
+    regime: ProgressionRegime.repsOnly,
+  );
 
   LoadDecision _timedDecision(Duration hold) => _decision(
     suggestion: RepOrDurationTarget.hold(hold),
@@ -961,25 +1014,13 @@ final class _Pass {
           ? 0
           : loads.stepsBetween(base, externalLoad),
       why: List<ReasonCode>.unmodifiable(why),
-      warnings: List<EngineWarning>.unmodifiable(warnings),
     );
   }
 
   Kg _stepAt(Kg load) {
     final step = loads.stepAt(load);
-    if (!step.isFinite || !step.isPositive) {
-      warnings.add(const EngineWarning(WarningCode.invalidEquipmentStep));
-      return config.loadTable(input.unitSystem).dumbbellStep;
-    }
+    assert(step.isFinite && step.isPositive);
     return step;
-  }
-
-  // ── Sanitizers: every one of these keeps the function total ────────────────
-
-  RepRange _sanitizedRange(RepRange range) {
-    if (range.min <= range.max) return range;
-    warnings.add(EngineWarning(WarningCode.invertedRepRange, '$range'));
-    return RepRange(range.max, range.min);
   }
 
   RepRange _prescribableWindow() =>
@@ -987,75 +1028,25 @@ final class _Pass {
       ? RepRange(config.isolationRestartRange.min, range.max)
       : range;
 
-  int _sanitizedTargetReps(int reps) {
-    if (window.contains(reps)) return reps;
-    warnings.add(
-      EngineWarning(WarningCode.targetRepsOutOfRange, '$reps not in $window'),
-    );
-    return window.clamp(reps);
-  }
+  /// Legacy events without prescription context use actual reps as their target;
+  /// a later plan may have a different window, so that real migration path clamps
+  /// here without treating it as malformed data.
+  int _targetReps(int reps) => window.clamp(reps);
 
-  int _sanitizedReps(int reps) {
-    if (reps >= 1) return reps;
-    warnings.add(EngineWarning(WarningCode.invalidReps, '$reps'));
-    return 1;
-  }
-
-  int _sanitizedDays() {
-    if (input.daysSinceLastSession >= 0) return input.daysSinceLastSession;
-    warnings.add(
-      EngineWarning(
-        WarningCode.negativeLayoff,
-        '${input.daysSinceLastSession}',
-      ),
-    );
-    return 0;
-  }
-
-  EffectiveLoad _sanitizedEffectiveLoad() {
-    var contribution = input.profile.bwContribution;
-    if (!contribution.isFinite || contribution < 0 || contribution > 1) {
-      warnings.add(
-        EngineWarning(WarningCode.bwContributionOutOfRange, '$contribution'),
-      );
-      contribution = contribution.isFinite ? contribution.clamp(0.0, 1.0) : 0.0;
-    }
+  EffectiveLoad _effectiveLoad() {
+    final contribution = input.profile.bwContribution;
+    assert(contribution.isFinite && contribution >= 0 && contribution <= 1);
     final bodyMass = input.bodyMass;
-    if (contribution == 0) return EffectiveLoad.externalOnly;
-    if (!bodyMass.isFinite || !bodyMass.isPositive) {
-      // No body mass: run on external load only. The ratio formula is
-      // scale-invariant in external load, so this degrades rather than breaks —
-      // the percentage guardrails just read tighter than they should.
-      warnings.add(
-        EngineWarning(WarningCode.invalidBodyMass, '${bodyMass.value}'),
-      );
+    if (contribution == 0 || bodyMass == null) {
       return EffectiveLoad.externalOnly;
     }
     return EffectiveLoad(bwContribution: contribution, bodyMass: bodyMass);
   }
 
-  Kg _sanitizedBaseLoad(Kg load) {
-    if (!load.isFinite) {
-      warnings.add(EngineWarning(WarningCode.nonFiniteLoad, '${load.value}'));
-      return loads.floor;
-    }
-    if (load < loads.floor) {
-      warnings.add(
-        EngineWarning(
-          WarningCode.loadBelowEquipmentFloor,
-          '${load.value} < ${loads.floor.value}',
-        ),
-      );
-      return loads.floor;
-    }
-    if (loads.isRepresentable(load)) return load;
-    final snapped = loads.snapDown(load);
-    warnings.add(
-      EngineWarning(
-        WarningCode.lastLoadNotRepresentable,
-        '${load.value} -> ${snapped.value}',
-      ),
-    );
-    return snapped;
+  Kg _baseLoad(Kg load) {
+    assert(load.isFinite);
+    // A user may edit a set to 3.7 kg. Equipment snapping is intentional
+    // normalization into the configured gym ladder, not error recovery.
+    return loads.snapDown(load);
   }
 }

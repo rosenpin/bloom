@@ -29,7 +29,7 @@ void main() {
                 );
                 final result = assemblePlan(
                   profile,
-                  const ProgrammingConfig(),
+                  ProgrammingConfig(),
                   catalogV1,
                 );
                 expect(
@@ -128,10 +128,7 @@ void main() {
   test('machine affinity is the rounded machine-variant fraction per day', () {
     for (final fixture in personaFixtures) {
       final plan = successfulPlan(fixture.profile);
-      final affinity = machineAffinityFor(
-        fixture.profile,
-        const ProgrammingConfig(),
-      );
+      final affinity = machineAffinityFor(fixture.profile, ProgrammingConfig());
       for (final day in plan.days) {
         final primaries = day.exercises
             .where((exercise) => exercise.blockRole.isPrimary)
@@ -163,11 +160,11 @@ void main() {
       experience: ProfileExperienceTier.beenAWhile,
       comfort: GymComfort.mostlyFine,
     );
-    const noMachines = ProgrammingConfig(
+    final noMachines = ProgrammingConfig(
       machineAffinityBeenAWhile: 0,
       machineAffinityMostlyFineComfort: 0,
     );
-    const allMachines = ProgrammingConfig(
+    final allMachines = ProgrammingConfig(
       machineAffinityBeenAWhile: 1,
       machineAffinityMostlyFineComfort: 0,
     );
@@ -330,10 +327,7 @@ void main() {
       MesocycleWeekKind.deload,
     ]);
     for (final slot in plan.days.expand((day) => day.exercises)) {
-      expect(
-        slot.doseByWeekKind.keys.toSet(),
-        MesocycleWeekKind.values.toSet(),
-      );
+      expect(slot.doseByWeekKind, isA<WeekDoses>());
       final build = slot.doseFor(MesocycleWeekKind.build);
       final easier = slot.doseFor(MesocycleWeekKind.easier);
       if (build case RepsDose(:final effort)) {
@@ -364,7 +358,7 @@ void main() {
     final profileChange = successfulPlan(profile.copyWith(mesocycleIndex: 2));
     final configChange = successfulPlan(
       profile,
-      config: const ProgrammingConfig(warmUpMinutes: 6),
+      config: ProgrammingConfig(warmUpMinutes: 6),
     );
     final contentChange = successfulPlan(
       profile,
@@ -384,7 +378,7 @@ void main() {
     test('never relaxes low-comfort intimidation gating', () {
       final result = assemblePlan(
         _profile(comfort: GymComfort.low),
-        const ProgrammingConfig(),
+        ProgrammingConfig(),
         _singleExerciseCatalog(intimidation: IntimidationTier.high),
       );
       expect(result, isA<Failure<Plan>>());
@@ -408,16 +402,12 @@ void main() {
         plan.warnings.map((warning) => warning.code),
         contains(WarningCode.experienceTierRelaxed),
       );
-      expect(
-        plan.warnings.map((warning) => warning.code),
-        isNot(contains(WarningCode.gymComfortRelaxed)),
-      );
     });
 
     test('never relaxes self-guided safety', () {
       final result = assemblePlan(
         _profile(),
-        const ProgrammingConfig(),
+        ProgrammingConfig(),
         _singleExerciseCatalog(safety: SafetyEligibility.instructorRequired),
       );
       expect(result, isA<Failure<Plan>>());
@@ -430,7 +420,7 @@ void main() {
     test('never relaxes hard age eligibility', () {
       final result = assemblePlan(
         _profile(age: AgeBand.age60Plus),
-        const ProgrammingConfig(),
+        ProgrammingConfig(),
         _singleExerciseCatalog(ageEligibility: AgeEligibility.under60),
       );
       expect(result, isA<Failure<Plan>>());
@@ -439,7 +429,7 @@ void main() {
     test('empty content is a genuinely unbuildable rich error', () {
       final result = assemblePlan(
         _profile(),
-        const ProgrammingConfig(),
+        ProgrammingConfig(),
         ContentCatalogData(
           contentVersion: 'empty',
           exercises: const <Exercise>[],
@@ -453,56 +443,33 @@ void main() {
       expect(error.affectedRoles, isNotEmpty);
     });
 
-    test(
-      'missing scheme configuration returns an error instead of throwing',
-      () {
-        final result = assemblePlan(
-          _profile(),
-          const ProgrammingConfig(repSchemes: <Goal, RepScheme>{}),
-          catalogV1,
-        );
-        expect(result, isA<Failure<Plan>>());
-        expect(
-          (result as Failure<Plan>).error.code,
-          PlanAssemblyErrorCode.missingRepSchemeConfiguration,
-        );
-      },
-    );
-
-    test('dangling swaps skip to same-role fallback candidates and warn', () {
+    test('dangling swaps are programmer errors after catalog validation', () {
       final baseExercises = catalogV1.exercises
           .where((exercise) => exercise.blockRole == BlockRole.lowerSquat)
           .toList(growable: false);
-      final plan = successfulPlan(
-        _profile(minutes: SessionMinutes.thirty),
-        config: const ProgrammingConfig(
-          machineAffinityBeenAWhile: 0,
-          machineAffinityMostlyFineComfort: 0,
-        ),
-        catalog: ContentCatalogData(
-          contentVersion: 'dangling-swap-fixture',
-          exercises: baseExercises,
-          swapEdges: const <SwapEdge>[
-            SwapEdge(
-              fromId: 'dumbbell-goblet-squat',
-              toId: 'missing',
-              tier: 1,
-              rank: 0,
-            ),
-          ],
-          rotatingBlockRoles: const <BlockRole>[],
-        ),
-      );
       expect(
-        plan.warnings.map((warning) => warning.code),
-        contains(WarningCode.danglingSwapSkipped),
+        () => successfulPlan(
+          _profile(minutes: SessionMinutes.thirty),
+          config: ProgrammingConfig(
+            machineAffinityBeenAWhile: 0,
+            machineAffinityMostlyFineComfort: 0,
+          ),
+          catalog: ContentCatalogData(
+            contentVersion: 'dangling-swap-fixture',
+            exercises: baseExercises,
+            swapEdges: const <SwapEdge>[
+              SwapEdge(
+                fromId: 'dumbbell-goblet-squat',
+                toId: 'missing',
+                tier: 1,
+                rank: 0,
+              ),
+            ],
+            rotatingBlockRoles: const <BlockRole>[],
+          ),
+        ),
+        throwsA(isA<AssertionError>()),
       );
-      final goblet = plan.days
-          .expand((day) => day.exercises)
-          .firstWhere(
-            (exercise) => exercise.exerciseId == 'dumbbell-goblet-squat',
-          );
-      expect(goblet.orderedSwapCandidates, isNotEmpty);
     });
   });
 }
@@ -545,6 +512,22 @@ ContentCatalog _singleExerciseCatalog({
       bwContribution: 0.65,
       targetMuscles: const [MuscleTarget.primary(MuscleGroup.quads)],
       primaryJointActions: const [JointAction.kneeExtension],
+      intimidationTier: intimidation,
+      minExperience: minimumExperience,
+      ageEligibility: ageEligibility,
+      safetyEligibility: safety,
+    ),
+    ExerciseData(
+      id: 'fallback-press',
+      name: 'Fallback Press',
+      slug: 'fallback-press',
+      blockRole: BlockRole.upperPush,
+      movementClass: MovementClass.compoundUpperPush,
+      metricType: MetricType.repsOnly,
+      resistanceEquipment: ResistanceEquipment.bodyweight,
+      bwContribution: 0.65,
+      targetMuscles: const [MuscleTarget.primary(MuscleGroup.chest)],
+      primaryJointActions: const [JointAction.horizontalPush],
       intimidationTier: intimidation,
       minExperience: minimumExperience,
       ageEligibility: ageEligibility,

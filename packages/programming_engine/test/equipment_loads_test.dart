@@ -21,7 +21,7 @@ typedef Ladder = ({
 
 void main() {
   group('§3 one step per equipment family', () {
-    const ladders = <Ladder>[
+    final ladders = <Ladder>[
       (
         rule: 'metric dumbbells: 2 kg steps from 2 kg',
         exercise: lateralRaise,
@@ -130,8 +130,9 @@ void main() {
       expect(loads.isRepresentable(const Kg(21)), isFalse);
     });
 
-    test('a nonsense override is ignored in favour of the family default', () {
-      const broken = ExerciseData(
+    test('a non-positive authored override is a content error', () {
+      final invalidStep = Kg(-5);
+      final exercise = ExerciseData(
         id: 'broken',
         name: 'Broken',
         blockRole: BlockRole.legIsolation,
@@ -139,11 +140,11 @@ void main() {
         metricType: MetricType.loadReps,
         resistanceEquipment: ResistanceEquipment.machine,
         bwContribution: 0,
-        loadStepOverride: Kg(-5),
+        loadStepOverride: invalidStep,
       );
       expect(
-        config.availableLoads(broken, UnitSystem.metric).smallestStep,
-        const Kg(5),
+        () => config.availableLoads(exercise, UnitSystem.metric),
+        throwsA(isA<AssertionError>()),
       );
     });
   });
@@ -170,14 +171,11 @@ void main() {
       expect(dumbbells.shift(const Kg(4), -10), const Kg(2));
     });
 
-    test(
-      'non-finite input is answered with the floor rather than an exception',
-      () {
-        expect(dumbbells.snapDown(const Kg(double.nan)), dumbbells.floor);
-        expect(dumbbells.snapDown(const Kg(double.infinity)), dumbbells.floor);
-        expect(dumbbells.isRepresentable(const Kg(double.nan)), isFalse);
-      },
-    );
+    test('non-finite snapping input violates the validated-load contract', () {
+      final invalid = Kg(double.nan);
+      expect(() => dumbbells.snapDown(invalid), throwsA(isA<AssertionError>()));
+      expect(dumbbells.isRepresentable(invalid), isFalse);
+    });
 
     test('shift and stepsBetween are inverses', () {
       for (final steps in <int>[-2, -1, 0, 1, 2, 5]) {
@@ -198,7 +196,11 @@ void main() {
     });
 
     test('a ceiling stops the ladder where the rack does', () {
-      const rack = ArithmeticLoads(floor: Kg(2), step: Kg(2), ceiling: Kg(10));
+      final rack = ArithmeticLoads(
+        floor: const Kg(2),
+        step: const Kg(2),
+        ceiling: const Kg(10),
+      );
       expect(rack.snapDown(const Kg(30)), const Kg(10));
       expect(rack.shift(const Kg(10), 3), const Kg(10));
       expect(rack.isRepresentable(const Kg(12)), isFalse);
@@ -253,12 +255,11 @@ void main() {
       expect(rack.stepsBetween(const Kg(5), const Kg(10)), 3);
     });
 
-    test('a degenerate inventory still answers every question', () {
-      final single = ExplicitLoads(const [Kg.zero]);
-      expect(single.floor, Kg.zero);
-      expect(single.snapDown(const Kg(50)), Kg.zero);
-      expect(single.shift(Kg.zero, 4), Kg.zero);
-      expect(single.stepAt(Kg.zero), Kg.zero);
+    test('an inventory needs enough values to define a positive step', () {
+      expect(
+        () => ExplicitLoads(const [Kg.zero]),
+        throwsA(isA<AssertionError>()),
+      );
     });
   });
 

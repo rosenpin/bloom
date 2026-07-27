@@ -34,24 +34,30 @@ Future<StoredPlanDocument> storeSessionTestPlan(
 }
 
 engine.Plan sessionTestPlan() {
-  final doses = <engine.MesocycleWeekKind, engine.Dose>{
-    for (final kind in engine.MesocycleWeekKind.values)
-      kind: const engine.RepsDose(
-        sets: 2,
-        range: engine.RepRange(10, 12),
-        effort: engine.EffortTarget.rpe7,
-        targetReps: 10,
-      ),
-  };
-  final isolationDoses = <engine.MesocycleWeekKind, engine.Dose>{
-    for (final kind in engine.MesocycleWeekKind.values)
-      kind: const engine.RepsDose(
-        sets: 2,
-        range: engine.RepRange(10, 15),
-        effort: engine.EffortTarget.rpe7,
-        targetReps: 10,
-      ),
-  };
+  const dose = engine.RepsDose(
+    sets: 2,
+    range: engine.RepRange(10, 12),
+    effort: engine.EffortTarget.rpe7,
+    targetReps: 10,
+  );
+  const isolationDose = engine.RepsDose(
+    sets: 2,
+    range: engine.RepRange(10, 15),
+    effort: engine.EffortTarget.rpe7,
+    targetReps: 10,
+  );
+  const doses = engine.WeekDoses(
+    build: dose,
+    easier: dose,
+    push: dose,
+    deload: dose,
+  );
+  const isolationDoses = engine.WeekDoses(
+    build: isolationDose,
+    easier: isolationDose,
+    push: isolationDose,
+    deload: isolationDose,
+  );
   return engine.Plan(
     mesocycleIndex: 1,
     stamps: const engine.PlanStamps(

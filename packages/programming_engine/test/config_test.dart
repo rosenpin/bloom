@@ -80,22 +80,10 @@ void main() {
       });
     }
 
-    test('every goal has a scheme, and an unknown goal still gets one', () {
+    test('every goal has an explicitly authored scheme', () {
       for (final goal in Goal.values) {
         expect(config.repSchemes[goal], isNotNull, reason: goal.name);
       }
-      const bare = ProgrammingConfig(
-        repSchemes: {
-          Goal.tonedAndDefined: RepScheme(
-            minSets: 3,
-            maxSets: 3,
-            range: RepRange(10, 12),
-            effort: EffortTarget.rpe7,
-            rest: Duration(seconds: 75),
-          ),
-        },
-      );
-      expect(bare.schemeFor(Goal.stronger).range, const RepRange(10, 12));
     });
 
     test('build curves is exactly the toned scheme', () {
@@ -294,7 +282,7 @@ void main() {
       expect(
         machineAffinityFor(
           profile(),
-          const ProgrammingConfig(
+          ProgrammingConfig(
             machineAffinityNewToIt: 0.8,
             machineAffinityLowComfort: 0.8,
           ),
@@ -362,17 +350,10 @@ void main() {
     );
   });
 
-  test(
-    'the shipped config is const and shared, so a decision is reproducible',
-    () {
-      expect(
-        const ProgrammingConfig().maxChangeFraction,
-        const ProgrammingConfig().maxChangeFraction,
-      );
-      expect(
-        identical(const ProgrammingConfig(), const ProgrammingConfig()),
-        isTrue,
-      );
-    },
-  );
+  test('independent shipped configs carry the same decision values', () {
+    expect(
+      ProgrammingConfig().maxChangeFraction,
+      ProgrammingConfig().maxChangeFraction,
+    );
+  });
 }

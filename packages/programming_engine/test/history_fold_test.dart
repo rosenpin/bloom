@@ -10,7 +10,7 @@ void main() {
           _record(
             id: 's1',
             date: DateTime.utc(2026, 1, 5),
-            events: const [
+            events: [
               SetCompleted(
                 exerciseId: 'squat',
                 setIndex: 0,
@@ -32,7 +32,7 @@ void main() {
           _record(
             id: 's2',
             date: DateTime.utc(2026, 1, 8),
-            events: const [
+            events: [
               SetCompleted(
                 exerciseId: 'squat',
                 setIndex: 0,
@@ -91,7 +91,7 @@ void main() {
               _record(
                 id: 'prescribed',
                 date: DateTime.utc(2026, 1, 5),
-                events: const [
+                events: [
                   SetCompleted(
                     exerciseId: 'squat',
                     setIndex: 0,
@@ -173,7 +173,7 @@ void main() {
         final abandoned = _record(
           id: 's2',
           date: DateTime.utc(2026, 1, 8),
-          events: const [
+          events: [
             SetCompleted(
               exerciseId: 'squat',
               setIndex: 0,
@@ -201,9 +201,7 @@ void main() {
         _record(
           id: 's3',
           date: DateTime.utc(2026, 1, 12),
-          events: const [
-            PainReported(exerciseId: 'squat', site: PainSite.knee),
-          ],
+          events: [PainReported(exerciseId: 'squat', site: PainSite.knee)],
         ),
       ];
       final all = foldTrainingHistory(

@@ -21,7 +21,7 @@ void main() {
       'updated_at',
     )
     ..writeln(') values (')
-    ..writeln("  true, '0.1.0', '0.1.0', null, '${_updatedAt}'::timestamptz")
+    ..writeln("  true, '0.1.0', '0.1.0', null, '$_updatedAt'::timestamptz")
     ..writeln(')')
     ..writeln('on conflict (id) do update set')
     ..writeln('  recommended_version = excluded.recommended_version,')
@@ -188,7 +188,7 @@ void _writeUpsert(
   final mutableColumns = columns
       .where((column) => !conflictColumns.contains(column))
       .toList(growable: false);
-  output..writeln('on conflict (${conflictColumns.join(', ')}) do update set');
+  output.writeln('on conflict (${conflictColumns.join(', ')}) do update set');
   for (var index = 0; index < mutableColumns.length; index++) {
     final column = mutableColumns[index];
     output

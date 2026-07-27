@@ -2,7 +2,7 @@ import 'package:programming_engine/programming_engine.dart';
 import 'package:test/test.dart';
 
 void main() {
-  const config = ProgrammingConfig();
+  final config = ProgrammingConfig();
   final start = DateTime.utc(2026, 1, 5);
   final standardDates = _standardDates(start);
 
@@ -232,7 +232,7 @@ void main() {
   });
 
   test('assisted-stack journey golden moves toward zero and never crosses', () {
-    const assistedConfig = ProgrammingConfig(
+    final assistedConfig = ProgrammingConfig(
       metricLoads: EquipmentLoadTable(
         barbellBar: Kg(20),
         barbellUpperStep: Kg(2.5),
@@ -490,18 +490,18 @@ PlanExercise _planExercise(
     rotatesAcrossMesocycles: false,
     rotationCandidateIds: const <String>[],
     orderedSwapCandidates: const <PlanSwapCandidate>[],
-    doseByWeekKind: {
-      MesocycleWeekKind.build: dose(scheme.maxSets, scheme.effort),
-      MesocycleWeekKind.easier: dose(
+    doseByWeekKind: WeekDoses(
+      build: dose(scheme.maxSets, scheme.effort),
+      easier: dose(
         (scheme.maxSets + config.easierWeekSetsDelta).clamp(1, scheme.maxSets),
         scheme.effort.easierBy(config.easierWeekRpeDelta.abs()),
       ),
-      MesocycleWeekKind.push: dose(scheme.maxSets, scheme.effort),
-      MesocycleWeekKind.deload: dose(
+      push: dose(scheme.maxSets, scheme.effort),
+      deload: dose(
         scheme.maxSets,
         scheme.effort.easierBy(config.deloadWeekRpeDelta.abs()),
       ),
-    },
+    ),
     repRange: range,
   );
 }

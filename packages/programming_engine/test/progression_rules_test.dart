@@ -246,7 +246,7 @@ void main() {
       // One rep or RPE point is worth 2.0–2.9% in our rep ranges, so the shipped 2%
       // deadband almost never binds on integer inputs. Widened here to pin the
       // mechanism rather than the coincidence.
-      config: const ProgrammingConfig(deadbandFraction: 0.05),
+      config: ProgrammingConfig(deadbandFraction: 0.05),
       input: inputFor(
         legPress,
         range: compoundRange,
@@ -876,7 +876,6 @@ void main() {
             containsAll(testRow.why),
             reason: 'why: $decision',
           );
-          expect(decision.warnings, isEmpty, reason: 'warnings: $decision');
           testRow.also?.call(decision);
         });
       }

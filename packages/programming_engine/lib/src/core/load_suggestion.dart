@@ -35,15 +35,15 @@ final class BodyweightOnly extends LoadSuggestion {
   final Kg added;
 
   @override
-  bool operator ==(Object other) => other is BodyweightOnly && other.added == added;
+  bool operator ==(Object other) =>
+      other is BodyweightOnly && other.added == added;
 
   @override
   int get hashCode => added.hashCode;
 
   @override
-  String toString() => added.isZero
-      ? 'BodyweightOnly()'
-      : 'BodyweightOnly(+${added.value}kg)';
+  String toString() =>
+      added.isZero ? 'BodyweightOnly()' : 'BodyweightOnly(+${added.value}kg)';
 }
 
 /// First exposure: there is no prior (load, reps, effort) triple, so the §7 probe
@@ -59,20 +59,21 @@ final class NeedsCalibration extends LoadSuggestion {
 
   @override
   bool operator ==(Object other) =>
-      other is NeedsCalibration && other.floor == floor && other.probeReps == probeReps;
+      other is NeedsCalibration &&
+      other.floor == floor &&
+      other.probeReps == probeReps;
 
   @override
   int get hashCode => Object.hash(floor, probeReps);
 
   @override
-  String toString() => 'NeedsCalibration(floor: ${floor.value}kg, $probeReps reps)';
+  String toString() =>
+      'NeedsCalibration(floor: ${floor.value}kg, $probeReps reps)';
 }
 
 /// Bodyweight and timed movements: the progression *is* the rep count or the hold.
 final class RepOrDurationTarget extends LoadSuggestion {
-  const RepOrDurationTarget.reps(this.reps)
-      : hold = null,
-        assert(reps >= 1);
+  const RepOrDurationTarget.reps(this.reps) : hold = null, assert(reps >= 1);
 
   const RepOrDurationTarget.hold(Duration this.hold) : reps = 1;
 

@@ -72,25 +72,28 @@ void main() {
     }
 
     test('the levels are ordered 1..5 easiest to hardest', () {
-      expect(
-        EffortLevel.values.map((l) => l.value),
-        <int>[1, 2, 3, 4, 5],
-      );
+      expect(EffortLevel.values.map((l) => l.value), <int>[1, 2, 3, 4, 5]);
       final rirs = EffortLevel.values
           .map((level) => interpretEffort(level, config).rir)
           .toList();
       for (var i = 1; i < rirs.length; i++) {
-        expect(rirs[i], lessThan(rirs[i - 1]), reason: 'RIR must fall monotonically');
+        expect(
+          rirs[i],
+          lessThan(rirs[i - 1]),
+          reason: 'RIR must fall monotonically',
+        );
       }
     });
 
-    test('§4 interpreted RIR is clamped at 5 — the scale is meaningless beyond that',
-        () {
-      expect(config.maxInterpretedRir, 5);
-      for (final level in EffortLevel.values) {
-        expect(interpretEffort(level, config).rir, lessThanOrEqualTo(5));
-      }
-    });
+    test(
+      '§4 interpreted RIR is clamped at 5 — the scale is meaningless beyond that',
+      () {
+        expect(config.maxInterpretedRir, 5);
+        for (final level in EffortLevel.values) {
+          expect(interpretEffort(level, config).rir, lessThanOrEqualTo(5));
+        }
+      },
+    );
 
     test('only "way too easy" triggers the §4.1 calibration regime', () {
       for (final level in EffortLevel.values) {
@@ -118,31 +121,22 @@ void main() {
       }
     });
 
-    test('decoding a level from the log is total', () {
+    test('boundary lookup accepts only the stored 1–5 vocabulary', () {
       expect(EffortLevel.fromValue(3), EffortLevel.justRight);
       expect(EffortLevel.fromValue(0), isNull);
       expect(EffortLevel.fromValue(6), isNull);
       expect(EffortLevel.fromValue(-1), isNull);
-      expect(EffortLevel.clampFromValue(0), EffortLevel.wayTooEasy);
-      expect(EffortLevel.clampFromValue(99), EffortLevel.tooHard);
-      expect(
-        EffortReported.fromLevelValue(exerciseId: 'x', level: 7),
-        isNull,
-      );
-      expect(
-        EffortReported.fromLevelValue(exerciseId: 'x', level: 5),
-        const EffortReported(exerciseId: 'x', level: EffortLevel.tooHard),
-      );
     });
 
-    test('a config missing a level still maps it (total by construction)', () {
-      const sparse = ProgrammingConfig(
+    test('a config missing an effort level is a programmer error', () {
+      const invalidConfig = ProgrammingConfig(
         reportedRpeByLevel: {EffortLevel.justRight: 7},
         rpeBandByLevel: {EffortLevel.justRight: RpeBand(7, 7)},
       );
-      final interpreted = interpretEffort(EffortLevel.tooHard, sparse);
-      expect(interpreted.rir, 1);
-      expect(interpreted.band, const RpeBand(9, 9));
+      expect(
+        () => interpretEffort(EffortLevel.tooHard, invalidConfig),
+        throwsA(isA<AssertionError>()),
+      );
     });
   });
 

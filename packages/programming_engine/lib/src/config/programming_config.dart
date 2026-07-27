@@ -95,8 +95,8 @@ final class RepScheme {
       'rest ${rest.inSeconds}s)';
 }
 
-/// The tuning surface. Construct `const ProgrammingConfig()` for the shipped
-/// defaults; override named fields in tests to probe a rule.
+/// The tuning surface. Construct [ProgrammingConfig] for the shipped defaults;
+/// override named fields in tests to probe a rule.
 final class ProgrammingConfig {
   const ProgrammingConfig({
     this.repSchemes = _defaultRepSchemes,
@@ -160,7 +160,63 @@ final class ProgrammingConfig {
     this.seatedPreferenceAge = 60,
     this.reportedRpeByLevel = _defaultReportedRpe,
     this.rpeBandByLevel = _defaultRpeBands,
-  });
+  }) : assert(mesocycleWeeks >= 1),
+       assert(easierWeekIndex >= 1 && easierWeekIndex <= mesocycleWeeks),
+       assert(deloadWeekIndex >= 1 && deloadWeekIndex <= mesocycleWeeks),
+       assert(easierWeekSetsDelta <= 0),
+       assert(easierWeekRpeDelta <= 0),
+       assert(deloadWeekRpeDelta <= 0),
+       assert(deloadWeekLoadFraction > 0 && deloadWeekLoadFraction < 1),
+       assert(newMesocycleStepUp > 0),
+       assert(layoffTier1Days > 0),
+       assert(layoffTier2Days > layoffTier1Days),
+       assert(layoffTier3Days > layoffTier2Days),
+       assert(layoffTier2LoadFraction > 0 && layoffTier2LoadFraction < 1),
+       assert(
+         layoffTier3LoadFraction > 0 &&
+             layoffTier3LoadFraction < layoffTier2LoadFraction,
+       ),
+       assert(calibrationProbeReps > 0),
+       assert(calibrationMaxTestSets > 0),
+       assert(calibrationProbeStepJump > 0),
+       assert(lowerBodyMachineProbeJumpMin > 0),
+       assert(lowerBodyMachineProbeJumpMax >= lowerBodyMachineProbeJumpMin),
+       assert(calibrationMinCleanReps > 0),
+       assert(
+         calibrationMaxIncreaseFraction > 0 &&
+             calibrationMaxIncreaseFraction < 1,
+       ),
+       assert(calibrationMaxSteps > 0),
+       assert(maxChangeFraction > 0 && maxChangeFraction < 1),
+       assert(maxStepsPerAdjustment > 0),
+       assert(deadbandFraction > 0 && deadbandFraction < 1),
+       assert(loadFractionPerRep > 0 && loadFractionPerRep < 1),
+       assert(minIncrementStepFraction > 0 && minIncrementStepFraction <= 1),
+       assert(epleyConstant > 0),
+       assert(stallSessions > 0),
+       assert(stallDeloadFraction > 0 && stallDeloadFraction < 1),
+       assert(missedBottomDropFraction > 0 && missedBottomDropFraction < 1),
+       assert(lowEnergyLoadFraction > 0 && lowEnergyLoadFraction < 1),
+       assert(bodyweightRepStep > 0),
+       assert(warmUpMinutes > 0),
+       assert(olderWarmUpMinutes >= warmUpMinutes),
+       assert(machineAffinityNewToIt >= 0 && machineAffinityNewToIt <= 1),
+       assert(machineAffinityBeenAWhile >= 0 && machineAffinityBeenAWhile <= 1),
+       assert(
+         machineAffinityTrainsRegularly >= 0 &&
+             machineAffinityTrainsRegularly <= 1,
+       ),
+       assert(machineAffinityAge50To59 >= 0 && machineAffinityAge50To59 <= 1),
+       assert(machineAffinityAge60Plus >= 0 && machineAffinityAge60Plus <= 1),
+       assert(machineAffinityLowComfort >= 0 && machineAffinityLowComfort <= 1),
+       assert(
+         machineAffinityMostlyFineComfort >= 0 &&
+             machineAffinityMostlyFineComfort <= 1,
+       ),
+       assert(
+         machineAffinityTotallyAtHomeComfort >= 0 &&
+             machineAffinityTotallyAtHomeComfort <= 1,
+       );
 
   // ── §2 Rep/set schemes by goal ─────────────────────────────────────────────
   final Map<Goal, RepScheme> repSchemes;
@@ -337,8 +393,15 @@ final class ProgrammingConfig {
   /// The scheme for [goal], with the novice cap applied when she is inside her
   /// first [noviceWeeks] weeks of training.
   RepScheme schemeFor(Goal goal, {int weeksTrained = 999}) {
-    final scheme = repSchemes[goal] ?? repSchemes[Goal.tonedAndDefined]!;
-    return weeksTrained < noviceWeeks ? scheme.cappedForNovice(this) : scheme;
+    final scheme = repSchemes[goal];
+    assert(scheme != null, 'missing rep scheme for ${goal.name}');
+    return weeksTrained < noviceWeeks ? scheme!.cappedForNovice(this) : scheme!;
+  }
+
+  void assertTimedDoseConfiguration() {
+    assert(timedHoldFloor > Duration.zero);
+    assert(timedHoldStep > Duration.zero);
+    assert(timedHoldCeiling >= timedHoldFloor);
   }
 
   /// Isolation and single-side work override the goal's rep range (§3).
@@ -418,7 +481,7 @@ final class ProgrammingConfig {
 
   /// §3 metric market: 20 kg bar, 2.5/5 kg bar steps, 2 kg dumbbell steps,
   /// 5 kg machine pins, 2.5 kg cable pins.
-  static const EquipmentLoadTable _metricLoads = EquipmentLoadTable(
+  static const EquipmentLoadTable _metricLoads = EquipmentLoadTable.trusted(
     barbellBar: Kg(20),
     barbellUpperStep: Kg(2.5),
     barbellLowerStep: Kg(5),
@@ -436,7 +499,7 @@ final class ProgrammingConfig {
 
   /// §3 imperial market: 45 lb bar, 5/10 lb bar steps, **5 lb dumbbell steps**,
   /// 10 lb machine pins, 5 lb cable pins. Stored in kg like everything else.
-  static const EquipmentLoadTable _imperialLoads = EquipmentLoadTable(
+  static const EquipmentLoadTable _imperialLoads = EquipmentLoadTable.trusted(
     barbellBar: Kg(45 * kgPerLb),
     barbellUpperStep: Kg(5 * kgPerLb),
     barbellLowerStep: Kg(10 * kgPerLb),

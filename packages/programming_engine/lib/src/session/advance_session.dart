@@ -131,12 +131,6 @@ final class _SessionReducer {
         reason: ReasonCode.missedBottomSameSessionDrop,
       );
       prescription = adjustment.prescription;
-      nextState = nextState.copyWith(
-        warnings: <EngineWarning>[
-          ...nextState.warnings,
-          ...adjustment.warnings,
-        ],
-      );
       nextState = _withReason(
         nextState,
         ReasonCode.missedBottomSameSessionDrop,
@@ -284,13 +278,7 @@ final class _SessionReducer {
       tier: candidate.tier,
       reason: event.reason,
     );
-    var nextState = _replaceEntry(
-      state.copyWith(
-        warnings: <EngineWarning>[...state.warnings, ...resolution.warnings],
-      ),
-      index,
-      replacement,
-    );
+    var nextState = _replaceEntry(state, index, replacement);
     nextState = nextState.copyWith(
       pendingPlanEditSuggestions: <PendingPlanEditSuggestion>[
         ...nextState.pendingPlanEditSuggestions.where(
@@ -366,7 +354,6 @@ final class _SessionReducer {
       );
     }
     final exercises = <SessionExerciseEntry>[];
-    final warnings = <EngineWarning>[...state.warnings];
     for (final entry in state.exercises) {
       if (!entry.isUnstarted ||
           entry.status == SessionExerciseStatus.removed ||
@@ -399,13 +386,11 @@ final class _SessionReducer {
           reason: ReasonCode.lowEnergyApplied,
         );
         prescription = adjustment.prescription;
-        warnings.addAll(adjustment.warnings);
       }
       exercises.add(entry.copyWith(prescription: prescription));
     }
     var nextState = state.copyWith(
       exercises: exercises,
-      warnings: warnings,
       lowEnergyWasApplied: true,
     );
     nextState = _withReason(nextState, ReasonCode.lowEnergyApplied);
@@ -621,9 +606,6 @@ Kg _nextCalibrationProbe(
   UnitSystem unitSystem,
 ) {
   final loads = config.availableLoads(profile, unitSystem);
-  if (!loads.smallestStep.isFinite || !loads.smallestStep.isPositive) {
-    return current;
-  }
   final isLowerBodyMachine =
       profile.resistanceEquipment == ResistanceEquipment.machine &&
       profile.movementClass.isLowerBody;
@@ -631,11 +613,7 @@ Kg _nextCalibrationProbe(
     return loads.shift(current, config.calibrationProbeStepJump);
   }
 
-  var jump = config.lowerBodyMachineProbeJumpMax;
-  if (!jump.isFinite || jump < config.lowerBodyMachineProbeJumpMin) {
-    jump = config.lowerBodyMachineProbeJumpMin;
-  }
-  if (!jump.isFinite || jump <= 0) jump = 0.5;
+  final jump = config.lowerBodyMachineProbeJumpMax;
   final target = current * (1 + jump);
   var snapped = loads.snapDown(target);
   if (snapped <= current) snapped = loads.shift(current, 1);
@@ -650,9 +628,7 @@ _ResolvedPrescription _fractionalAdjustment(
   required ReasonCode reason,
 }) {
   final dose = entry.prescription.dose;
-  final range = dose is RepsDose
-      ? dose.range
-      : entry.planExercise.repRange ?? const RepRange(8, 12);
+  final range = dose is RepsDose ? dose.range : const RepRange(1, 1);
   final effort = dose is RepsDose ? dose.effort : const EffortTarget(7);
   final targetReps = dose is RepsDose ? dose.targetReps : range.min;
   final decision = LoadSuggester(state.config).suggest(
@@ -666,7 +642,7 @@ _ResolvedPrescription _fractionalAdjustment(
         lastReps: targetReps,
         targetReps: targetReps,
       ),
-      bodyMass: state.bodyMass,
+      bodyMass: state.bodyMass.isPositive ? state.bodyMass : null,
       preSuggesterAdjustment: PreSuggesterAdjustment.fractionalDeload(
         reason: reason,
         loadFraction: fraction,
@@ -685,7 +661,6 @@ _ResolvedPrescription _fractionalAdjustment(
       bridge: decision.bridge ?? entry.prescription.bridge,
       why: _mergeReasons(entry.prescription.why, decision.why),
     ),
-    warnings: decision.warnings,
   );
 }
 
@@ -693,21 +668,8 @@ _ResolvedPrescription _prescribeCandidate(
   SessionState state,
   PlanSwapCandidate candidate,
 ) {
-  var dose =
-      candidate.doseFor(state.weekKind) ??
-      candidate.doseFor(MesocycleWeekKind.build) ??
-      candidate.doseByWeekKind.values.firstOrNull ??
-      (candidate.metricType == MetricType.timed
-          ? TimedDose(sets: 1, hold: state.config.timedHoldFloor)
-          : RepsDose(
-              sets: 1,
-              range: candidate.repRange ?? const RepRange(8, 12),
-              effort: const EffortTarget(7),
-              targetReps: (candidate.repRange ?? const RepRange(8, 12)).min,
-            ));
-  final range = dose is RepsDose
-      ? dose.range
-      : candidate.repRange ?? const RepRange(8, 12);
+  var dose = candidate.doseFor(state.weekKind);
+  final range = dose is RepsDose ? dose.range : const RepRange(1, 1);
   final decision = LoadSuggester(state.config).suggest(
     ProgressionInput(
       profile: candidate,
@@ -717,7 +679,7 @@ _ResolvedPrescription _prescribeCandidate(
       history: state.historySnapshot
           .exercise(candidate.exerciseId)
           .asProgressionSnapshot(),
-      bodyMass: state.bodyMass,
+      bodyMass: state.bodyMass.isPositive ? state.bodyMass : null,
       daysSinceLastSession: state.daysSinceLastSession ?? 0,
     ),
   );
@@ -737,14 +699,10 @@ _ResolvedPrescription _prescribeCandidate(
         ReasonCode.swapApplied,
       ]),
     ),
-    warnings: decision.warnings,
   );
 }
 
-typedef _ResolvedPrescription = ({
-  ExercisePrescription prescription,
-  List<EngineWarning> warnings,
-});
+typedef _ResolvedPrescription = ({ExercisePrescription prescription});
 
 PlanExercise _candidatePlanExercise(
   SessionExerciseEntry source,
@@ -773,14 +731,14 @@ PlanExercise _candidatePlanExercise(
 );
 
 int _exerciseTargetForMinutes(int minutes, ProgrammingConfig config) {
-  if (config.exerciseCountByMinutes.isEmpty) return 0;
+  assert(config.exerciseCountByMinutes.isNotEmpty);
   final keys = config.exerciseCountByMinutes.keys.toList(growable: false)
     ..sort();
   var selected = keys.first;
   for (final key in keys) {
     if (key <= minutes) selected = key;
   }
-  return config.exerciseCountByMinutes[selected] ?? 0;
+  return config.exerciseCountByMinutes[selected]!;
 }
 
 Kg? _loadFromSuggestion(LoadSuggestion suggestion) => switch (suggestion) {
@@ -789,10 +747,3 @@ Kg? _loadFromSuggestion(LoadSuggestion suggestion) => switch (suggestion) {
   NeedsCalibration(:final floor) => floor,
   RepOrDurationTarget() => null,
 };
-
-extension<T> on Iterable<T> {
-  T? get firstOrNull {
-    final iterator = this.iterator;
-    return iterator.moveNext() ? iterator.current : null;
-  }
-}

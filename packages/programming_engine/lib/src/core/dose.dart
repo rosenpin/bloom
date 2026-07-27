@@ -9,10 +9,7 @@ import 'effort.dart';
 /// An inclusive rep window. Double progression climbs it, then the load steps and
 /// the reps reset to [min].
 final class RepRange {
-  /// Inversion is *not* asserted away: rep ranges arrive from stored plans and
-  /// synced rows, so the engine tolerates and warns about `RepRange(12, 8)` rather
-  /// than crashing between sets. See `LoadSuggester`'s sanitizers.
-  const RepRange(this.min, this.max) : assert(min >= 1 && max >= 1);
+  const RepRange(this.min, this.max) : assert(min >= 1 && max >= min);
 
   final int min;
   final int max;
@@ -48,7 +45,8 @@ final class RepsDose extends Dose {
     required this.range,
     required this.effort,
     required this.targetReps,
-  }) : assert(sets >= 1);
+  }) : assert(sets >= 1),
+       assert(targetReps >= 1);
 
   final RepRange range;
   final EffortTarget effort;
@@ -57,13 +55,17 @@ final class RepsDose extends Dose {
   /// formula's `targetReps`.
   final int targetReps;
 
-  RepsDose copyWith({int? sets, RepRange? range, EffortTarget? effort, int? targetReps}) =>
-      RepsDose(
-        sets: sets ?? this.sets,
-        range: range ?? this.range,
-        effort: effort ?? this.effort,
-        targetReps: targetReps ?? this.targetReps,
-      );
+  RepsDose copyWith({
+    int? sets,
+    RepRange? range,
+    EffortTarget? effort,
+    int? targetReps,
+  }) => RepsDose(
+    sets: sets ?? this.sets,
+    range: range ?? this.range,
+    effort: effort ?? this.effort,
+    targetReps: targetReps ?? this.targetReps,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -82,7 +84,8 @@ final class RepsDose extends Dose {
 
 /// Timed work (planks). Nothing to resolve into a load.
 final class TimedDose extends Dose {
-  const TimedDose({required super.sets, required this.hold}) : assert(sets >= 1);
+  const TimedDose({required super.sets, required this.hold})
+    : assert(sets >= 1);
 
   final Duration hold;
 

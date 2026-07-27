@@ -51,7 +51,7 @@ sealed class SessionEvent {
 /// A set she finished. [load] is the canonical kg actually used; [unitSystem] is
 /// the market in force at entry, so replay never double-rounds.
 final class SetCompleted extends SessionEvent {
-  const SetCompleted({
+  SetCompleted({
     required this.exerciseId,
     required this.setIndex,
     required this.load,
@@ -61,9 +61,17 @@ final class SetCompleted extends SessionEvent {
     this.targetRpe,
     this.prescribedLoad,
   }) : assert(setIndex >= 0),
-       assert(reps >= 0),
+       assert(
+         load.value > double.negativeInfinity && load.value < double.infinity,
+       ),
+       assert(reps >= 1),
        assert(targetReps == null || targetReps >= 1),
-       assert(targetRpe == null || (targetRpe >= 1 && targetRpe <= 10));
+       assert(targetRpe == null || (targetRpe >= 1 && targetRpe <= 10)),
+       assert(
+         prescribedLoad == null ||
+             (prescribedLoad.value > double.negativeInfinity &&
+                 prescribedLoad.value < double.infinity),
+       );
 
   final String exerciseId;
 
@@ -118,18 +126,6 @@ final class SetCompleted extends SessionEvent {
 /// never blocking.
 final class EffortReported extends SessionEvent {
   const EffortReported({required this.exerciseId, required this.level});
-
-  /// Decodes a raw 1..5 from the UI or the log. Returns `null` for anything else
-  /// rather than throwing.
-  static EffortReported? fromLevelValue({
-    required String exerciseId,
-    required int level,
-  }) {
-    final decoded = EffortLevel.fromValue(level);
-    return decoded == null
-        ? null
-        : EffortReported(exerciseId: exerciseId, level: decoded);
-  }
 
   final String exerciseId;
   final EffortLevel level;

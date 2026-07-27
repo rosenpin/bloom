@@ -4,13 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:programming_engine/programming_engine.dart' as engine;
 import 'package:womens_gym/core/providers.dart';
 import 'package:womens_gym/data/db/app_database.dart';
+import 'package:womens_gym/data/db/schema.dart';
+import 'package:womens_gym/features/session/data/exercise_content_repository.dart';
 import 'package:womens_gym/features/session/data/session_event_codec.dart';
 
 import 'support/session_test_support.dart';
 
 void main() {
   test('every engine event round-trips through the Drift payload mapping', () {
-    const events = <engine.SessionEvent>[
+    final events = <engine.SessionEvent>[
       engine.SetCompleted(
         exerciseId: 'dumbbell-goblet-squat',
         setIndex: 1,
@@ -50,6 +52,72 @@ void main() {
       expect(decoded, event);
     }
   });
+
+  test('stored event garbage has one boundary decode error', () {
+    final invalidPayloads = <(StoredSessionEventType, String)>[
+      (
+        StoredSessionEventType.setCompleted,
+        '{"exerciseId":"squat","setIndex":0,"loadKg":1e999,"reps":8}',
+      ),
+      (
+        StoredSessionEventType.setCompleted,
+        '{"exerciseId":"squat","setIndex":0,"loadKg":10,"reps":0}',
+      ),
+      (
+        StoredSessionEventType.effortReported,
+        '{"exerciseId":"squat","level":0}',
+      ),
+      (
+        StoredSessionEventType.swapRequested,
+        '{"exerciseId":"squat","reason":"surprise"}',
+      ),
+      (
+        StoredSessionEventType.painReported,
+        '{"exerciseId":"squat","site":"surprise"}',
+      ),
+    ];
+
+    for (final (type, payloadJson) in invalidPayloads) {
+      expect(
+        () => SessionEventCodec.decodePayload(
+          type: type,
+          payloadJson: payloadJson,
+          unitSystemAtEntry: engine.UnitSystem.metric,
+        ),
+        throwsA(isA<SessionEventDecodeError>()),
+      );
+    }
+  });
+
+  test(
+    'content seeding rejects a dangling swap at the load boundary',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final source = engine.catalogV1.exercises.first;
+      final invalidCatalog = engine.ContentCatalogData(
+        contentVersion: 'invalid-test-catalog',
+        exercises: [source],
+        swapEdges: [
+          engine.SwapEdge(
+            fromId: source.id,
+            toId: 'missing-exercise',
+            tier: 1,
+            rank: 0,
+          ),
+        ],
+        rotatingBlockRoles: const [],
+      );
+      expect(
+        () => ExerciseContentSeeder(
+          database,
+          invalidCatalog,
+          () => DateTime.utc(2026, 7, 27),
+        ),
+        throwsA(isA<ContentCatalogLoadError>()),
+      );
+    },
+  );
 
   test(
     'stored lifecycle events are exactly the events replayed and folded',

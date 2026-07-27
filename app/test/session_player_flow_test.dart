@@ -260,7 +260,7 @@ final class _SessionHarness {
             completedAt: Value(startedAt.add(const Duration(minutes: 30))),
           ),
         );
-    const event = engine.SetCompleted(
+    final event = engine.SetCompleted(
       exerciseId: 'dumbbell-goblet-squat',
       setIndex: 1,
       load: engine.Kg(10),

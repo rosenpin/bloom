@@ -302,7 +302,7 @@ void main() {
     test('unknown exercise ids warn instead of throwing', () {
       final state = advanceSession(
         _freshState(),
-        const SetCompleted(
+        SetCompleted(
           exerciseId: 'missing',
           setIndex: 0,
           load: Kg(10),

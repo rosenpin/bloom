@@ -28,7 +28,7 @@ enum LayoffTier {
   bool get changesLoad => this == reduce || this == reCalibrate;
 }
 
-/// Total: a negative day count is treated as 0 by the caller, which also warns.
+/// A negative day count is treated as 0 by the caller as clock-skew normalization.
 @useResult
 LayoffTier layoffTierFor(int daysSinceLastSession, ProgrammingConfig config) {
   final days = daysSinceLastSession < 0 ? 0 : daysSinceLastSession;
@@ -39,7 +39,8 @@ LayoffTier layoffTierFor(int daysSinceLastSession, ProgrammingConfig config) {
 }
 
 /// The multiplier this tier applies to her last working load.
-double layoffLoadFraction(LayoffTier tier, ProgrammingConfig config) => switch (tier) {
+double layoffLoadFraction(LayoffTier tier, ProgrammingConfig config) =>
+    switch (tier) {
       LayoffTier.none => 1,
       LayoffTier.hold => 1,
       LayoffTier.reduce => config.layoffTier2LoadFraction,
@@ -47,8 +48,8 @@ double layoffLoadFraction(LayoffTier tier, ProgrammingConfig config) => switch (
     };
 
 ReasonCode? layoffReason(LayoffTier tier) => switch (tier) {
-      LayoffTier.none => null,
-      LayoffTier.hold => ReasonCode.layoffTier1,
-      LayoffTier.reduce => ReasonCode.layoffTier2,
-      LayoffTier.reCalibrate => ReasonCode.layoffTier3,
-    };
+  LayoffTier.none => null,
+  LayoffTier.hold => ReasonCode.layoffTier1,
+  LayoffTier.reduce => ReasonCode.layoffTier2,
+  LayoffTier.reCalibrate => ReasonCode.layoffTier3,
+};

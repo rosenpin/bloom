@@ -25,13 +25,7 @@ final class Failure<T> extends Result<T> {
   final PlanAssemblyError error;
 }
 
-enum PlanAssemblyErrorCode {
-  invalidMesocycleConfiguration,
-  missingExerciseCountConfiguration,
-  invalidExerciseCountConfiguration,
-  missingRepSchemeConfiguration,
-  noUsableExercises,
-}
+enum PlanAssemblyErrorCode { noUsableExercises }
 
 final class PlanAssemblyError {
   PlanAssemblyError({

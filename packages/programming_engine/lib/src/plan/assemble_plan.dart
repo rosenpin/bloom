@@ -52,56 +52,21 @@ Result<Plan> assemblePlan(
   // does not affect selection. The quiz lacks activity-day placement, so changing
   // volume or plan days from this answer would be guesswork.
 
-  if (config.mesocycleWeeks <= 0 ||
-      config.easierWeekIndex < 1 ||
-      config.easierWeekIndex > config.mesocycleWeeks ||
-      config.deloadWeekIndex < 1 ||
-      config.deloadWeekIndex > config.mesocycleWeeks) {
-    return Failure<Plan>(
-      PlanAssemblyError(
-        code: PlanAssemblyErrorCode.invalidMesocycleConfiguration,
-        message: 'Mesocycle week indexes must fit inside a positive mesocycle.',
-      ),
-    );
-  }
-
-  if (config.repSchemes[profile.goal] == null &&
-      config.repSchemes[Goal.tonedAndDefined] == null) {
-    return Failure<Plan>(
-      PlanAssemblyError(
-        code: PlanAssemblyErrorCode.missingRepSchemeConfiguration,
-        message:
-            'No ${profile.goal.name} or fallback rep scheme is configured.',
-      ),
-    );
-  }
-
   final minutes = profile.sessionMinutes.value;
   final configuredCount = config.exerciseCountByMinutes[minutes];
-  if (configuredCount == null) {
-    return Failure<Plan>(
-      PlanAssemblyError(
-        code: PlanAssemblyErrorCode.missingExerciseCountConfiguration,
-        message:
-            'No exercise count is configured for $minutes-minute sessions.',
-      ),
-    );
-  }
+  assert(
+    configuredCount != null,
+    'missing exercise count for $minutes-minute sessions',
+  );
 
   final hasCardioFinisher = profile.sessionMinutes == SessionMinutes.sixty;
   final primaryCount = profile.sessionMinutes == SessionMinutes.thirty ? 2 : 3;
-  final catalogExerciseCount = configuredCount - (hasCardioFinisher ? 1 : 0);
+  final catalogExerciseCount = configuredCount! - (hasCardioFinisher ? 1 : 0);
   final isolationCount = catalogExerciseCount - primaryCount;
-  if (isolationCount < 1) {
-    return Failure<Plan>(
-      PlanAssemblyError(
-        code: PlanAssemblyErrorCode.invalidExerciseCountConfiguration,
-        message:
-            '$minutes-minute sessions cannot preserve $primaryCount primaries '
-            'and an isolation block with a configured count of $configuredCount.',
-      ),
-    );
-  }
+  assert(
+    isolationCount >= 1,
+    '$minutes-minute sessions need $primaryCount primaries and an isolation',
+  );
 
   final context = _AssemblyContext(
     profile: profile,
@@ -122,11 +87,7 @@ Result<Plan> assemblePlan(
     );
   }
 
-  final assembledExerciseCount = days.fold<int>(
-    0,
-    (sum, day) => sum + day.exercises.length,
-  );
-  if (assembledExerciseCount == 0) {
+  if (days.any((day) => day.exercises.isEmpty)) {
     final affectedRoles = context.warnings
         .where((warning) => warning.code == WarningCode.blockDropped)
         .map(
@@ -547,36 +508,26 @@ final class _AssemblyContext {
     );
   }
 
-  Map<MesocycleWeekKind, Dose> _dosesFor(
+  WeekDoses _dosesFor(
     Exercise exercise,
     RepScheme scheme, {
     required bool isEmphasis,
   }) {
     final baseSets =
         scheme.maxSets + (isEmphasis && scheme.extraSetOnEmphasis ? 1 : 0);
-    final easierSets = (baseSets + config.easierWeekSetsDelta).clamp(
-      1,
-      baseSets,
+    final easierSets = baseSets + config.easierWeekSetsDelta;
+    assert(
+      easierSets >= 1 && easierSets <= baseSets,
+      'easier-week set delta must preserve a positive, non-increasing dose',
     );
     if (exercise.metricType == MetricType.timed) {
-      return <MesocycleWeekKind, Dose>{
-        MesocycleWeekKind.build: TimedDose(
-          sets: baseSets,
-          hold: config.timedHoldFloor,
-        ),
-        MesocycleWeekKind.easier: TimedDose(
-          sets: easierSets,
-          hold: config.timedHoldFloor,
-        ),
-        MesocycleWeekKind.push: TimedDose(
-          sets: baseSets,
-          hold: config.timedHoldFloor,
-        ),
-        MesocycleWeekKind.deload: TimedDose(
-          sets: easierSets,
-          hold: config.timedHoldFloor,
-        ),
-      };
+      config.assertTimedDoseConfiguration();
+      return WeekDoses(
+        build: TimedDose(sets: baseSets, hold: config.timedHoldFloor),
+        easier: TimedDose(sets: easierSets, hold: config.timedHoldFloor),
+        push: TimedDose(sets: baseSets, hold: config.timedHoldFloor),
+        deload: TimedDose(sets: easierSets, hold: config.timedHoldFloor),
+      );
     }
 
     final range = config.rangeFor(exercise, scheme);
@@ -586,18 +537,18 @@ final class _AssemblyContext {
       effort: effort,
       targetReps: range.min,
     );
-    return <MesocycleWeekKind, Dose>{
-      MesocycleWeekKind.build: dose(baseSets, scheme.effort),
-      MesocycleWeekKind.easier: dose(
+    return WeekDoses(
+      build: dose(baseSets, scheme.effort),
+      easier: dose(
         easierSets,
         scheme.effort.easierBy(config.easierWeekRpeDelta.abs()),
       ),
-      MesocycleWeekKind.push: dose(baseSets, scheme.effort),
-      MesocycleWeekKind.deload: dose(
+      push: dose(baseSets, scheme.effort),
+      deload: dose(
         baseSets,
         scheme.effort.easierBy(config.deloadWeekRpeDelta.abs()),
       ),
-    };
+    );
   }
 
   List<PlanSwapCandidate> _swapCandidates(
@@ -621,44 +572,40 @@ final class _AssemblyContext {
     final included = <String>{};
     for (final edge in edges) {
       final target = exercisesById[edge.toId];
-      if (target == null || target.isRetired) {
-        _addWarning(
-          EngineWarning(
-            WarningCode.danglingSwapSkipped,
-            '${edge.fromId}->${edge.toId}/tier${edge.tier}',
-          ),
-        );
-        continue;
-      }
-      if (!_swapCompatible(from, target)) {
-        _addWarning(
-          EngineWarning(
-            WarningCode.invalidSwapSkipped,
-            '${edge.fromId}->${edge.toId}/tier${edge.tier}',
-          ),
-        );
-        continue;
-      }
-      if (eligible(target, eligibleProfile) && included.add(target.id)) {
+      assert(
+        target != null && !target.isRetired,
+        'swap ${edge.fromId}->${edge.toId} must target an active exercise',
+      );
+      assert(
+        _swapCompatible(from, target!),
+        'swap ${edge.fromId}->${edge.toId} crosses session purpose',
+      );
+      final resolvedTarget = target!;
+      if (eligible(resolvedTarget, eligibleProfile) &&
+          included.add(resolvedTarget.id)) {
         result.add(
           PlanSwapCandidate(
-            exerciseId: target.id,
-            name: target.name,
-            blockRole: target.blockRole,
-            movementClass: target.movementClass,
-            metricType: target.metricType,
-            laterality: target.laterality,
-            difficultyTier: target.difficultyTier,
-            resistanceEquipment: target.resistanceEquipment,
-            supportEquipment: target.supportEquipment,
-            bwContribution: target.bwContribution,
-            loadStepOverride: target.loadStepOverride,
+            exerciseId: resolvedTarget.id,
+            name: resolvedTarget.name,
+            blockRole: resolvedTarget.blockRole,
+            movementClass: resolvedTarget.movementClass,
+            metricType: resolvedTarget.metricType,
+            laterality: resolvedTarget.laterality,
+            difficultyTier: resolvedTarget.difficultyTier,
+            resistanceEquipment: resolvedTarget.resistanceEquipment,
+            supportEquipment: resolvedTarget.supportEquipment,
+            bwContribution: resolvedTarget.bwContribution,
+            loadStepOverride: resolvedTarget.loadStepOverride,
             tier: edge.tier,
             rank: edge.rank,
-            doseByWeekKind: _dosesFor(target, scheme, isEmphasis: isEmphasis),
-            repRange: target.metricType == MetricType.timed
+            doseByWeekKind: _dosesFor(
+              resolvedTarget,
+              scheme,
+              isEmphasis: isEmphasis,
+            ),
+            repRange: resolvedTarget.metricType == MetricType.timed
                 ? null
-                : config.rangeFor(target, scheme),
+                : config.rangeFor(resolvedTarget, scheme),
           ),
         );
       }

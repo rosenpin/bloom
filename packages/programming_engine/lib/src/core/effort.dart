@@ -39,10 +39,6 @@ enum EffortLevel {
     }
     return null;
   }
-
-  /// Clamping lookup, for decoding logs written by a future version.
-  static EffortLevel clampFromValue(int value) =>
-      EffortLevel.values[value.clamp(1, EffortLevel.values.length) - 1];
 }
 
 /// An RPE band. The scale is coarse below 7 and we operate coarse, so a report
