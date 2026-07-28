@@ -70,7 +70,12 @@ jobs:
         working-directory: app
 
       - name: Install App Store Connect Python dependency
-        run: python3 -m pip install --disable-pip-version-check cryptography
+        # macos-15's Homebrew Python is PEP 668 externally managed; a bare pip
+        # install fails. Use a venv and put it first on PATH for later steps.
+        run: |
+          python3 -m venv "$RUNNER_TEMP/asc-venv"
+          "$RUNNER_TEMP/asc-venv/bin/pip" install --disable-pip-version-check cryptography
+          echo "$RUNNER_TEMP/asc-venv/bin" >> "$GITHUB_PATH"
 
       - name: Restore build-number floor
         uses: actions/cache/restore@v4
