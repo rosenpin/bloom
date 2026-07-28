@@ -12,6 +12,7 @@ import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../plan/domain/plan_presentation.dart';
 import '../../session/application/session_controller.dart';
 import '../../session/application/session_lifecycle_service.dart';
+import 'week_strip.dart';
 
 class TodayScreen extends ConsumerStatefulWidget {
   const TodayScreen({super.key});
@@ -52,6 +53,32 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     final weekKind =
         preview?.state.weekKind ?? document.plan.mesocycleCalendar.first.kind;
     final weekExplanation = PlanPresentation.weekKindExplanation(weekKind);
+    final currentWeek = preview?.state.mesocycleWeekIndex ?? 1;
+    final absoluteWeek = preview?.state.absoluteWeekIndex ?? 1;
+    final completedSessions = ref.watch(
+      completedSessionsForWeekProvider((
+        planId: document.row.id,
+        mesocycleWeekIndex: currentWeek,
+        absoluteWeekIndex: absoluteWeek,
+      )),
+    );
+    final daysPerWeek = answers.daysPerWeek?.value ?? document.plan.days.length;
+    final plannedWeekdays = {
+      for (final planDay in document.plan.days)
+        _weekdayFromPlanLabel(
+          PlanPresentation.weekdayLabel(planDay.dayIndex, daysPerWeek),
+        ),
+    };
+    final weeklyCompletedAt =
+        completedSessions.value
+            ?.map((session) => session.completedAt)
+            .nonNulls ??
+        const Iterable<DateTime>.empty();
+    final completedAt = <DateTime>[
+      ...weeklyCompletedAt,
+      ?completed?.record.completedAt,
+    ];
+    final today = ref.watch(clockProvider)();
     return SafeArea(
       key: const ValueKey('today-screen'),
       child: SingleChildScrollView(
@@ -115,6 +142,14 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   _NextSessionLine(session: session),
                 ],
+                SizedBox(
+                  height: completed == null ? AppSpacing.lg : AppSpacing.xs,
+                ),
+                WeekStrip(
+                  today: today,
+                  completedAt: completedAt,
+                  plannedWeekdays: plannedWeekdays,
+                ),
                 if (weekExplanation != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   Container(
@@ -144,6 +179,17 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     if (runtime != null && context.mounted) context.push('/session');
   }
 }
+
+int _weekdayFromPlanLabel(String label) => switch (label) {
+  'MONDAY' => DateTime.monday,
+  'TUESDAY' => DateTime.tuesday,
+  'WEDNESDAY' => DateTime.wednesday,
+  'THURSDAY' => DateTime.thursday,
+  'FRIDAY' => DateTime.friday,
+  'SATURDAY' => DateTime.saturday,
+  'SUNDAY' => DateTime.sunday,
+  _ => throw ArgumentError.value(label, 'label', 'Unknown weekday label'),
+};
 
 class _TodayHeroCard extends StatelessWidget {
   const _TodayHeroCard({
