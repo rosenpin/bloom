@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../application/session_lifecycle_service.dart';
@@ -114,13 +115,15 @@ class CalibrationExerciseView extends StatelessWidget {
                       const SizedBox(height: AppSpacing.sm),
                       const _ReassuranceCard(),
                       const SizedBox(height: AppSpacing.md),
-                      FilledButton(
-                        key: const ValueKey('calibration-done'),
-                        onPressed: onDone,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(60),
+                      AppPressScale(
+                        child: FilledButton(
+                          key: const ValueKey('calibration-done'),
+                          onPressed: onDone,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(60),
+                          ),
+                          child: Text("I've done my ${probe.probeReps} reps"),
                         ),
-                        child: Text("I've done my ${probe.probeReps} reps"),
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       _AmbientSessionStrip(
@@ -269,14 +272,16 @@ class ActiveExerciseView extends StatelessWidget {
                           ),
                         ),
                       const SizedBox(height: AppSpacing.md),
-                      FilledButton(
-                        key: const ValueKey('set-done'),
-                        onPressed: onDone,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(64),
-                          textStyle: Theme.of(context).textTheme.titleLarge,
+                      AppPressScale(
+                        child: FilledButton(
+                          key: const ValueKey('set-done'),
+                          onPressed: onDone,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(64),
+                            textStyle: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          child: const Text('Done'),
                         ),
-                        child: const Text('Done'),
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       _AmbientSessionStrip(
@@ -834,7 +839,8 @@ class _SetPills extends StatelessWidget {
       children: [
         for (var index = 0; index < entry.prescription.dose.sets; index++)
           _SetPill(
-            key: ValueKey(
+            key: ValueKey('set-pill-${entry.exerciseId}-${index + 1}'),
+            stateKey: ValueKey(
               index < entry.setLogs.length
                   ? 'completed-set-${index + 1}'
                   : 'set-${index + 1}',
@@ -866,13 +872,14 @@ class _SetPills extends StatelessWidget {
       : '${set.reps} × ${SessionPresentation.formatLoad(set.load, unitSystem)}';
 }
 
-class _SetPill extends StatelessWidget {
+class _SetPill extends StatefulWidget {
   const _SetPill({
     required this.text,
     required this.color,
     required this.textColor,
     required this.completed,
     required this.onTap,
+    required this.stateKey,
     super.key,
   });
 
@@ -881,38 +888,111 @@ class _SetPill extends StatelessWidget {
   final Color textColor;
   final bool completed;
   final VoidCallback? onTap;
+  final Key stateKey;
+
+  @override
+  State<_SetPill> createState() => _SetPillState();
+}
+
+class _SetPillState extends State<_SetPill>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pop = AnimationController(
+    vsync: this,
+    value: 1,
+  );
+  late final Animation<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween(
+        begin: 1.0,
+        end: 1.06,
+      ).chain(CurveTween(curve: AppMotion.standardCurve)),
+      weight: 45,
+    ),
+    TweenSequenceItem(
+      tween: Tween(
+        begin: 1.06,
+        end: 1.0,
+      ).chain(CurveTween(curve: AppMotion.standardCurve)),
+      weight: 55,
+    ),
+  ]).animate(_pop);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _pop.duration = AppMotion.duration(context, AppMotion.setPop);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SetPill oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.completed && widget.completed) _pop.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _pop.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: color,
-      borderRadius: AppRadii.largeBorder,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xs,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (completed) ...[
-                Icon(Icons.check_rounded, color: textColor, size: 15),
-                const SizedBox(width: AppSpacing.xxs),
-              ],
-              Flexible(
-                child: Text(
-                  text,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelMedium?.copyWith(color: textColor),
-                ),
+    return ScaleTransition(
+      scale: _scale,
+      child: AnimatedContainer(
+        key: widget.stateKey,
+        duration: AppMotion.duration(context, AppMotion.state),
+        curve: AppMotion.standardCurve,
+        decoration: BoxDecoration(
+          color: widget.color,
+          borderRadius: AppRadii.largeBorder,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: AppRadii.largeBorder,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
               ),
-            ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedSwitcher(
+                    duration: AppMotion.duration(context, AppMotion.feedback),
+                    switchInCurve: AppMotion.entranceCurve,
+                    switchOutCurve: AppMotion.standardCurve,
+                    child: widget.completed
+                        ? Icon(
+                            Icons.check_rounded,
+                            key: const ValueKey('set-check'),
+                            color: widget.textColor,
+                            size: 15,
+                          )
+                        : const SizedBox(key: ValueKey('set-check-empty')),
+                  ),
+                  if (widget.completed) const SizedBox(width: AppSpacing.xxs),
+                  Flexible(
+                    child: AnimatedSwitcher(
+                      duration: AppMotion.duration(context, AppMotion.state),
+                      switchInCurve: AppMotion.entranceCurve,
+                      switchOutCurve: AppMotion.standardCurve,
+                      child: Text(
+                        widget.text,
+                        key: ValueKey(widget.text),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: widget.textColor),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -1124,12 +1204,33 @@ class _PrescriptionCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    main,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontSize: compact ? 24 : 31,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
+                  AnimatedSwitcher(
+                    duration: AppMotion.duration(context, AppMotion.state),
+                    reverseDuration: AppMotion.exitDuration(
+                      context,
+                      AppMotion.state,
+                    ),
+                    switchInCurve: AppMotion.entranceCurve,
+                    switchOutCurve: AppMotion.standardCurve,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.08),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: Text(
+                      main,
+                      key: ValueKey(main),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            fontSize: compact ? 24 : 31,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                          ),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xxs),

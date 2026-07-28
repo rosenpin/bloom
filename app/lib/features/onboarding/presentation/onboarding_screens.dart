@@ -7,6 +7,7 @@ import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../domain/onboarding_answers.dart';
@@ -432,23 +433,31 @@ class _SegmentChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.paper : AppColors.blushSoft,
-      borderRadius: AppRadii.smallBorder,
-      child: InkWell(
-        onTap: onTap,
+    return AnimatedContainer(
+      duration: AppMotion.duration(context, AppMotion.state),
+      curve: AppMotion.standardCurve,
+      decoration: BoxDecoration(
+        color: selected ? AppColors.paper : AppColors.blushSoft,
         borderRadius: AppRadii.smallBorder,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.xxs,
-            vertical: AppSpacing.sm,
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: selected ? AppColors.ink : AppColors.inkSoft,
-              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: AppRadii.smallBorder,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xxs,
+              vertical: AppSpacing.sm,
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: selected ? AppColors.ink : AppColors.inkSoft,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              ),
             ),
           ),
         ),
@@ -553,9 +562,13 @@ class _BodyMap extends StatelessWidget {
                 ),
               ),
             ),
-            Align(
+            AnimatedAlign(
               alignment: accentAlignment,
-              child: Container(
+              duration: AppMotion.duration(context, AppMotion.state),
+              curve: AppMotion.standardCurve,
+              child: AnimatedContainer(
+                duration: AppMotion.duration(context, AppMotion.state),
+                curve: AppMotion.standardCurve,
                 width: AppSpacing.xxl,
                 height: AppSpacing.lg,
                 decoration: BoxDecoration(
@@ -1014,11 +1027,16 @@ class _GeneratingScreenState extends ConsumerState<GeneratingScreen>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat(reverse: true);
+    _controller = AnimationController(vsync: this);
     unawaited(_generate());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_controller.isAnimating || _controller.isCompleted) return;
+    _controller.duration = AppMotion.duration(context, AppMotion.entrance);
+    _controller.forward();
   }
 
   Future<void> _generate() async {
@@ -1063,10 +1081,14 @@ class _GeneratingScreenState extends ConsumerState<GeneratingScreen>
                           children: [
                             AnimatedBuilder(
                               animation: _controller,
-                              builder: (context, child) => Transform.scale(
-                                scale: 0.96 + (_controller.value * 0.08),
-                                child: child,
-                              ),
+                              builder: (context, child) {
+                                final progress = AppMotion.entranceCurve
+                                    .transform(_controller.value);
+                                return Transform.scale(
+                                  scale: 0.96 + (progress * 0.04),
+                                  child: child,
+                                );
+                              },
                               child: Container(
                                 width: AppSpacing.xxl * 4,
                                 height: AppSpacing.xxl * 4,

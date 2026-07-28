@@ -80,7 +80,7 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('dismiss-version-update-nudge')),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('version-update-nudge')), findsNothing);
     await _dispose(tester);
   });

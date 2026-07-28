@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../history/domain/history_presentation.dart';
@@ -26,6 +28,11 @@ const _swapGold = Color(0xFFC29A2E);
 const _swapSilver = Color(0xFF8F98A5);
 const _swapBronze = Color(0xFFA8754E);
 const _swapMedalSize = 19.0;
+
+AnimationStyle _sheetAnimationStyle(BuildContext context) => AnimationStyle(
+  duration: AppMotion.duration(context, AppMotion.layout),
+  reverseDuration: AppMotion.exitDuration(context, AppMotion.layout),
+);
 
 class SessionPlayerScreen extends ConsumerStatefulWidget {
   const SessionPlayerScreen({super.key});
@@ -55,112 +62,175 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       canPop: _rest == null,
       child: Scaffold(
         key: const ValueKey('session-player'),
-        body: runtimeValue.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stackTrace) =>
-              _SessionError(onBack: () => context.go('/today')),
-          data: (runtime) {
-            if (runtime == null) {
-              return _SessionError(onBack: () => context.go('/today'));
-            }
-            _queueExerciseVideoPrefetch(runtime);
-            if (_rest case final rest?) {
-              return _RestTakeover(
-                runtime: runtime,
-                phase: rest,
-                onFinished: (effort) => _finishRest(rest, effort),
-              );
-            }
-            if (_shareRecap case final recap?) {
-              return ShareRecapScreen(
-                runtime: runtime,
-                recap: recap,
-                onFinished: _finishCompletion,
-              );
-            }
-            if (_showComplete || runtime.isComplete) {
-              _queueKeepSwap(runtime);
-              return _SessionComplete(
-                runtime: runtime,
-                recap: _completionRecap(runtime),
-                adjustmentNotice: _adjustmentNotice,
-                onRecap: (recap) => setState(() => _shareRecap = recap),
-                onDone: _finishCompletion,
-              );
-            }
-            if (!_begun && runtime.state.events.isEmpty) {
-              return _SessionStart(
-                runtime: runtime,
-                onStart: () => setState(() => _begun = true),
-                onUsualWeights: () {
-                  ref
-                      .read(sessionControllerProvider.notifier)
-                      .useUsualWeights();
-                  setState(() => _begun = true);
-                },
-              );
-            }
-            final entry = runtime.activeEntry;
-            if (entry == null) {
-              return _SessionError(onBack: () => context.go('/today'));
-            }
-            if (entry.calibration.phase ==
-                engine.CalibrationPhase.awaitingEffort) {
-              return _CalibrationEffort(
-                entry: entry,
-                onEffort: (level) async {
-                  await ref
-                      .read(sessionControllerProvider.notifier)
-                      .advance(
-                        engine.EffortReported(
-                          exerciseId: entry.exerciseId,
-                          level: level,
-                        ),
-                      );
-                  if (mounted) setState(() {});
-                },
-              );
-            }
-            final reps =
-                _repOverrides[entry.exerciseId] ??
-                SessionPresentation.targetReps(entry);
-            return switch (entry.prescription.suggestion) {
-              engine.NeedsCalibration() => CalibrationExerciseView(
-                runtime: runtime,
-                entry: entry,
-                onDone: () => _completeSet(runtime, entry),
-                onSetup: () => _openTeachView(entry),
-                onLifeHappened: () => _openLifeSheet(runtime, entry),
-                onOverview: () => _openSessionOverview(runtime, entry),
-                onPain: () => _openPainPicker(entry),
-                onSwitchUnits: () => _switchUnits(runtime),
-                onDismissUnits: () => ref
-                    .read(sessionControllerProvider.notifier)
-                    .dismissUnitPrompt(),
-                adjustmentNotice: _adjustmentNotice,
-              ),
-              engine.SuggestedLoad() ||
-              engine.BodyweightOnly() ||
-              engine.RepOrDurationTarget() => ActiveExerciseView(
-                runtime: runtime,
-                entry: entry,
-                reps: reps,
-                onDone: () => _completeSet(runtime, entry),
-                onEdit: () => _editSet(runtime, entry),
-                onReviewSet: (setIndex) =>
-                    _reviewCompletedSet(runtime, entry, setIndex),
-                onSetup: () => _openTeachView(entry),
-                onLifeHappened: () => _openLifeSheet(runtime, entry),
-                onOverview: () => _openSessionOverview(runtime, entry),
-                onPain: () => _openPainPicker(entry),
-                onSwitchUnits: () => _switchUnits(runtime),
-                onDismissUnits: () => ref
-                    .read(sessionControllerProvider.notifier)
-                    .dismissUnitPrompt(),
-                adjustmentNotice: _adjustmentNotice,
-              ),
+        body: AnimatedSwitcher(
+          duration: AppMotion.duration(context, AppMotion.layout),
+          reverseDuration: AppMotion.exitDuration(context, AppMotion.layout),
+          switchInCurve: AppMotion.entranceCurve,
+          switchOutCurve: AppMotion.standardCurve,
+          layoutBuilder: (currentChild, previousChildren) => Stack(
+            fit: StackFit.expand,
+            children: [...previousChildren, ?currentChild],
+          ),
+          transitionBuilder: (child, animation) {
+            final keyValue = switch (child.key) {
+              ValueKey<String>(:final value) => value,
+              _ => '',
             };
+            final isRest = keyValue.startsWith('rest-stage-');
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset(0, isRest ? 0.12 : 0.03),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            );
           },
+          child: runtimeValue.when(
+            loading: () => const KeyedSubtree(
+              key: ValueKey('session-loading-stage'),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, stackTrace) => KeyedSubtree(
+              key: const ValueKey('session-error-stage'),
+              child: _SessionError(onBack: () => context.go('/today')),
+            ),
+            data: (runtime) {
+              if (runtime == null) {
+                return KeyedSubtree(
+                  key: const ValueKey('session-empty-stage'),
+                  child: _SessionError(onBack: () => context.go('/today')),
+                );
+              }
+              _queueExerciseVideoPrefetch(runtime);
+              if (_rest case final rest?) {
+                return KeyedSubtree(
+                  key: ValueKey(
+                    'rest-stage-${rest.exerciseId}-${rest.completedSet}',
+                  ),
+                  child: _RestTakeover(
+                    runtime: runtime,
+                    phase: rest,
+                    onFinished: (effort) => _finishRest(rest, effort),
+                  ),
+                );
+              }
+              if (_shareRecap case final recap?) {
+                return KeyedSubtree(
+                  key: const ValueKey('share-recap-stage'),
+                  child: ShareRecapScreen(
+                    runtime: runtime,
+                    recap: recap,
+                    onFinished: _finishCompletion,
+                  ),
+                );
+              }
+              if (_showComplete || runtime.isComplete) {
+                _queueKeepSwap(runtime);
+                return KeyedSubtree(
+                  key: const ValueKey('session-complete-stage'),
+                  child: _SessionComplete(
+                    runtime: runtime,
+                    recap: _completionRecap(runtime),
+                    adjustmentNotice: _adjustmentNotice,
+                    onRecap: (recap) => setState(() => _shareRecap = recap),
+                    onDone: _finishCompletion,
+                  ),
+                );
+              }
+              if (!_begun && runtime.state.events.isEmpty) {
+                return KeyedSubtree(
+                  key: const ValueKey('session-start-stage'),
+                  child: _SessionStart(
+                    runtime: runtime,
+                    onStart: () => setState(() => _begun = true),
+                    onUsualWeights: () {
+                      ref
+                          .read(sessionControllerProvider.notifier)
+                          .useUsualWeights();
+                      setState(() => _begun = true);
+                    },
+                  ),
+                );
+              }
+              final entry = runtime.activeEntry;
+              if (entry == null) {
+                return KeyedSubtree(
+                  key: const ValueKey('session-no-entry-stage'),
+                  child: _SessionError(onBack: () => context.go('/today')),
+                );
+              }
+              if (entry.calibration.phase ==
+                  engine.CalibrationPhase.awaitingEffort) {
+                return KeyedSubtree(
+                  key: ValueKey('effort-stage-${entry.exerciseId}'),
+                  child: _CalibrationEffort(
+                    entry: entry,
+                    onEffort: (level) async {
+                      await ref
+                          .read(sessionControllerProvider.notifier)
+                          .advance(
+                            engine.EffortReported(
+                              exerciseId: entry.exerciseId,
+                              level: level,
+                            ),
+                          );
+                      if (mounted) setState(() {});
+                    },
+                  ),
+                );
+              }
+              final reps =
+                  _repOverrides[entry.exerciseId] ??
+                  SessionPresentation.targetReps(entry);
+              final exerciseView = switch (entry.prescription.suggestion) {
+                engine.NeedsCalibration() => CalibrationExerciseView(
+                  runtime: runtime,
+                  entry: entry,
+                  onDone: () => _completeSet(runtime, entry),
+                  onSetup: () => _openTeachView(entry),
+                  onLifeHappened: () => _openLifeSheet(runtime, entry),
+                  onOverview: () => _openSessionOverview(runtime, entry),
+                  onPain: () => _openPainPicker(entry),
+                  onSwitchUnits: () => _switchUnits(runtime),
+                  onDismissUnits: () => ref
+                      .read(sessionControllerProvider.notifier)
+                      .dismissUnitPrompt(),
+                  adjustmentNotice: _adjustmentNotice,
+                ),
+                engine.SuggestedLoad() ||
+                engine.BodyweightOnly() ||
+                engine.RepOrDurationTarget() => ActiveExerciseView(
+                  runtime: runtime,
+                  entry: entry,
+                  reps: reps,
+                  onDone: () => _completeSet(runtime, entry),
+                  onEdit: () => _editSet(runtime, entry),
+                  onReviewSet: (setIndex) =>
+                      _reviewCompletedSet(runtime, entry, setIndex),
+                  onSetup: () => _openTeachView(entry),
+                  onLifeHappened: () => _openLifeSheet(runtime, entry),
+                  onOverview: () => _openSessionOverview(runtime, entry),
+                  onPain: () => _openPainPicker(entry),
+                  onSwitchUnits: () => _switchUnits(runtime),
+                  onDismissUnits: () => ref
+                      .read(sessionControllerProvider.notifier)
+                      .dismissUnitPrompt(),
+                  adjustmentNotice: _adjustmentNotice,
+                ),
+              };
+              final mode =
+                  entry.prescription.suggestion is engine.NeedsCalibration
+                  ? 'calibration'
+                  : 'active';
+              return KeyedSubtree(
+                key: ValueKey('exercise-stage-${entry.exerciseId}-$mode'),
+                child: exerciseView,
+              );
+            },
+          ),
         ),
       ),
     );
@@ -238,7 +308,14 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
             ),
           );
       if (!mounted) return;
+      unawaited(HapticFeedback.lightImpact());
       final latest = ref.read(sessionControllerProvider).value;
+      if (!wasCalibration && !isFinalSet) {
+        await Future<void>.delayed(
+          AppMotion.duration(context, AppMotion.setPop),
+        );
+        if (!mounted) return;
+      }
       if (latest == null) return;
       final next = latest.activeEntry;
       setState(() {
@@ -292,6 +369,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
+      sheetAnimationStyle: _sheetAnimationStyle(context),
       builder: (context) => _SetStepperSheet(
         entry: entry,
         unitSystem: runtime.displayUnitSystem,
@@ -320,6 +398,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
+      sheetAnimationStyle: _sheetAnimationStyle(context),
       builder: (context) => _SetStepperSheet(
         entry: entry,
         unitSystem: runtime.displayUnitSystem,
@@ -353,6 +432,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       useSafeArea: true,
       backgroundColor: AppColors.paper,
       showDragHandle: false,
+      sheetAnimationStyle: _sheetAnimationStyle(context),
       builder: (context) =>
           _SessionOverviewSheet(runtime: runtime, current: current),
     );
@@ -377,6 +457,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
           isScrollControlled: true,
           useSafeArea: true,
           backgroundColor: AppColors.paper,
+          sheetAnimationStyle: _sheetAnimationStyle(context),
           builder: (context) => _CompletedExerciseReviewSheet(
             entries: entries,
             unitSystem: runtime.displayUnitSystem,
@@ -393,8 +474,31 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
 
   Future<void> _openTeachView(engine.SessionExerciseEntry entry) async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (context) => ExerciseTeachScreen(entry: entry),
+      PageRouteBuilder<void>(
+        transitionDuration: AppMotion.duration(context, AppMotion.layout),
+        reverseTransitionDuration: AppMotion.exitDuration(
+          context,
+          AppMotion.layout,
+        ),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            ExerciseTeachScreen(entry: entry),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: AppMotion.entranceCurve,
+            reverseCurve: AppMotion.standardCurve,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.08),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
       ),
     );
   }
@@ -407,6 +511,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
+      sheetAnimationStyle: _sheetAnimationStyle(context),
       builder: (context) => const _LifeHappenedSheet(),
     );
     if (!mounted || action == null) return;
@@ -457,6 +562,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
+      sheetAnimationStyle: _sheetAnimationStyle(context),
       builder: (context) => _SwapSheet(entry: entry, recommended: recommended),
     );
     if (candidate == null || !mounted) return;
@@ -470,6 +576,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
+      sheetAnimationStyle: _sheetAnimationStyle(context),
       builder: (context) => const _PainSitePicker(),
     );
     if (site == null || !mounted) return;
@@ -510,6 +617,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
         isDismissible: false,
         enableDrag: false,
         backgroundColor: AppColors.paper,
+        sheetAnimationStyle: _sheetAnimationStyle(context),
         builder: (context) =>
             _KeepSwapSheet(runtime: runtime, suggestion: suggestion),
       );
@@ -1031,78 +1139,104 @@ class _ExerciseTeachScreenState extends ConsumerState<ExerciseTeachScreen> {
                           setState(() => _tab = value.first),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    if (_tab == 0) ...[
-                      for (
-                        var index = 0;
-                        index < guidance.setupSteps.length;
-                        index++
-                      )
-                        _NumberedStep(
-                          number: index + 1,
-                          text: guidance.setupSteps[index],
-                        ),
-                      _InfoCard(
-                        color: AppColors.blushSoft,
-                        icon: Icons.location_on_outlined,
-                        title: 'Find it',
-                        body: guidance.findIt,
+                    AnimatedSwitcher(
+                      duration: AppMotion.duration(context, AppMotion.state),
+                      reverseDuration: AppMotion.exitDuration(
+                        context,
+                        AppMotion.state,
                       ),
-                    ] else if (_tab == 1) ...[
-                      _InfoCard(
-                        color: AppColors.sageSoft,
-                        icon: Icons.check_rounded,
-                        title: 'Should feel',
-                        body: guidance.shouldFeel,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      _InfoCard(
-                        color: AppColors.blushSoft,
-                        icon: Icons.pan_tool_outlined,
-                        title: 'Stop if',
-                        body: guidance.stopIf,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        'Helpful cues',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      for (final item in guidance.dos)
-                        ListTile(
-                          leading: const Icon(
-                            Icons.check_circle_outline,
-                            color: AppColors.sage,
-                          ),
-                          title: Text(item),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      for (final item in guidance.donts)
-                        ListTile(
-                          leading: const Icon(
-                            Icons.remove_circle_outline,
-                            color: AppColors.coral,
-                          ),
-                          title: Text(item),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                    ] else ...[
-                      Text(
-                        'These keep the same job in your session.',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AppColors.inkSoft,
+                      switchInCurve: AppMotion.entranceCurve,
+                      switchOutCurve: AppMotion.standardCurve,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.025),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      for (final candidate in guidance.swaps)
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(candidate.name),
-                          subtitle: Text(
-                            candidate.tier <= 2 ? 'Good match' : 'Looser match',
-                          ),
-                          trailing: _SwapTierMedal(tier: candidate.tier),
-                        ),
-                    ],
+                      child: Column(
+                        key: ValueKey('teach-tab-$_tab'),
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_tab == 0) ...[
+                            for (
+                              var index = 0;
+                              index < guidance.setupSteps.length;
+                              index++
+                            )
+                              _NumberedStep(
+                                number: index + 1,
+                                text: guidance.setupSteps[index],
+                              ),
+                            _InfoCard(
+                              color: AppColors.blushSoft,
+                              icon: Icons.location_on_outlined,
+                              title: 'Find it',
+                              body: guidance.findIt,
+                            ),
+                          ] else if (_tab == 1) ...[
+                            _InfoCard(
+                              color: AppColors.sageSoft,
+                              icon: Icons.check_rounded,
+                              title: 'Should feel',
+                              body: guidance.shouldFeel,
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            _InfoCard(
+                              color: AppColors.blushSoft,
+                              icon: Icons.pan_tool_outlined,
+                              title: 'Stop if',
+                              body: guidance.stopIf,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Text(
+                              'Helpful cues',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            for (final item in guidance.dos)
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.check_circle_outline,
+                                  color: AppColors.sage,
+                                ),
+                                title: Text(item),
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            for (final item in guidance.donts)
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.remove_circle_outline,
+                                  color: AppColors.coral,
+                                ),
+                                title: Text(item),
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                          ] else ...[
+                            Text(
+                              'These keep the same job in your session.',
+                              style: Theme.of(context).textTheme.bodyLarge
+                                  ?.copyWith(color: AppColors.inkSoft),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            for (final candidate in guidance.swaps)
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(candidate.name),
+                                subtitle: Text(
+                                  candidate.tier <= 2
+                                      ? 'Good match'
+                                      : 'Looser match',
+                                ),
+                                trailing: _SwapTierMedal(tier: candidate.tier),
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1818,7 +1952,7 @@ class _KeepSwapSheet extends StatelessWidget {
   }
 }
 
-class _SessionComplete extends StatelessWidget {
+class _SessionComplete extends StatefulWidget {
   const _SessionComplete({
     required this.runtime,
     required this.recap,
@@ -1834,15 +1968,49 @@ class _SessionComplete extends StatelessWidget {
   final String? adjustmentNotice;
 
   @override
+  State<_SessionComplete> createState() => _SessionCompleteState();
+}
+
+class _SessionCompleteState extends State<_SessionComplete>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bloom = AnimationController(vsync: this);
+  bool _started = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(HapticFeedback.mediumImpact());
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    _bloom.duration = AppMotion.duration(context, AppMotion.completion);
+    _bloom.forward();
+  }
+
+  @override
+  void dispose() {
+    _bloom.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ColoredBox(
       color: AppColors.blushSoft,
       child: SafeArea(
         child: FutureBuilder<SessionRecap?>(
-          future: recap,
+          future: widget.recap,
           builder: (context, snapshot) {
             final value = snapshot.data;
-            final swapLines = SessionPresentation.swapRecapLines(runtime.state);
+            final swapLines = SessionPresentation.swapRecapLines(
+              widget.runtime.state,
+            );
             return Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Center(
@@ -1856,12 +2024,14 @@ class _SessionComplete extends StatelessWidget {
                           child: Column(
                             children: [
                               const SizedBox(height: AppSpacing.lg),
-                              TweenAnimationBuilder<double>(
-                                tween: Tween(begin: 0.72, end: 1),
-                                duration: const Duration(milliseconds: 700),
-                                curve: Curves.easeOutBack,
-                                builder: (context, scale, child) =>
-                                    Transform.scale(scale: scale, child: child),
+                              ScaleTransition(
+                                scale: Tween<double>(begin: 0.8, end: 1)
+                                    .animate(
+                                      CurvedAnimation(
+                                        parent: _bloom,
+                                        curve: AppMotion.entranceCurve,
+                                      ),
+                                    ),
                                 child: Container(
                                   width: 76,
                                   height: 76,
@@ -1892,99 +2062,13 @@ class _SessionComplete extends StatelessWidget {
                                   child: CircularProgressIndicator(),
                                 )
                               else ...[
-                                Text.rich(
-                                  TextSpan(
-                                    children: [
-                                      TextSpan(
-                                        text: HistoryPresentation.duration(
-                                          value.duration,
-                                        ),
-                                      ),
-                                      const TextSpan(text: '  ·  '),
-                                      TextSpan(
-                                        text: SessionPresentation.formatLoad(
-                                          value.totalLoad,
-                                          runtime.displayUnitSystem,
-                                        ),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
+                                _CompletionStats(
+                                  runtime: widget.runtime,
+                                  value: value,
                                 ),
-                                const SizedBox(height: AppSpacing.xxs),
-                                Text(
-                                  SessionPresentation.dayComparison(
-                                    value.totalLoad,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(color: AppColors.inkSoft),
-                                ),
-                                const SizedBox(height: AppSpacing.lg),
-                                _AdherenceDots(
-                                  completed: value.completedThisWeek,
-                                  total: value.plannedThisWeek,
-                                ),
-                                if (value.weekStreak case final streak?) ...[
-                                  const SizedBox(height: AppSpacing.md),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: AppSpacing.sm,
-                                      vertical: AppSpacing.xs,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.paper,
-                                      borderRadius: AppRadii.largeBorder,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.roseDeep.withValues(
-                                            alpha: 0.1,
-                                          ),
-                                          blurRadius: 18,
-                                          offset: const Offset(0, 8),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(
-                                          Icons.local_florist_rounded,
-                                          color: AppColors.roseDeep,
-                                          size: 16,
-                                        ),
-                                        const SizedBox(width: AppSpacing.xxs),
-                                        Text(
-                                          '$streak-week streak',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelMedium
-                                              ?.copyWith(
-                                                color: AppColors.roseDeep,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                if (value.totalSessions == 1) ...[
-                                  const SizedBox(height: AppSpacing.md),
-                                  Text(
-                                    'Each session teaches your plan.',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(color: AppColors.inkSoft),
-                                  ),
-                                ],
                               ],
-                              if (adjustmentNotice case final notice?) ...[
+                              if (widget.adjustmentNotice
+                                  case final notice?) ...[
                                 const SizedBox(height: AppSpacing.md),
                                 _SoftConfirmationCard(text: notice),
                               ],
@@ -1997,15 +2081,25 @@ class _SessionComplete extends StatelessWidget {
                           ),
                         ),
                       ),
-                      FilledButton(
-                        key: const ValueKey('session-complete-recap'),
-                        onPressed: value == null ? null : () => onRecap(value),
-                        child: const Text('Show me my recap'),
-                      ),
-                      TextButton(
-                        key: const ValueKey('session-complete-done'),
-                        onPressed: onDone,
-                        child: const Text('Back to today'),
+                      _CompletionActions(
+                        ready: value != null,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            FilledButton(
+                              key: const ValueKey('session-complete-recap'),
+                              onPressed: value == null
+                                  ? null
+                                  : () => widget.onRecap(value),
+                              child: const Text('Show me my recap'),
+                            ),
+                            TextButton(
+                              key: const ValueKey('session-complete-done'),
+                              onPressed: widget.onDone,
+                              child: const Text('Back to today'),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -2013,6 +2107,261 @@ class _SessionComplete extends StatelessWidget {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _CompletionStats extends StatefulWidget {
+  const _CompletionStats({required this.runtime, required this.value});
+
+  final SessionRuntime runtime;
+  final SessionRecap value;
+
+  @override
+  State<_CompletionStats> createState() => _CompletionStatsState();
+}
+
+class _CompletionStatsState extends State<_CompletionStats>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _entrance = AnimationController(vsync: this);
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    _entrance.duration = AppMotion.duration(
+      context,
+      const Duration(milliseconds: 1300),
+    );
+    _entrance.forward();
+  }
+
+  @override
+  void dispose() {
+    _entrance.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = widget.value;
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _CompletionReveal(
+              animation: _entrance,
+              interval: const Interval(
+                0.38,
+                0.6,
+                curve: AppMotion.entranceCurve,
+              ),
+              child: Text(
+                HistoryPresentation.duration(value.duration),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            _CompletionReveal(
+              animation: _entrance,
+              interval: const Interval(
+                0.42,
+                0.64,
+                curve: AppMotion.entranceCurve,
+              ),
+              child: const Text('  ·  '),
+            ),
+            _CompletionReveal(
+              animation: _entrance,
+              interval: const Interval(
+                0.46,
+                0.68,
+                curve: AppMotion.entranceCurve,
+              ),
+              child: Text(
+                SessionPresentation.formatLoad(
+                  value.totalLoad,
+                  widget.runtime.displayUnitSystem,
+                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        _CompletionReveal(
+          animation: _entrance,
+          interval: const Interval(0.54, 0.76, curve: AppMotion.entranceCurve),
+          child: Text(
+            SessionPresentation.dayComparison(value.totalLoad),
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _CompletionReveal(
+          animation: _entrance,
+          interval: const Interval(0.62, 0.84, curve: AppMotion.entranceCurve),
+          child: _AdherenceDots(
+            completed: value.completedThisWeek,
+            total: value.plannedThisWeek,
+          ),
+        ),
+        if (value.weekStreak case final streak?) ...[
+          const SizedBox(height: AppSpacing.md),
+          _CompletionReveal(
+            animation: _entrance,
+            interval: const Interval(0.7, 0.92, curve: AppMotion.entranceCurve),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.paper,
+                borderRadius: AppRadii.largeBorder,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.roseDeep.withValues(alpha: 0.1),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.local_florist_rounded,
+                    color: AppColors.roseDeep,
+                    size: 16,
+                  ),
+                  const SizedBox(width: AppSpacing.xxs),
+                  Text(
+                    '$streak-week streak',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: AppColors.roseDeep,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        if (value.totalSessions == 1) ...[
+          const SizedBox(height: AppSpacing.md),
+          _CompletionReveal(
+            animation: _entrance,
+            interval: const Interval(0.78, 1, curve: AppMotion.entranceCurve),
+            child: Text(
+              'Each session teaches your plan.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _CompletionActions extends StatefulWidget {
+  const _CompletionActions({required this.ready, required this.child});
+
+  final bool ready;
+  final Widget child;
+
+  @override
+  State<_CompletionActions> createState() => _CompletionActionsState();
+}
+
+class _CompletionActionsState extends State<_CompletionActions>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _entrance = AnimationController(vsync: this);
+  bool _interactive = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _entrance.addStatusListener(_handleStatus);
+  }
+
+  void _handleStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _interactive = true);
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _entrance.duration = AppMotion.duration(
+      context,
+      const Duration(milliseconds: 1750),
+    );
+    if (widget.ready && !_entrance.isAnimating && !_entrance.isCompleted) {
+      _entrance.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _CompletionActions oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.ready && widget.ready) _entrance.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _entrance.removeStatusListener(_handleStatus);
+    _entrance.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: !widget.ready || !_interactive,
+      child: _CompletionReveal(
+        animation: _entrance,
+        interval: const Interval(0.77, 1, curve: AppMotion.entranceCurve),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _CompletionReveal extends StatelessWidget {
+  const _CompletionReveal({
+    required this.animation,
+    required this.interval,
+    required this.child,
+  });
+
+  final Animation<double> animation;
+  final Interval interval;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final reveal = CurvedAnimation(parent: animation, curve: interval);
+    return AnimatedBuilder(
+      animation: reveal,
+      child: child,
+      builder: (context, child) => Opacity(
+        opacity: reveal.value,
+        child: Transform.translate(
+          offset: Offset(0, 10 * (1 - reveal.value)),
+          child: child,
         ),
       ),
     );

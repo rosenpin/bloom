@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../data/exercise_video_source.dart';
@@ -375,7 +376,8 @@ class _AngleButton extends StatelessWidget {
         key: ValueKey('exercise-video-angle-${angle.name}'),
         onTap: () => onSelected(angle),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
+          duration: AppMotion.duration(context, AppMotion.feedback),
+          curve: AppMotion.standardCurve,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm,
             vertical: AppSpacing.xs,

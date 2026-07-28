@@ -11,6 +11,7 @@ import '../../features/tabs/presentation/me_screen.dart';
 import '../../features/tabs/presentation/plan_screen.dart';
 import '../../features/tabs/presentation/today_screen.dart';
 import '../providers.dart';
+import '../theme/app_motion.dart';
 
 part 'app_router.g.dart';
 
@@ -38,64 +39,88 @@ GoRouter router(Ref ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/', builder: (context, state) => const SizedBox.shrink()),
+      GoRoute(
+        path: '/',
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const SizedBox.shrink()),
+      ),
       GoRoute(
         path: '/onboarding',
-        builder: (context, state) => const WelcomeScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const WelcomeScreen()),
       ),
       GoRoute(
         path: '/onboarding/age',
-        builder: (context, state) => const AgeScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const AgeScreen()),
       ),
       GoRoute(
         path: '/onboarding/goal',
-        builder: (context, state) => const GoalScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const GoalScreen()),
       ),
       GoRoute(
         path: '/onboarding/days',
-        builder: (context, state) => const DaysScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const DaysScreen()),
       ),
       GoRoute(
         path: '/onboarding/session-length',
-        builder: (context, state) => const SessionLengthScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const SessionLengthScreen()),
       ),
       GoRoute(
         path: '/onboarding/experience',
-        builder: (context, state) => const ExperienceScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const ExperienceScreen()),
       ),
       GoRoute(
         path: '/onboarding/emphasis',
-        builder: (context, state) => const EmphasisScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const EmphasisScreen()),
       ),
       GoRoute(
         path: '/onboarding/activities',
-        builder: (context, state) => const ActivitiesScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const ActivitiesScreen()),
       ),
       GoRoute(
         path: '/onboarding/menstrual',
-        builder: (context, state) => const MenstrualScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const MenstrualScreen()),
       ),
       GoRoute(
         path: '/onboarding/generating',
-        builder: (context, state) => const GeneratingScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const GeneratingScreen()),
       ),
       GoRoute(
         path: '/onboarding/reveal',
-        builder: (context, state) => const PlanRevealScreen(),
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const PlanRevealScreen()),
       ),
       GoRoute(
         path: '/session',
-        builder: (context, state) => const SessionPlayerScreen(),
+        pageBuilder: (context, state) =>
+            _takeoverPage(context, state, const SessionPlayerScreen()),
       ),
       GoRoute(
         path: '/history/session/:id',
-        builder: (context, state) =>
-            SessionSummaryScreen(sessionId: state.pathParameters['id'] ?? ''),
+        pageBuilder: (context, state) => _softPage(
+          context,
+          state,
+          SessionSummaryScreen(sessionId: state.pathParameters['id'] ?? ''),
+        ),
       ),
       GoRoute(
         path: '/plan/day/:dayIndex',
-        builder: (context, state) => PlanDayDetailScreen(
-          dayIndex: int.tryParse(state.pathParameters['dayIndex'] ?? '') ?? -1,
+        pageBuilder: (context, state) => _softPage(
+          context,
+          state,
+          PlanDayDetailScreen(
+            dayIndex:
+                int.tryParse(state.pathParameters['dayIndex'] ?? '') ?? -1,
+          ),
         ),
       ),
       StatefulShellRoute.indexedStack(
@@ -106,7 +131,8 @@ GoRouter router(Ref ref) {
             routes: [
               GoRoute(
                 path: '/today',
-                builder: (context, state) => const TodayScreen(),
+                pageBuilder: (context, state) =>
+                    _softPage(context, state, const TodayScreen()),
               ),
             ],
           ),
@@ -114,7 +140,8 @@ GoRouter router(Ref ref) {
             routes: [
               GoRoute(
                 path: '/plan',
-                builder: (context, state) => const PlanScreen(),
+                pageBuilder: (context, state) =>
+                    _softPage(context, state, const PlanScreen()),
               ),
             ],
           ),
@@ -122,7 +149,8 @@ GoRouter router(Ref ref) {
             routes: [
               GoRoute(
                 path: '/me',
-                builder: (context, state) => const MeScreen(),
+                pageBuilder: (context, state) =>
+                    _softPage(context, state, const MeScreen()),
               ),
             ],
           ),
@@ -134,21 +162,142 @@ GoRouter router(Ref ref) {
   return router;
 }
 
-class _AppShell extends StatelessWidget {
+CustomTransitionPage<void> _softPage(
+  BuildContext context,
+  GoRouterState state,
+  Widget child,
+) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: AppMotion.duration(context, AppMotion.routeEntrance),
+    reverseTransitionDuration: AppMotion.duration(context, AppMotion.routeExit),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: AppMotion.entranceCurve,
+        reverseCurve: AppMotion.standardCurve,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.04),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+CustomTransitionPage<void> _takeoverPage(
+  BuildContext context,
+  GoRouterState state,
+  Widget child,
+) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: AppMotion.duration(context, AppMotion.layout),
+    reverseTransitionDuration: AppMotion.exitDuration(
+      context,
+      AppMotion.layout,
+    ),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: AppMotion.decisiveCurve,
+        reverseCurve: AppMotion.standardCurve,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 1),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+class _AppShell extends StatefulWidget {
   const _AppShell({required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
+  State<_AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<_AppShell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _tabFade = AnimationController(
+    vsync: this,
+    value: 1,
+  );
+  bool _switching = false;
+
+  @override
+  void didUpdateWidget(covariant _AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_switching &&
+        oldWidget.navigationShell.currentIndex !=
+            widget.navigationShell.currentIndex) {
+      _tabFade.value = 0;
+      _tabFade.animateTo(
+        1,
+        duration: AppMotion.duration(context, AppMotion.tab),
+        curve: AppMotion.entranceCurve,
+      );
+    }
+  }
+
+  Future<void> _selectTab(int index) async {
+    if (_switching) return;
+    final currentIndex = widget.navigationShell.currentIndex;
+    if (index == currentIndex) {
+      widget.navigationShell.goBranch(index, initialLocation: true);
+      return;
+    }
+    if (AppMotion.isReduced(context)) {
+      widget.navigationShell.goBranch(index);
+      return;
+    }
+
+    _switching = true;
+    await _tabFade.animateTo(
+      0,
+      duration: AppMotion.duration(context, const Duration(milliseconds: 75)),
+      curve: AppMotion.standardCurve,
+    );
+    if (!mounted) return;
+    widget.navigationShell.goBranch(index);
+    await _tabFade.animateTo(
+      1,
+      duration: AppMotion.duration(context, const Duration(milliseconds: 125)),
+      curve: AppMotion.entranceCurve,
+    );
+    _switching = false;
+  }
+
+  @override
+  void dispose() {
+    _tabFade.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: navigationShell,
+      body: FadeTransition(opacity: _tabFade, child: widget.navigationShell),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) => navigationShell.goBranch(
-          index,
-          initialLocation: index == navigationShell.currentIndex,
-        ),
+        selectedIndex: widget.navigationShell.currentIndex,
+        onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(
             key: ValueKey('today-tab'),

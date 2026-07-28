@@ -5,6 +5,7 @@ import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../onboarding/presentation/onboarding_widgets.dart';
@@ -104,24 +105,54 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                       setState(() => _showAllWeeks = showAllWeeks),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                if (_showAllWeeks)
-                  for (final week in document.plan.mesocycleCalendar)
-                    _MesocycleWeekCard(
-                      week: week,
-                      isCurrent: week.weekIndex == currentWeek,
-                    )
-                else
-                  for (final day in document.plan.days)
-                    PlanDayCard(
-                      day: day,
-                      answers: answers,
-                      state: completedDayIndices.contains(day.dayIndex)
-                          ? PlanDayCardState.done
-                          : day.dayIndex == todayDayIndex
-                          ? PlanDayCardState.today
-                          : PlanDayCardState.upcoming,
-                      onTap: () => context.push('/plan/day/${day.dayIndex}'),
+                AnimatedSwitcher(
+                  duration: AppMotion.duration(context, AppMotion.layout),
+                  reverseDuration: AppMotion.exitDuration(
+                    context,
+                    AppMotion.layout,
+                  ),
+                  switchInCurve: AppMotion.entranceCurve,
+                  switchOutCurve: AppMotion.standardCurve,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.025),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
                     ),
+                  ),
+                  child: _showAllWeeks
+                      ? Column(
+                          key: const ValueKey('plan-all-weeks-list'),
+                          children: [
+                            for (final week in document.plan.mesocycleCalendar)
+                              _MesocycleWeekCard(
+                                week: week,
+                                isCurrent: week.weekIndex == currentWeek,
+                              ),
+                          ],
+                        )
+                      : Column(
+                          key: const ValueKey('plan-current-week-list'),
+                          children: [
+                            for (final day in document.plan.days)
+                              PlanDayCard(
+                                day: day,
+                                answers: answers,
+                                state:
+                                    completedDayIndices.contains(day.dayIndex)
+                                    ? PlanDayCardState.done
+                                    : day.dayIndex == todayDayIndex
+                                    ? PlanDayCardState.today
+                                    : PlanDayCardState.upcoming,
+                                onTap: () =>
+                                    context.push('/plan/day/${day.dayIndex}'),
+                              ),
+                          ],
+                        ),
+                ),
                 TextButton(
                   key: const ValueKey('plan-adjust'),
                   onPressed: () => context.go('/onboarding/age'),
@@ -181,32 +212,66 @@ class _PlanViewToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.all(AppSpacing.xxs),
-      decoration: const BoxDecoration(
-        color: AppColors.blushSoft,
-        borderRadius: AppRadii.mediumBorder,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _PlanViewToggleItem(
-              key: const ValueKey('plan-week-view'),
-              label: 'Week $currentWeek',
-              selected: !showAllWeeks,
-              onTap: () => onChanged(false),
+    return Material(
+      color: AppColors.blushSoft,
+      borderRadius: AppRadii.mediumBorder,
+      child: SizedBox(
+        height: 44,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xxs),
+          child: LayoutBuilder(
+            builder: (context, constraints) => Stack(
+              fit: StackFit.expand,
+              children: [
+                IgnorePointer(
+                  child: AnimatedAlign(
+                    alignment: showAllWeeks
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    duration: AppMotion.duration(context, AppMotion.state),
+                    curve: AppMotion.standardCurve,
+                    child: SizedBox(
+                      width: constraints.maxWidth / 2,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: AppColors.paper,
+                          borderRadius: AppRadii.smallBorder,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.ink.withValues(alpha: 0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PlanViewToggleItem(
+                        key: const ValueKey('plan-week-view'),
+                        label: 'Week $currentWeek',
+                        selected: !showAllWeeks,
+                        onTap: () => onChanged(false),
+                      ),
+                    ),
+                    Expanded(
+                      child: _PlanViewToggleItem(
+                        key: const ValueKey('plan-all-weeks-view'),
+                        label: 'All weeks',
+                        selected: showAllWeeks,
+                        onTap: () => onChanged(true),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          Expanded(
-            child: _PlanViewToggleItem(
-              key: const ValueKey('plan-all-weeks-view'),
-              label: 'All weeks',
-              selected: showAllWeeks,
-              onTap: () => onChanged(true),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -227,7 +292,7 @@ class _PlanViewToggleItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.paper : Colors.transparent,
+      color: Colors.transparent,
       borderRadius: AppRadii.smallBorder,
       clipBehavior: Clip.antiAlias,
       child: InkWell(

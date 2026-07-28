@@ -5,6 +5,7 @@ import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../history/domain/history_presentation.dart';
@@ -112,31 +113,62 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     const BloomMark(showWordmark: false),
                   ],
                 ),
-                if (gateDecision?.updateRecommended == true &&
-                    !_updateNudgeDismissed) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _VersionUpdateNudge(
-                    message: gateDecision?.message,
-                    onDismiss: () =>
-                        setState(() => _updateNudgeDismissed = true),
+                AnimatedSwitcher(
+                  duration: AppMotion.duration(context, AppMotion.state),
+                  reverseDuration: AppMotion.exitDuration(
+                    context,
+                    AppMotion.state,
                   ),
-                ],
+                  switchInCurve: AppMotion.entranceCurve,
+                  switchOutCurve: AppMotion.standardCurve,
+                  transitionBuilder: _softStateTransition,
+                  child:
+                      gateDecision?.updateRecommended == true &&
+                          !_updateNudgeDismissed
+                      ? Padding(
+                          key: const ValueKey('version-nudge-visible'),
+                          padding: const EdgeInsets.only(top: AppSpacing.md),
+                          child: _VersionUpdateNudge(
+                            message: gateDecision?.message,
+                            onDismiss: () =>
+                                setState(() => _updateNudgeDismissed = true),
+                          ),
+                        )
+                      : const SizedBox(key: ValueKey('version-nudge-hidden')),
+                ),
                 const SizedBox(height: AppSpacing.lg),
-                _TodayHeroCard(
-                  dayName: PlanPresentation.dayName(day, answers),
-                  weekKind: weekKind,
-                  exerciseCount: day.exercises.length,
-                  plannedMinutes: answers.sessionMinutes?.value ?? 45,
-                  completed: completed,
-                  hasOpenSession: preview?.hasOpenSessionToday ?? false,
-                  onStart: preview == null
-                      ? null
-                      : () => _startSession(context),
-                  onSummary: completed == null
-                      ? null
-                      : () => context.push(
-                          '/history/session/${completed.record.id}',
-                        ),
+                AnimatedSwitcher(
+                  duration: AppMotion.duration(context, AppMotion.state),
+                  reverseDuration: AppMotion.exitDuration(
+                    context,
+                    AppMotion.state,
+                  ),
+                  switchInCurve: AppMotion.entranceCurve,
+                  switchOutCurve: AppMotion.standardCurve,
+                  transitionBuilder: _softStateTransition,
+                  child: _TodayHeroCard(
+                    key: ValueKey(
+                      completed != null
+                          ? 'today-hero-done'
+                          : preview?.hasOpenSessionToday ?? false
+                          ? 'today-hero-resume'
+                          : 'today-hero-normal',
+                    ),
+                    dayName: PlanPresentation.dayName(day, answers),
+                    weekKind: weekKind,
+                    exerciseCount: day.exercises.length,
+                    plannedMinutes: answers.sessionMinutes?.value ?? 45,
+                    completed: completed,
+                    hasOpenSession: preview?.hasOpenSessionToday ?? false,
+                    onStart: preview == null
+                        ? null
+                        : () => _startSession(context),
+                    onSummary: completed == null
+                        ? null
+                        : () => context.push(
+                            '/history/session/${completed.record.id}',
+                          ),
+                  ),
                 ),
                 if (completed case final session?) ...[
                   const SizedBox(height: AppSpacing.sm),
@@ -201,6 +233,7 @@ class _TodayHeroCard extends StatelessWidget {
     required this.onStart,
     required this.onSummary,
     this.completed,
+    super.key,
   });
 
   final String dayName;
@@ -419,13 +452,28 @@ class _NoPlanToday extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (showUpdateNudge) ...[
-                  _VersionUpdateNudge(
-                    message: updateMessage,
-                    onDismiss: onDismissUpdate,
+                AnimatedSwitcher(
+                  duration: AppMotion.duration(context, AppMotion.state),
+                  reverseDuration: AppMotion.exitDuration(
+                    context,
+                    AppMotion.state,
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
+                  switchInCurve: AppMotion.entranceCurve,
+                  switchOutCurve: AppMotion.standardCurve,
+                  transitionBuilder: _softStateTransition,
+                  child: showUpdateNudge
+                      ? Padding(
+                          key: const ValueKey('empty-version-nudge-visible'),
+                          padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                          child: _VersionUpdateNudge(
+                            message: updateMessage,
+                            onDismiss: onDismissUpdate,
+                          ),
+                        )
+                      : const SizedBox(
+                          key: ValueKey('empty-version-nudge-hidden'),
+                        ),
+                ),
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.xl),
                   decoration: const BoxDecoration(
@@ -461,6 +509,19 @@ class _NoPlanToday extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _softStateTransition(Widget child, Animation<double> animation) {
+  return FadeTransition(
+    opacity: animation,
+    child: SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, 0.025),
+        end: Offset.zero,
+      ).animate(animation),
+      child: child,
+    ),
+  );
 }
 
 class _VersionUpdateNudge extends StatelessWidget {

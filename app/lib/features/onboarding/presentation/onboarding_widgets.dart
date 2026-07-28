@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_theme.dart';
@@ -271,55 +272,75 @@ class OptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Material(
-        color: selected ? AppColors.blushSoft : AppColors.paper,
-        shape: RoundedRectangleBorder(
+      child: AnimatedContainer(
+        duration: AppMotion.duration(context, AppMotion.state),
+        curve: AppMotion.standardCurve,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.blushSoft : AppColors.paper,
           borderRadius: AppRadii.mediumBorder,
-          side: BorderSide(
+          border: Border.all(
             color: selected ? AppColors.rose : AppColors.line,
             width: selected ? 2 : 1,
           ),
         ),
-        child: InkWell(
-          onTap: onTap,
+        child: Material(
+          color: Colors.transparent,
           borderRadius: AppRadii.mediumBorder,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          if (description != null) ...[
-                            const SizedBox(height: AppSpacing.xxs),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              description!,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: AppColors.inkSoft,
-                                    height: 1.35,
-                                  ),
+                              title,
+                              style: Theme.of(context).textTheme.titleMedium,
                             ),
+                            if (description != null) ...[
+                              const SizedBox(height: AppSpacing.xxs),
+                              Text(
+                                description!,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: AppColors.inkSoft,
+                                      height: 1.35,
+                                    ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
+                      const SizedBox(width: AppSpacing.sm),
+                      trailing ?? SelectionRadio(selected: selected),
+                    ],
+                  ),
+                  AnimatedSwitcher(
+                    duration: AppMotion.duration(context, AppMotion.state),
+                    reverseDuration: AppMotion.exitDuration(
+                      context,
+                      AppMotion.state,
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    trailing ?? SelectionRadio(selected: selected),
-                  ],
-                ),
-                if (child != null) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  child!,
+                    switchInCurve: AppMotion.entranceCurve,
+                    switchOutCurve: AppMotion.standardCurve,
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: child == null
+                        ? const SizedBox(key: ValueKey('option-child-empty'))
+                        : Padding(
+                            key: const ValueKey('option-child-visible'),
+                            padding: const EdgeInsets.only(top: AppSpacing.sm),
+                            child: child,
+                          ),
+                  ),
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -336,7 +357,8 @@ class SelectionRadio extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
+      duration: AppMotion.duration(context, AppMotion.state),
+      curve: AppMotion.standardCurve,
       width: AppSpacing.lg,
       height: AppSpacing.lg,
       decoration: BoxDecoration(
@@ -347,13 +369,23 @@ class SelectionRadio extends StatelessWidget {
           width: 2,
         ),
       ),
-      child: selected
-          ? const Icon(
-              Icons.circle,
-              color: AppColors.paper,
-              size: AppSpacing.sm,
-            )
-          : null,
+      child: AnimatedSwitcher(
+        duration: AppMotion.duration(context, AppMotion.feedback),
+        switchInCurve: AppMotion.entranceCurve,
+        switchOutCurve: AppMotion.standardCurve,
+        transitionBuilder: (child, animation) => ScaleTransition(
+          scale: animation,
+          child: FadeTransition(opacity: animation, child: child),
+        ),
+        child: selected
+            ? const Icon(
+                Icons.circle,
+                key: ValueKey('selection-radio-selected'),
+                color: AppColors.paper,
+                size: AppSpacing.sm,
+              )
+            : const SizedBox(key: ValueKey('selection-radio-empty')),
+      ),
     );
   }
 }
@@ -386,70 +418,75 @@ class SquareChoice<T> extends StatelessWidget {
               fontFamily: AppTheme.displayFontFamily,
               fontWeight: FontWeight.w400,
             );
-    return Material(
-      color: selected ? AppColors.blushSoft : AppColors.paper,
-      shape: RoundedRectangleBorder(
+    return AnimatedContainer(
+      duration: AppMotion.duration(context, AppMotion.state),
+      curve: AppMotion.standardCurve,
+      decoration: BoxDecoration(
+        color: selected ? AppColors.blushSoft : AppColors.paper,
         borderRadius: AppRadii.mediumBorder,
-        side: BorderSide(
+        border: Border.all(
           color: selected ? AppColors.rose : AppColors.line,
           width: selected ? 2 : 1,
         ),
       ),
-      child: InkWell(
-        onTap: () => onSelected(value),
+      child: Material(
+        color: Colors.transparent,
         borderRadius: AppRadii.mediumBorder,
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? AppSpacing.xxs : AppSpacing.sm,
-            vertical: compact ? AppSpacing.sm : AppSpacing.md,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (compact)
-                SizedBox(
-                  width: double.infinity,
-                  height: AppSpacing.lg,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: primaryStyle,
-                    ),
-                  ),
-                )
-              else
-                Text(label, textAlign: TextAlign.center, style: primaryStyle),
-              if (caption != null) ...[
-                SizedBox(height: compact ? 2 : AppSpacing.xxs),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => onSelected(value),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? AppSpacing.xxs : AppSpacing.sm,
+              vertical: compact ? AppSpacing.sm : AppSpacing.md,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
                 if (compact)
                   SizedBox(
                     width: double.infinity,
-                    height: AppSpacing.md,
+                    height: AppSpacing.lg,
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        caption!,
+                        label,
                         maxLines: 1,
                         softWrap: false,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.inkFaint,
-                        ),
+                        style: primaryStyle,
                       ),
                     ),
                   )
                 else
-                  Text(
-                    caption!,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: AppColors.inkFaint),
-                  ),
+                  Text(label, textAlign: TextAlign.center, style: primaryStyle),
+                if (caption != null) ...[
+                  SizedBox(height: compact ? 2 : AppSpacing.xxs),
+                  if (compact)
+                    SizedBox(
+                      width: double.infinity,
+                      height: AppSpacing.md,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          caption!,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.inkFaint),
+                        ),
+                      ),
+                    )
+                  else
+                    Text(
+                      caption!,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppColors.inkFaint,
+                      ),
+                    ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -496,12 +533,12 @@ class SlidingSegmentedPicker<T> extends StatelessWidget {
                   IgnorePointer(
                     child: AnimatedOpacity(
                       opacity: selectedIndex < 0 ? 0 : 1,
-                      duration: const Duration(milliseconds: 160),
-                      curve: Curves.easeOut,
+                      duration: AppMotion.duration(context, AppMotion.feedback),
+                      curve: AppMotion.standardCurve,
                       child: AnimatedAlign(
                         alignment: alignment,
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
+                        duration: AppMotion.duration(context, AppMotion.state),
+                        curve: AppMotion.standardCurve,
                         child: SizedBox(
                           width: constraints.maxWidth / entries.length,
                           height: double.infinity,
@@ -655,7 +692,8 @@ class BloomToggle extends StatelessWidget {
         onTap: () => onChanged(!value),
         borderRadius: AppRadii.largeBorder,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
+          duration: AppMotion.duration(context, AppMotion.state),
+          curve: AppMotion.standardCurve,
           width: AppSpacing.xxl,
           height: AppSpacing.xl,
           padding: const EdgeInsets.all(AppSpacing.xxs),
@@ -664,7 +702,8 @@ class BloomToggle extends StatelessWidget {
             borderRadius: AppRadii.largeBorder,
           ),
           child: AnimatedAlign(
-            duration: const Duration(milliseconds: 160),
+            duration: AppMotion.duration(context, AppMotion.state),
+            curve: AppMotion.standardCurve,
             alignment: value ? Alignment.centerRight : Alignment.centerLeft,
             child: const DecoratedBox(
               decoration: BoxDecoration(
@@ -696,24 +735,30 @@ class PillChoice<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.rose : AppColors.paper,
-      shape: RoundedRectangleBorder(
+    return AnimatedContainer(
+      duration: AppMotion.duration(context, AppMotion.state),
+      curve: AppMotion.standardCurve,
+      decoration: BoxDecoration(
+        color: selected ? AppColors.rose : AppColors.paper,
         borderRadius: AppRadii.largeBorder,
-        side: BorderSide(color: selected ? AppColors.rose : AppColors.line),
+        border: Border.all(color: selected ? AppColors.rose : AppColors.line),
       ),
-      child: InkWell(
-        onTap: () => onSelected(value),
+      child: Material(
+        color: Colors.transparent,
         borderRadius: AppRadii.largeBorder,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
-          ),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: selected ? AppColors.paper : AppColors.inkSoft,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => onSelected(value),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: selected ? AppColors.paper : AppColors.inkSoft,
+              ),
             ),
           ),
         ),
