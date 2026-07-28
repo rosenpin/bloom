@@ -1,0 +1,283 @@
+name: TestFlight
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'mockups/**'
+      - '**.md'
+      - '.impeccable.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Pin the OS image so Xcode changes do not land unexpectedly mid-release.
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      TESTFLIGHT_KEYCHAIN_PATH: ${{ runner.temp }}/testflight-signing.keychain-db
+      TESTFLIGHT_CERTIFICATE_PATH: ${{ runner.temp }}/apple-distribution.p12
+      TESTFLIGHT_PROFILE_PATH: ${{ runner.temp }}/app-store.mobileprovision
+      TESTFLIGHT_PROFILE_PLIST: ${{ runner.temp }}/app-store-profile.plist
+      TESTFLIGHT_ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+      TESTFLIGHT_XCODE_XCCONFIG_FILE: ${{ runner.temp }}/TestFlightSigning.xcconfig
+      TESTFLIGHT_EXPORT_OPTIONS_PLIST: ${{ runner.temp }}/ExportOptions.plist
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.5'
+          channel: stable
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+        working-directory: app
+
+      - name: Generate Flutter sources
+        run: dart run build_runner build --delete-conflicting-outputs
+        working-directory: app
+
+      # Gate the release on the same tests CI runs, so a red merge cannot ship a
+      # beta. Runs before any signing material is created, so a failure is cheap.
+      - name: Test the engine
+        run: |
+          dart pub get
+          dart test
+        working-directory: packages/programming_engine
+
+      - name: Test the app
+        run: flutter test
+        working-directory: app
+
+      - name: Install App Store Connect Python dependency
+        run: python3 -m pip install --disable-pip-version-check cryptography
+
+      - name: Restore build-number floor
+        uses: actions/cache/restore@v4
+        with:
+          path: .last-build-number
+          key: testflight-build-number-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            testflight-build-number-
+
+      - name: Set up manual iOS signing
+        env:
+          ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+          IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          set +x
+          keychain_password="$(openssl rand -base64 48 | tr -d '\r\n')"
+
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          files = (
+              ("IOS_DIST_CERT_P12_BASE64", "TESTFLIGHT_CERTIFICATE_PATH"),
+              ("IOS_PROVISIONING_PROFILE_BASE64", "TESTFLIGHT_PROFILE_PATH"),
+          )
+          for secret_name, path_name in files:
+              encoded = os.environ.get(secret_name)
+              if not encoded:
+                  raise SystemExit(f"Required Actions secret is missing: {secret_name}")
+              try:
+                  decoded = base64.b64decode(encoded, validate=True)
+              except (ValueError, TypeError) as error:
+                  raise SystemExit(f"{secret_name} is not valid base64: {error}") from None
+              output = Path(os.environ[path_name])
+              output.write_bytes(decoded)
+              output.chmod(0o600)
+          PY
+
+          security create-keychain \
+            -p "$keychain_password" \
+            "$TESTFLIGHT_KEYCHAIN_PATH"
+          security default-keychain -d user -s "$TESTFLIGHT_KEYCHAIN_PATH"
+          security list-keychains -d user -s "$TESTFLIGHT_KEYCHAIN_PATH"
+          security unlock-keychain \
+            -p "$keychain_password" \
+            "$TESTFLIGHT_KEYCHAIN_PATH"
+          security set-keychain-settings \
+            -lut 21600 \
+            "$TESTFLIGHT_KEYCHAIN_PATH"
+          security import "$TESTFLIGHT_CERTIFICATE_PATH" \
+            -k "$TESTFLIGHT_KEYCHAIN_PATH" \
+            -P "$IOS_DIST_CERT_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$TESTFLIGHT_KEYCHAIN_PATH"
+
+          security cms \
+            -D \
+            -i "$TESTFLIGHT_PROFILE_PATH" \
+            >"$TESTFLIGHT_PROFILE_PLIST"
+          profile_uuid="$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :UUID" \
+              "$TESTFLIGHT_PROFILE_PLIST"
+          )"
+          profile_team="$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :TeamIdentifier:0" \
+              "$TESTFLIGHT_PROFILE_PLIST"
+          )"
+          profile_app_identifier="$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :Entitlements:application-identifier" \
+              "$TESTFLIGHT_PROFILE_PLIST"
+          )"
+          [[ "$profile_uuid" =~ ^[0-9A-Fa-f-]+$ ]]
+          [[ "$profile_team" == "$ASC_TEAM_ID" ]]
+          [[ "$profile_app_identifier" == *".io.rosenpin.womensgym" ]]
+
+          profile_directory="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$profile_directory"
+          installed_profile="$profile_directory/$profile_uuid.mobileprovision"
+          cp "$TESTFLIGHT_PROFILE_PATH" "$installed_profile"
+          printf 'TESTFLIGHT_INSTALLED_PROFILE=%s\n' \
+            "$installed_profile" >>"$GITHUB_ENV"
+
+          PROFILE_UUID="$profile_uuid" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          profile_uuid = os.environ["PROFILE_UUID"]
+          team_id = os.environ["ASC_TEAM_ID"]
+          xcconfig = f"""\
+          CODE_SIGN_STYLE = Manual
+          CODE_SIGN_IDENTITY = Apple Distribution
+          CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution
+          DEVELOPMENT_TEAM = {team_id}
+          PROVISIONING_PROFILE = {profile_uuid}
+          PROVISIONING_PROFILE_SPECIFIER = {profile_uuid}
+          """
+          Path(os.environ["TESTFLIGHT_XCODE_XCCONFIG_FILE"]).write_text(xcconfig)
+          PY
+
+          plutil -create xml1 "$TESTFLIGHT_EXPORT_OPTIONS_PLIST"
+          /usr/libexec/PlistBuddy \
+            -c "Add :method string app-store-connect" \
+            -c "Add :destination string export" \
+            -c "Add :signingStyle string manual" \
+            -c "Add :teamID string $ASC_TEAM_ID" \
+            -c "Add :manageAppVersionAndBuildNumber bool false" \
+            -c "Add :stripSwiftSymbols bool true" \
+            -c "Add :uploadSymbols bool true" \
+            -c "Add :provisioningProfiles dict" \
+            -c "Add :provisioningProfiles:io.rosenpin.womensgym string $profile_uuid" \
+            "$TESTFLIGHT_EXPORT_OPTIONS_PLIST"
+
+      - name: Reconstruct release environment
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+          SUPABASE_PROJECTID: ${{ secrets.SUPABASE_PROJECTID }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          python3 - <<'PY'
+          import os
+          import shlex
+          from pathlib import Path
+
+          required = (
+              "ASC_KEY_ID",
+              "ASC_ISSUER_ID",
+              "ASC_KEY_P8",
+              "ASC_TEAM_ID",
+              "SUPABASE_PROJECTID",
+              "SUPABASE_PUBLISHABLE_KEY",
+          )
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit(
+                  "Required Actions secrets are missing: " + ", ".join(missing)
+              )
+
+          key_path = Path(os.environ["TESTFLIGHT_ASC_KEY_PATH"])
+          key_path.write_text(os.environ["ASC_KEY_P8"])
+          key_path.chmod(0o600)
+
+          dotenv = {
+              "ASC_KEY_ID": os.environ["ASC_KEY_ID"],
+              "ASC_ISSUER_ID": os.environ["ASC_ISSUER_ID"],
+              "ASC_KEY_PATH": str(key_path),
+              "ASC_TEAM_ID": os.environ["ASC_TEAM_ID"],
+              "SUPABASE_PROJECTID": os.environ["SUPABASE_PROJECTID"],
+              "SUPABASE_PUBLISHABLE_KEY": os.environ[
+                  "SUPABASE_PUBLISHABLE_KEY"
+              ],
+          }
+          env_path = Path(".env")
+          env_path.write_text(
+              "".join(f"{name}={shlex.quote(value)}\n" for name, value in dotenv.items())
+          )
+          env_path.chmod(0o600)
+          PY
+
+      - name: Build and upload to TestFlight
+        run: |
+          set -o pipefail
+          tool/testflight.sh 2>&1 | tee "$RUNNER_TEMP/testflight.log"
+
+      - name: Save build-number floor
+        if: ${{ always() && hashFiles('.last-build-number') != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .last-build-number
+          key: testflight-build-number-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload failure diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/testflight.log
+            app/build/ios/ipa/*.ipa
+            app/build/ios/archive/**
+            ~/Library/Developer/Xcode/DerivedData/**/Logs/**
+
+      - name: Clean up signing material
+        if: ${{ always() }}
+        run: |
+          set +e
+          security delete-keychain "$TESTFLIGHT_KEYCHAIN_PATH" 2>/dev/null
+          if [[ -n "${TESTFLIGHT_INSTALLED_PROFILE:-}" ]]; then
+            rm -f "$TESTFLIGHT_INSTALLED_PROFILE"
+          fi
+          rm -f \
+            "$TESTFLIGHT_CERTIFICATE_PATH" \
+            "$TESTFLIGHT_PROFILE_PATH" \
+            "$TESTFLIGHT_PROFILE_PLIST" \
+            "$TESTFLIGHT_ASC_KEY_PATH" \
+            "$TESTFLIGHT_XCODE_XCCONFIG_FILE" \
+            "$TESTFLIGHT_EXPORT_OPTIONS_PLIST" \
+            .env \
+            app/env.json
