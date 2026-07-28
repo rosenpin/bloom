@@ -107,7 +107,12 @@ class PlanRevealScreen extends ConsumerWidget {
                           child: Column(
                             children: [
                               for (final day in document.plan.days)
-                                PlanDayCard(day: day, answers: answers),
+                                PlanDayCard(
+                                  day: day,
+                                  answers: answers,
+                                  onTap: () =>
+                                      context.push('/plan/day/${day.dayIndex}'),
+                                ),
                             ],
                           ),
                         ),
@@ -138,7 +143,7 @@ class PlanRevealScreen extends ConsumerWidget {
                       TextButton(
                         key: const ValueKey('reveal-tweak'),
                         onPressed: () => context.go('/onboarding/age'),
-                        child: const Text('Tweak my plan'),
+                        child: const Text('Create new plan'),
                       ),
                     ],
                   ),

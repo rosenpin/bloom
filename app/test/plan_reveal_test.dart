@@ -9,8 +9,40 @@ import 'package:womens_gym/core/providers.dart';
 import 'package:womens_gym/core/version_gate.dart';
 import 'package:womens_gym/data/db/app_database.dart';
 import 'package:womens_gym/features/onboarding/domain/onboarding_answers.dart';
+import 'package:womens_gym/features/plan/domain/plan_presentation.dart';
 
 void main() {
+  test('plan dose labels use ranges and timed seconds', () {
+    expect(
+      PlanPresentation.doseLabel(
+        const engine.RepsDose(
+          sets: 3,
+          range: engine.RepRange(8, 10),
+          effort: engine.EffortTarget.rpe7,
+          targetReps: 8,
+        ),
+      ),
+      '3 sets × 8-10',
+    );
+    expect(
+      PlanPresentation.doseLabel(
+        const engine.RepsDose(
+          sets: 3,
+          range: engine.RepRange(12, 12),
+          effort: engine.EffortTarget.rpe7,
+          targetReps: 12,
+        ),
+      ),
+      '3 sets × 12',
+    );
+    expect(
+      PlanPresentation.doseLabel(
+        const engine.TimedDose(sets: 2, hold: Duration(seconds: 30)),
+      ),
+      '2 sets × 30 sec',
+    );
+  });
+
   testWidgets('reveal renders the generated plan contents', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -71,7 +103,31 @@ void main() {
       findsWidgets,
     );
     expect(find.text('Start my first workout'), findsOneWidget);
-    expect(find.text('Tweak my plan'), findsOneWidget);
+    expect(find.text('Create new plan'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('plan-day-card-1')));
+    await tester.pumpAndSettle();
+
+    final firstDay = generated.plan.days.first;
+    expect(
+      find.byKey(const ValueKey('plan-day-detail-screen')),
+      findsOneWidget,
+    );
+    expect(find.text(PlanPresentation.dayName(firstDay, null)), findsOneWidget);
+    expect(
+      find.text(
+        '30 min · ${firstDay.exercises.length} exercises · warm-up included',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(PlanPresentation.doseLabel(firstDay.exercises.first.baseDose)),
+      findsWidgets,
+    );
+    expect(
+      find.byKey(const ValueKey('plan-day-start-workout')),
+      findsOneWidget,
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });

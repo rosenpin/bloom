@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../features/onboarding/presentation/onboarding_screens.dart';
+import '../../features/plan/presentation/plan_day_detail_screen.dart';
 import '../../features/plan/presentation/plan_reveal_screen.dart';
 import '../../features/session/presentation/session_player_screen.dart';
 import '../../features/tabs/presentation/me_screen.dart';
@@ -83,6 +84,12 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: '/session',
         builder: (context, state) => const SessionPlayerScreen(),
+      ),
+      GoRoute(
+        path: '/plan/day/:dayIndex',
+        builder: (context, state) => PlanDayDetailScreen(
+          dayIndex: int.tryParse(state.pathParameters['dayIndex'] ?? '') ?? -1,
+        ),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

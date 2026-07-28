@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' show StreamProvider;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -174,6 +175,23 @@ Stream<StoredPlanDocument?> latestPlan(Ref ref) =>
 @riverpod
 Future<SessionPreview?> sessionPreview(Ref ref) =>
     ref.watch(sessionLifecycleServiceProvider).preview();
+
+typedef CompletedSessionsForWeekQuery = ({
+  String planId,
+  int mesocycleWeekIndex,
+  int absoluteWeekIndex,
+});
+
+final completedSessionsForWeekProvider = StreamProvider.autoDispose
+    .family<List<SessionRecordRow>, CompletedSessionsForWeekQuery>(
+      (ref, query) => ref
+          .watch(sessionLifecycleServiceProvider)
+          .watchCompletedSessionsForWeek(
+            planId: query.planId,
+            mesocycleWeekIndex: query.mesocycleWeekIndex,
+            absoluteWeekIndex: query.absoluteWeekIndex,
+          ),
+    );
 
 @Riverpod(keepAlive: true)
 Duration minimumGenerationDelay(Ref ref) => const Duration(milliseconds: 2500);

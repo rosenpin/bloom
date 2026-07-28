@@ -82,6 +82,14 @@ abstract final class PlanPresentation {
         _ => null,
       };
 
+  static String doseLabel(engine.Dose dose) => switch (dose) {
+    engine.RepsDose(:final sets, :final range) =>
+      '$sets ${sets == 1 ? 'set' : 'sets'} × '
+          '${range.min == range.max ? range.min : '${range.min}-${range.max}'}',
+    engine.TimedDose(:final sets, :final hold) =>
+      '$sets ${sets == 1 ? 'set' : 'sets'} × ${hold.inSeconds} sec',
+  };
+
   static String? _activitiesLabel(OnboardingAnswers answers) {
     if (answers.otherActivities.containsKey(engine.ActivityKind.yogaPilates)) {
       return 'yoga in your week';
