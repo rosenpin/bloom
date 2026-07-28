@@ -74,6 +74,7 @@ class QuizPage extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
+    required this.onBack,
     required this.onContinue,
     super.key,
     this.continueLabel = 'Continue',
@@ -84,25 +85,62 @@ class QuizPage extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget child;
+  final VoidCallback onBack;
   final VoidCallback? onContinue;
   final String continueLabel;
   final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      body: SafeArea(
-        child: Column(
-          children: [
-            OnboardingProgress(step: step),
-            Expanded(
-              child: SingleChildScrollView(
+    return OnboardingBackScope(
+      onBack: onBack,
+      child: Scaffold(
+        backgroundColor: AppColors.paper,
+        body: SafeArea(
+          child: Column(
+            children: [
+              OnboardingProgress(step: step, onBack: onBack),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.md,
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 440),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            title,
+                            style: Theme.of(context).textTheme.headlineMedium,
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            subtitle,
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(
+                                  color: AppColors.inkSoft,
+                                  height: 1.45,
+                                ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          child,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.lg,
+                  AppSpacing.sm,
                   AppSpacing.lg,
                   AppSpacing.lg,
-                  AppSpacing.md,
                 ),
                 child: Center(
                   child: ConstrainedBox(
@@ -110,75 +148,82 @@ class QuizPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          title,
-                          style: Theme.of(context).textTheme.headlineMedium,
+                        FilledButton(
+                          onPressed: onContinue,
+                          child: Text(continueLabel),
                         ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          subtitle,
-                          style: Theme.of(context).textTheme.bodyLarge
-                              ?.copyWith(
-                                color: AppColors.inkSoft,
-                                height: 1.45,
-                              ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        child,
+                        ?footer,
                       ],
                     ),
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.lg,
-                AppSpacing.lg,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      FilledButton(
-                        onPressed: onContinue,
-                        child: Text(continueLabel),
-                      ),
-                      ?footer,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+class OnboardingBackScope extends StatelessWidget {
+  const OnboardingBackScope({
+    required this.onBack,
+    required this.child,
+    super.key,
+  });
+
+  final VoidCallback onBack;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope<void>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) onBack();
+      },
+      child: child,
+    );
+  }
+}
+
 class OnboardingProgress extends StatelessWidget {
-  const OnboardingProgress({super.key, this.step, this.optional = false})
-    : assert(step != null || optional);
+  const OnboardingProgress({
+    super.key,
+    this.step,
+    this.optional = false,
+    this.onBack,
+  }) : assert(step != null || optional);
 
   final int? step;
   final bool optional;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
+      padding: EdgeInsets.fromLTRB(
+        onBack == null ? AppSpacing.lg : AppSpacing.xxs,
         AppSpacing.sm,
         AppSpacing.lg,
         AppSpacing.xxs,
       ),
       child: Row(
         children: [
+          if (onBack != null) ...[
+            IconButton(
+              key: const ValueKey('onboarding-back'),
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              onPressed: onBack,
+              icon: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: AppColors.inkSoft,
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xxs),
+          ],
           Expanded(
             child: ClipRRect(
               borderRadius: AppRadii.smallBorder,
@@ -321,6 +366,7 @@ class SquareChoice<T> extends StatelessWidget {
     required this.onSelected,
     super.key,
     this.caption,
+    this.compact = false,
   });
 
   final T value;
@@ -328,9 +374,18 @@ class SquareChoice<T> extends StatelessWidget {
   final String? caption;
   final bool selected;
   final ValueChanged<T> onSelected;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final primaryStyle =
+        (compact
+                ? Theme.of(context).textTheme.titleMedium
+                : Theme.of(context).textTheme.titleLarge)
+            ?.copyWith(
+              fontFamily: AppTheme.displayFontFamily,
+              fontWeight: FontWeight.w400,
+            );
     return Material(
       color: selected ? AppColors.blushSoft : AppColors.paper,
       shape: RoundedRectangleBorder(
@@ -344,32 +399,178 @@ class SquareChoice<T> extends StatelessWidget {
         onTap: () => onSelected(value),
         borderRadius: AppRadii.mediumBorder,
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.md,
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? AppSpacing.xxs : AppSpacing.sm,
+            vertical: compact ? AppSpacing.sm : AppSpacing.md,
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontFamily: AppTheme.displayFontFamily,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
+              if (compact)
+                SizedBox(
+                  width: double.infinity,
+                  height: AppSpacing.lg,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: primaryStyle,
+                    ),
+                  ),
+                )
+              else
+                Text(label, textAlign: TextAlign.center, style: primaryStyle),
               if (caption != null) ...[
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  caption!,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelSmall?.copyWith(color: AppColors.inkFaint),
-                ),
+                SizedBox(height: compact ? 2 : AppSpacing.xxs),
+                if (compact)
+                  SizedBox(
+                    width: double.infinity,
+                    height: AppSpacing.md,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        caption!,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.inkFaint,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    caption!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: AppColors.inkFaint),
+                  ),
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SlidingSegmentedPicker<T> extends StatelessWidget {
+  const SlidingSegmentedPicker({
+    required this.options,
+    required this.value,
+    required this.onChanged,
+    super.key,
+    this.segmentKeyBuilder,
+  }) : assert(options.length > 1);
+
+  final Map<T, String> options;
+  final T? value;
+  final ValueChanged<T> onChanged;
+  final Key? Function(T value)? segmentKeyBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = options.entries.toList(growable: false);
+    final selectedIndex = entries.indexWhere((entry) => entry.key == value);
+    final visibleIndex = selectedIndex < 0 ? 0 : selectedIndex;
+    final alignment = Alignment(
+      -1 + (2 * visibleIndex / (entries.length - 1)),
+      0,
+    );
+
+    return Material(
+      color: AppColors.blushSoft,
+      borderRadius: AppRadii.smallBorder,
+      child: SizedBox(
+        height: AppSpacing.xxl,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xxs),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: selectedIndex < 0 ? 0 : 1,
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOut,
+                      child: AnimatedAlign(
+                        alignment: alignment,
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOut,
+                        child: SizedBox(
+                          width: constraints.maxWidth / entries.length,
+                          height: double.infinity,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: AppColors.paper,
+                              borderRadius: AppRadii.smallBorder,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.ink.withValues(alpha: 0.12),
+                                  blurRadius: AppSpacing.xxs,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      for (final entry in entries)
+                        Expanded(
+                          child: Semantics(
+                            button: true,
+                            selected: entry.key == value,
+                            child: InkWell(
+                              key: segmentKeyBuilder?.call(entry.key),
+                              onTap: () => onChanged(entry.key),
+                              borderRadius: AppRadii.smallBorder,
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.xxs,
+                                  ),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    height: AppSpacing.lg,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        entry.value,
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelMedium
+                                            ?.copyWith(
+                                              color: entry.key == value
+                                                  ? AppColors.ink
+                                                  : AppColors.inkSoft,
+                                              fontWeight: entry.key == value
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w600,
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),

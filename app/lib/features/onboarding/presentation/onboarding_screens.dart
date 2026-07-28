@@ -129,6 +129,7 @@ class AgeScreen extends ConsumerWidget {
       };
       return QuizPage(
         step: 1,
+        onBack: () => context.go('/onboarding'),
         title: 'How old are you?',
         subtitle:
             "Every decade starts differently. We'll pace your plan to yours.",
@@ -197,6 +198,7 @@ class GoalScreen extends ConsumerWidget {
       ref,
       (answers) => QuizPage(
         step: 2,
+        onBack: () => context.go('/onboarding/age'),
         title: 'What are we working toward?',
         subtitle: 'You can change this anytime.',
         onContinue: answers.goal == null
@@ -230,6 +232,7 @@ class DaysScreen extends ConsumerWidget {
       ref,
       (answers) => QuizPage(
         step: 3,
+        onBack: () => context.go('/onboarding/goal'),
         title: 'How often can you get to the gym?',
         subtitle: 'Be honest, not ambitious.',
         onContinue: answers.daysPerWeek == null
@@ -288,6 +291,7 @@ class SessionLengthScreen extends ConsumerWidget {
       ref,
       (answers) => QuizPage(
         step: 4,
+        onBack: () => context.go('/onboarding/days'),
         title: 'How long have you got?',
         subtitle: 'Workouts should fit your life, not the other way around.',
         onContinue: answers.sessionMinutes == null
@@ -358,6 +362,7 @@ class ExperienceScreen extends ConsumerWidget {
       ref,
       (answers) => QuizPage(
         step: 5,
+        onBack: () => context.go('/onboarding/session-length'),
         title: 'Where are you starting from?',
         subtitle: 'This shapes how much guidance we build in.',
         onContinue: answers.experienceTier == null || answers.gymComfort == null
@@ -469,6 +474,7 @@ class EmphasisScreen extends ConsumerWidget {
       ref,
       (answers) => QuizPage(
         step: 6,
+        onBack: () => context.go('/onboarding/experience'),
         title: 'Anywhere you want extra focus?',
         subtitle: "You'll train everything. This just tilts the balance.",
         onContinue: answers.emphasis == null
@@ -589,6 +595,7 @@ class ActivitiesScreen extends ConsumerWidget {
       ref,
       (answers) => QuizPage(
         step: 7,
+        onBack: () => context.go('/onboarding/emphasis'),
         title: 'What else do you do?',
         subtitle: "So your gym days land where you've got the energy for them.",
         onContinue: () =>
@@ -691,19 +698,156 @@ class MenstrualScreen extends ConsumerWidget {
       final ready =
           !enabled ||
           (answers.lastPeriodStart != null && answers.menstrualGap != null);
-      return Scaffold(
-        backgroundColor: AppColors.paper,
-        body: SafeArea(
-          child: Column(
-            children: [
-              const OnboardingProgress(optional: true),
-              Expanded(
-                child: SingleChildScrollView(
+      void goBack() => context.go('/onboarding/activities');
+      return OnboardingBackScope(
+        onBack: goBack,
+        child: Scaffold(
+          backgroundColor: AppColors.paper,
+          body: SafeArea(
+            child: Column(
+              children: [
+                OnboardingProgress(optional: true, onBack: goBack),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                      AppSpacing.sm,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 440),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              decoration: const BoxDecoration(
+                                color: AppColors.lavenderSoft,
+                                borderRadius: AppRadii.mediumBorder,
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.nightlight_round,
+                                    color: AppColors.lavender,
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Work with your menstrual cycle',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium,
+                                        ),
+                                        Text(
+                                          'Two questions. No tracking, ever.',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: AppColors.inkSoft,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  BloomToggle(
+                                    key: const ValueKey('menstrual-toggle'),
+                                    value: enabled,
+                                    onChanged: (value) => ref
+                                        .read(onboardingRepositoryProvider)
+                                        .update(
+                                          (current) => current.copyWith(
+                                            menstrualPreference: value
+                                                ? MenstrualPreference.undecided
+                                                : MenstrualPreference.declined,
+                                            lastPeriodStart: value
+                                                ? current.lastPeriodStart
+                                                : null,
+                                            menstrualGap: value
+                                                ? current.menstrualGap
+                                                : null,
+                                          ),
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (enabled) ...[
+                              const SizedBox(height: AppSpacing.lg),
+                              const SectionLabel(
+                                'When did your last period start?',
+                              ),
+                              _PeriodDateChoices(answers: answers),
+                              const SizedBox(height: AppSpacing.lg),
+                              const SectionLabel('Usual gap between periods'),
+                              SlidingSegmentedPicker<MenstrualGap>(
+                                options: const {
+                                  MenstrualGap.days26: '26 days',
+                                  MenstrualGap.days28: '28 days',
+                                  MenstrualGap.days30Plus: '30+',
+                                  MenstrualGap.notSure: 'Not sure',
+                                },
+                                value: answers.menstrualGap,
+                                segmentKeyBuilder: (gap) =>
+                                    ValueKey('menstrual-gap-${gap.name}'),
+                                onChanged: (value) => ref
+                                    .read(onboardingRepositoryProvider)
+                                    .update(
+                                      (current) => current.copyWith(
+                                        menstrualPreference:
+                                            MenstrualPreference.optedIn,
+                                        menstrualGap: value,
+                                      ),
+                                    ),
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              OptionCard(
+                                key: const ValueKey('menstrual-not-applicable'),
+                                title: 'None of this fits me',
+                                description:
+                                    "On the pill, irregular, or no periods? We'll just ask how you feel instead.",
+                                selected:
+                                    answers.menstrualPreference ==
+                                    MenstrualPreference.notApplicable,
+                                trailing: const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: AppColors.inkFaint,
+                                ),
+                                onTap: () => _finishWithoutMenstrualData(
+                                  context,
+                                  ref,
+                                  MenstrualPreference.notApplicable,
+                                ),
+                              ),
+                            ] else ...[
+                              const SizedBox(height: AppSpacing.lg),
+                              const SoftNote(
+                                color: AppColors.lavenderSoft,
+                                iconColor: AppColors.lavender,
+                                icon: Icons.favorite_border_rounded,
+                                text:
+                                    "That's completely fine. This will never change the plan we build today.",
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.lg,
-                    AppSpacing.md,
-                    AppSpacing.lg,
                     AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
                   ),
                   child: Center(
                     child: ConstrainedBox(
@@ -711,169 +855,29 @@ class MenstrualScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(AppSpacing.md),
-                            decoration: const BoxDecoration(
-                              color: AppColors.lavenderSoft,
-                              borderRadius: AppRadii.mediumBorder,
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.nightlight_round,
-                                  color: AppColors.lavender,
-                                ),
-                                const SizedBox(width: AppSpacing.sm),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Work with your cycle',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleMedium,
-                                      ),
-                                      Text(
-                                        'Two questions. No tracking, ever.',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: AppColors.inkSoft,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                BloomToggle(
-                                  key: const ValueKey('menstrual-toggle'),
-                                  value: enabled,
-                                  onChanged: (value) => ref
-                                      .read(onboardingRepositoryProvider)
-                                      .update(
-                                        (current) => current.copyWith(
-                                          menstrualPreference: value
-                                              ? MenstrualPreference.undecided
-                                              : MenstrualPreference.declined,
-                                          lastPeriodStart: value
-                                              ? current.lastPeriodStart
-                                              : null,
-                                          menstrualGap: value
-                                              ? current.menstrualGap
-                                              : null,
-                                        ),
-                                      ),
-                                ),
-                              ],
-                            ),
+                          FilledButton(
+                            key: const ValueKey('menstrual-finish'),
+                            onPressed: ready
+                                ? () => context.go('/onboarding/generating')
+                                : null,
+                            child: const Text("That's everything"),
                           ),
-                          if (enabled) ...[
-                            const SizedBox(height: AppSpacing.lg),
-                            const SectionLabel(
-                              'When did your last period start?',
+                          TextButton(
+                            key: const ValueKey('menstrual-skip'),
+                            onPressed: () => _finishWithoutMenstrualData(
+                              context,
+                              ref,
+                              MenstrualPreference.declined,
                             ),
-                            _PeriodDateChoices(answers: answers),
-                            const SizedBox(height: AppSpacing.lg),
-                            const SectionLabel('Usual gap between periods'),
-                            Wrap(
-                              spacing: AppSpacing.xs,
-                              runSpacing: AppSpacing.xs,
-                              children: [
-                                for (final gap in MenstrualGap.values)
-                                  PillChoice(
-                                    key: ValueKey('menstrual-gap-${gap.name}'),
-                                    value: gap,
-                                    label: switch (gap) {
-                                      MenstrualGap.days26 => '26 days',
-                                      MenstrualGap.days28 => '28 days',
-                                      MenstrualGap.days30Plus => '30+',
-                                      MenstrualGap.notSure => 'Not sure',
-                                    },
-                                    selected: answers.menstrualGap == gap,
-                                    onSelected: (value) => ref
-                                        .read(onboardingRepositoryProvider)
-                                        .update(
-                                          (current) => current.copyWith(
-                                            menstrualPreference:
-                                                MenstrualPreference.optedIn,
-                                            menstrualGap: value,
-                                          ),
-                                        ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.lg),
-                            OptionCard(
-                              key: const ValueKey('menstrual-not-applicable'),
-                              title: 'None of this fits me',
-                              description:
-                                  "On the pill, irregular, or no periods? We'll just ask how you feel instead.",
-                              selected:
-                                  answers.menstrualPreference ==
-                                  MenstrualPreference.notApplicable,
-                              trailing: const Icon(
-                                Icons.chevron_right_rounded,
-                                color: AppColors.inkFaint,
-                              ),
-                              onTap: () => _finishWithoutMenstrualData(
-                                context,
-                                ref,
-                                MenstrualPreference.notApplicable,
-                              ),
-                            ),
-                          ] else ...[
-                            const SizedBox(height: AppSpacing.lg),
-                            const SoftNote(
-                              color: AppColors.lavenderSoft,
-                              iconColor: AppColors.lavender,
-                              icon: Icons.favorite_border_rounded,
-                              text:
-                                  "That's completely fine. This will never change the plan we build today.",
-                            ),
-                          ],
+                            child: const Text("Skip this for now"),
+                          ),
                         ],
                       ),
                     ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        FilledButton(
-                          key: const ValueKey('menstrual-finish'),
-                          onPressed: ready
-                              ? () => context.go('/onboarding/generating')
-                              : null,
-                          child: const Text("That's everything"),
-                        ),
-                        TextButton(
-                          key: const ValueKey('menstrual-skip'),
-                          onPressed: () => _finishWithoutMenstrualData(
-                            context,
-                            ref,
-                            MenstrualPreference.declined,
-                          ),
-                          child: const Text("Skip this for now"),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
@@ -916,29 +920,37 @@ class _PeriodDateChoices extends ConsumerWidget {
         for (final (index, choice) in choices.indexed) ...[
           if (index != 0) const SizedBox(width: AppSpacing.xs),
           Expanded(
-            child: SquareChoice(
-              key: ValueKey('menstrual-date-$index'),
-              value: choice.$3,
-              label: choice.$1,
-              caption: choice.$2,
-              selected: _sameDay(answers.lastPeriodStart, choice.$3),
-              onSelected: (date) => _saveDate(ref, date),
+            child: SizedBox(
+              height: 72,
+              child: SquareChoice(
+                key: ValueKey('menstrual-date-$index'),
+                value: choice.$3,
+                label: choice.$1,
+                caption: choice.$2,
+                compact: true,
+                selected: _sameDay(answers.lastPeriodStart, choice.$3),
+                onSelected: (date) => _saveDate(ref, date),
+              ),
             ),
           ),
         ],
         const SizedBox(width: AppSpacing.xs),
         Expanded(
-          child: SquareChoice(
-            key: const ValueKey('menstrual-date-pick'),
-            value: now,
-            label: 'Pick',
-            caption: 'a date',
-            selected:
-                answers.lastPeriodStart != null &&
-                !choices.any(
-                  (choice) => _sameDay(answers.lastPeriodStart, choice.$3),
-                ),
-            onSelected: (_) => _pickDate(context, ref, now),
+          child: SizedBox(
+            height: 72,
+            child: SquareChoice(
+              key: const ValueKey('menstrual-date-pick'),
+              value: now,
+              label: 'Pick',
+              caption: 'a date',
+              compact: true,
+              selected:
+                  answers.lastPeriodStart != null &&
+                  !choices.any(
+                    (choice) => _sameDay(answers.lastPeriodStart, choice.$3),
+                  ),
+              onSelected: (_) => _pickDate(context, ref, now),
+            ),
           ),
         ),
       ],
