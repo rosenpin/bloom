@@ -22,16 +22,23 @@ jobs:
     # Pin the OS image so Xcode changes do not land unexpectedly mid-release.
     runs-on: macos-15
     timeout-minutes: 90
-    env:
-      TESTFLIGHT_KEYCHAIN_PATH: ${{ runner.temp }}/testflight-signing.keychain-db
-      TESTFLIGHT_CERTIFICATE_PATH: ${{ runner.temp }}/apple-distribution.p12
-      TESTFLIGHT_PROFILE_PATH: ${{ runner.temp }}/app-store.mobileprovision
-      TESTFLIGHT_PROFILE_PLIST: ${{ runner.temp }}/app-store-profile.plist
-      TESTFLIGHT_ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
-      TESTFLIGHT_XCODE_XCCONFIG_FILE: ${{ runner.temp }}/TestFlightSigning.xcconfig
-      TESTFLIGHT_EXPORT_OPTIONS_PLIST: ${{ runner.temp }}/ExportOptions.plist
-
     steps:
+      # The runner context is not available in job-level env, and an invalid
+      # expression there makes GitHub reject the whole workflow file (every
+      # push then records an instant 0s failure). Define the signing paths in
+      # a step instead, where RUNNER_TEMP exists.
+      - name: Define signing paths
+        run: |
+          {
+            echo "TESTFLIGHT_KEYCHAIN_PATH=$RUNNER_TEMP/testflight-signing.keychain-db"
+            echo "TESTFLIGHT_CERTIFICATE_PATH=$RUNNER_TEMP/apple-distribution.p12"
+            echo "TESTFLIGHT_PROFILE_PATH=$RUNNER_TEMP/app-store.mobileprovision"
+            echo "TESTFLIGHT_PROFILE_PLIST=$RUNNER_TEMP/app-store-profile.plist"
+            echo "TESTFLIGHT_ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8"
+            echo "TESTFLIGHT_XCODE_XCCONFIG_FILE=$RUNNER_TEMP/TestFlightSigning.xcconfig"
+            echo "TESTFLIGHT_EXPORT_OPTIONS_PLIST=$RUNNER_TEMP/ExportOptions.plist"
+          } >> "$GITHUB_ENV"
+
       - name: Check out repository
         uses: actions/checkout@v4
 
