@@ -129,8 +129,9 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
                 runtime: runtime,
                 entry: entry,
                 onDone: () => _completeSet(runtime, entry),
-                onSetup: () => _openSetup(entry),
+                onSetup: () => _openTeachView(entry),
                 onLifeHappened: () => _openLifeSheet(runtime, entry),
+                onOverview: () => _openSessionOverview(runtime, entry),
                 onPain: () => _openPainPicker(entry),
                 onSwitchUnits: () => _switchUnits(runtime),
                 onDismissUnits: () => ref
@@ -148,8 +149,9 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
                 onEdit: () => _editSet(runtime, entry),
                 onReviewSet: (setIndex) =>
                     _reviewCompletedSet(runtime, entry, setIndex),
-                onSetup: () => _openSetup(entry),
+                onSetup: () => _openTeachView(entry),
                 onLifeHappened: () => _openLifeSheet(runtime, entry),
+                onOverview: () => _openSessionOverview(runtime, entry),
                 onPain: () => _openPainPicker(entry),
                 onSwitchUnits: () => _switchUnits(runtime),
                 onDismissUnits: () => ref
@@ -341,10 +343,58 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
         );
   }
 
-  Future<void> _openSetup(engine.SessionExerciseEntry entry) async {
+  Future<void> _openSessionOverview(
+    SessionRuntime runtime,
+    engine.SessionExerciseEntry current,
+  ) async {
+    final completedSlotId = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.paper,
+      showDragHandle: false,
+      builder: (context) =>
+          _SessionOverviewSheet(runtime: runtime, current: current),
+    );
+    if (!mounted || completedSlotId == null) return;
+    final latest = ref.read(sessionControllerProvider).value;
+    if (latest == null) return;
+    await _openCompletedExerciseReview(latest, completedSlotId);
+  }
+
+  Future<void> _openCompletedExerciseReview(
+    SessionRuntime runtime,
+    String originalExerciseId,
+  ) async {
+    final entries = runtime.state.exercises
+        .where((entry) => entry.originalExerciseId == originalExerciseId)
+        .where((entry) => entry.setLogs.isNotEmpty)
+        .toList(growable: false);
+    if (entries.isEmpty) return;
+    final correction =
+        await showModalBottomSheet<({String exerciseId, int setIndex})>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          backgroundColor: AppColors.paper,
+          builder: (context) => _CompletedExerciseReviewSheet(
+            entries: entries,
+            unitSystem: runtime.displayUnitSystem,
+          ),
+        );
+    if (!mounted || correction == null) return;
+    final latest = ref.read(sessionControllerProvider).value;
+    final entry = latest?.state.exercises
+        .where((entry) => entry.exerciseId == correction.exerciseId)
+        .firstOrNull;
+    if (latest == null || entry == null) return;
+    await _reviewCompletedSet(latest, entry, correction.setIndex);
+  }
+
+  Future<void> _openTeachView(engine.SessionExerciseEntry entry) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) => ExerciseSetupScreen(entry: entry),
+        builder: (context) => ExerciseTeachScreen(entry: entry),
       ),
     );
   }
@@ -896,24 +946,50 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
   }
 }
 
-class ExerciseSetupScreen extends ConsumerStatefulWidget {
-  const ExerciseSetupScreen({required this.entry, super.key});
+class ExerciseTeachScreen extends ConsumerStatefulWidget {
+  const ExerciseTeachScreen({required this.entry, super.key});
 
   final engine.SessionExerciseEntry entry;
 
   @override
-  ConsumerState<ExerciseSetupScreen> createState() =>
-      _ExerciseSetupScreenState();
+  ConsumerState<ExerciseTeachScreen> createState() =>
+      _ExerciseTeachScreenState();
 }
 
-class _ExerciseSetupScreenState extends ConsumerState<ExerciseSetupScreen> {
+class _ExerciseTeachScreenState extends ConsumerState<ExerciseTeachScreen> {
   int _tab = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: const ValueKey('exercise-setup-screen'),
-      appBar: AppBar(title: Text(widget.entry.planExercise.name)),
+      key: const ValueKey('exercise-teach-screen'),
+      appBar: AppBar(
+        title: Text(widget.entry.planExercise.name),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.md),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 6,
+                ),
+                decoration: const BoxDecoration(
+                  color: AppColors.blushSoft,
+                  borderRadius: AppRadii.largeBorder,
+                ),
+                child: Text(
+                  'Beginner friendly',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.roseDeep,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: FutureBuilder<ExerciseGuidance?>(
         future: ref
             .read(exerciseContentRepositoryProvider)
@@ -931,13 +1007,16 @@ class _ExerciseSetupScreenState extends ConsumerState<ExerciseSetupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    ExerciseVisual(
-                      exerciseId: widget.entry.exerciseId,
-                      exerciseName: widget.entry.planExercise.name,
-                      blockRoleLabel: SessionPresentation.blockRole(
-                        widget.entry.planExercise.blockRole,
+                    AspectRatio(
+                      key: const ValueKey('teach-video'),
+                      aspectRatio: 4 / 3,
+                      child: ExerciseVisual(
+                        exerciseId: widget.entry.exerciseId,
+                        exerciseName: widget.entry.planExercise.name,
+                        blockRoleLabel: SessionPresentation.blockRole(
+                          widget.entry.planExercise.blockRole,
+                        ),
                       ),
-                      height: 225,
                     ),
                     const SizedBox(height: AppSpacing.md),
                     SegmentedButton<int>(
@@ -1032,6 +1111,413 @@ class _ExerciseSetupScreenState extends ConsumerState<ExerciseSetupScreen> {
         },
       ),
     );
+  }
+}
+
+class _SessionOverviewSheet extends StatelessWidget {
+  const _SessionOverviewSheet({required this.runtime, required this.current});
+
+  final SessionRuntime runtime;
+  final engine.SessionExerciseEntry current;
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = SessionPresentation.exerciseSlots(runtime.state);
+    final currentIndex = slots.indexWhere((slot) => slot.contains(current));
+    return SizedBox(
+      key: const ValueKey('session-overview-sheet'),
+      height: MediaQuery.sizeOf(context).height * 0.9,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _SheetHandle(),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${currentIndex + 1} OF ${slots.length}',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppColors.coral,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        'Your session',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton.filledTonal(
+                  key: const ValueKey('close-session-overview'),
+                  onPressed: () => Navigator.pop(context),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.blushSoft,
+                    foregroundColor: AppColors.inkSoft,
+                  ),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'A little look back, and what is waiting for you.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Expanded(
+              child: ListView(
+                children: [
+                  for (var index = 0; index < slots.length; index++)
+                    if (_displayEntry(slots[index]) case final entry?)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: index < currentIndex
+                            ? _completedRow(
+                                context,
+                                slot: slots[index],
+                                entry: entry,
+                              )
+                            : index == currentIndex
+                            ? _currentRow(context)
+                            : _upcomingRow(context, entry),
+                      ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Container(
+                    key: const ValueKey('session-overview-note'),
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    decoration: const BoxDecoration(
+                      color: AppColors.cream,
+                      borderRadius: AppRadii.smallBorder,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.favorite_outline_rounded,
+                          color: AppColors.roseDeep,
+                          size: 19,
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            "You can look ahead. We'll keep you with the move you're on.",
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.inkSoft),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  engine.SessionExerciseEntry? _displayEntry(
+    List<engine.SessionExerciseEntry> slot,
+  ) {
+    for (final entry in slot.reversed) {
+      if (!entry.isTerminal) return entry;
+    }
+    for (final entry in slot.reversed) {
+      if (entry.setLogs.isNotEmpty) return entry;
+    }
+    return slot.lastOrNull;
+  }
+
+  Widget _completedRow(
+    BuildContext context, {
+    required List<engine.SessionExerciseEntry> slot,
+    required engine.SessionExerciseEntry entry,
+  }) {
+    final sets = slot.fold<int>(
+      0,
+      (total, candidate) => total + candidate.setLogs.length,
+    );
+    final logged = [
+      for (final candidate in slot) ...candidate.setLogs,
+    ].lastOrNull;
+    final load = logged == null || logged.load.isZero
+        ? ''
+        : ' · ${SessionPresentation.formatLoad(logged.load, runtime.displayUnitSystem)}';
+    return Material(
+      color: AppColors.paper,
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadii.mediumBorder,
+        side: const BorderSide(color: AppColors.line, width: 1.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: ValueKey('overview-completed-${entry.originalExerciseId}'),
+        onTap: sets == 0
+            ? null
+            : () => Navigator.pop(context, entry.originalExerciseId),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xs),
+          child: Row(
+            children: [
+              const _OverviewCheckTile(),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.planExercise.name,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      '$sets ${sets == 1 ? 'set' : 'sets'} done$load',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                    ),
+                  ],
+                ),
+              ),
+              if (sets > 0)
+                const Icon(Icons.chevron_right_rounded, color: AppColors.sage),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _currentRow(BuildContext context) {
+    final setNumber = (current.setLogs.length + 1).clamp(
+      1,
+      current.prescription.dose.sets,
+    );
+    final load = SessionPresentation.suggestionLoad(
+      current,
+      override: runtime.loadOverrides[current.exerciseId],
+    );
+    final loadText = load.isZero
+        ? ''
+        : ' · ${SessionPresentation.formatLoad(load, runtime.displayUnitSystem)}';
+    return Container(
+      key: const ValueKey('overview-current'),
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.blushSoft,
+        borderRadius: AppRadii.mediumBorder,
+        border: Border.all(color: AppColors.rose, width: 2),
+      ),
+      child: Row(
+        children: [
+          _OverviewExerciseTile(entry: current),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'NOW',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.roseDeep,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                Text(
+                  current.planExercise.name,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'set $setNumber of ${current.prescription.dose.sets}$loadText',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _upcomingRow(BuildContext context, engine.SessionExerciseEntry entry) {
+    return Container(
+      key: ValueKey('overview-upcoming-${entry.originalExerciseId}'),
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: AppRadii.mediumBorder,
+        border: Border.all(color: AppColors.line, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          _OverviewExerciseTile(entry: entry),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.planExercise.name,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  SessionPresentation.upcomingDose(entry),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OverviewExerciseTile extends StatelessWidget {
+  const _OverviewExerciseTile({required this.entry});
+
+  final engine.SessionExerciseEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 46,
+      child: ExerciseVisual(
+        exerciseId: entry.exerciseId,
+        exerciseName: entry.planExercise.name,
+        blockRoleLabel: SessionPresentation.blockRole(
+          entry.planExercise.blockRole,
+        ),
+        compact: true,
+        showAngleToggle: false,
+      ),
+    );
+  }
+}
+
+class _OverviewCheckTile extends StatelessWidget {
+  const _OverviewCheckTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: const BoxDecoration(
+        color: AppColors.sageSoft,
+        borderRadius: AppRadii.smallBorder,
+      ),
+      child: const Icon(Icons.check_rounded, color: AppColors.sage, size: 28),
+    );
+  }
+}
+
+class _CompletedExerciseReviewSheet extends StatelessWidget {
+  const _CompletedExerciseReviewSheet({
+    required this.entries,
+    required this.unitSystem,
+  });
+
+  final List<engine.SessionExerciseEntry> entries;
+  final engine.UnitSystem unitSystem;
+
+  @override
+  Widget build(BuildContext context) {
+    final setCount = entries.fold<int>(
+      0,
+      (total, entry) => total + entry.setLogs.length,
+    );
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          key: const ValueKey('completed-exercise-review'),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _SheetHandle(),
+            Text(
+              entries.last.planExercise.name,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '$setCount ${setCount == 1 ? 'set' : 'sets'} logged. Tap one if the numbers need a correction.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            for (final entry in entries)
+              for (final set in entry.setLogs)
+                ListTile(
+                  key: ValueKey(
+                    'overview-review-${entry.exerciseId}-${set.setIndex}',
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: AppColors.sageSoft,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      color: AppColors.sage,
+                    ),
+                  ),
+                  title: Text('Set ${set.setIndex + 1}'),
+                  subtitle: Text(_loggedSet(set)),
+                  trailing: const Icon(
+                    Icons.edit_outlined,
+                    color: AppColors.inkFaint,
+                  ),
+                  onTap: () => Navigator.pop(context, (
+                    exerciseId: entry.exerciseId,
+                    setIndex: set.setIndex,
+                  )),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _loggedSet(engine.SetCompleted set) {
+    final load = set.load.isZero
+        ? ''
+        : ' · ${SessionPresentation.formatLoad(set.load, unitSystem)}';
+    return '${set.reps} reps$load';
   }
 }
 

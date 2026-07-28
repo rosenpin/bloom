@@ -104,6 +104,55 @@ abstract final class SessionPresentation {
   static int exerciseCount(engine.SessionState state) =>
       state.exercises.map((entry) => entry.originalExerciseId).toSet().length;
 
+  static List<List<engine.SessionExerciseEntry>> exerciseSlots(
+    engine.SessionState state,
+  ) {
+    final slots = <String, List<engine.SessionExerciseEntry>>{};
+    for (final entry in state.exercises) {
+      (slots[entry.originalExerciseId] ??= []).add(entry);
+    }
+    return List<List<engine.SessionExerciseEntry>>.unmodifiable(
+      slots.values.map(List<engine.SessionExerciseEntry>.unmodifiable),
+    );
+  }
+
+  static engine.SessionExerciseEntry? nextExercise(
+    engine.SessionState state,
+    engine.SessionExerciseEntry current,
+  ) {
+    final slots = exerciseSlots(state);
+    final currentIndex = slots.indexWhere((slot) => slot.contains(current));
+    if (currentIndex == -1) return null;
+    for (final slot in slots.skip(currentIndex + 1)) {
+      for (final entry in slot.reversed) {
+        if (!entry.isTerminal) return entry;
+      }
+    }
+    return null;
+  }
+
+  static bool hasLoggedExercise(
+    engine.TrainingHistory history,
+    engine.SessionState state,
+    engine.SessionExerciseEntry entry,
+  ) {
+    final snapshot = engine.foldTrainingHistory(history);
+    if (snapshot.exercise(entry.exerciseId).everSeen) return true;
+    return state.exercises.any(
+      (candidate) =>
+          candidate.exerciseId == entry.exerciseId &&
+          candidate.setLogs.isNotEmpty,
+    );
+  }
+
+  static String upcomingDose(engine.SessionExerciseEntry entry) =>
+      switch (entry.prescription.dose) {
+        engine.RepsDose(:final sets, :final targetReps) =>
+          '$sets sets × $targetReps',
+        engine.TimedDose(:final sets, :final hold) =>
+          '$sets sets × ${hold.inSeconds} sec',
+      };
+
   static String? savedSwapWork(
     engine.SessionState state,
     engine.SessionExerciseEntry current,

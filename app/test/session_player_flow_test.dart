@@ -21,6 +21,171 @@ import 'support/session_test_support.dart';
 
 void main() {
   testWidgets(
+    'seen exercise uses the compact learn strip and opens the teach view',
+    (tester) async {
+      final harness = await _SessionHarness.create(
+        tester,
+        seedCompletedSessionDaysAgo: 1,
+      );
+      addTearDown(harness.dispose);
+
+      await _tap(tester, const ValueKey('start-workout'));
+      await _tap(tester, const ValueKey('session-lets-go'));
+
+      expect(find.byKey(const ValueKey('learn-strip')), findsOneWidget);
+      expect(find.byKey(const ValueKey('new-move-card')), findsNothing);
+      expect(find.text('Show me how'), findsOneWidget);
+      expect(find.text('Video, setup and where to find it'), findsOneWidget);
+      expect(find.byKey(const ValueKey('watch-movement')), findsNothing);
+      expect(find.text('How do I set up?'), findsNothing);
+      expect(find.text('Up next · Dumbbell Lateral Raise'), findsOneWidget);
+
+      await _tap(tester, const ValueKey('ambient-session-overview'));
+      expect(
+        find.byKey(const ValueKey('session-overview-sheet')),
+        findsOneWidget,
+      );
+      await _tap(tester, const ValueKey('close-session-overview'));
+
+      await _tap(tester, const ValueKey('show-me-how'));
+      expect(
+        find.byKey(const ValueKey('exercise-teach-screen')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('teach-video')), findsOneWidget);
+      expect(find.text('Beginner friendly'), findsOneWidget);
+      expect(find.text('Set up'), findsOneWidget);
+      expect(find.text('How it feels'), findsOneWidget);
+      expect(find.text('Swaps'), findsOneWidget);
+    },
+  );
+
+  testWidgets('unseen active exercise uses the expanded new move card', (
+    tester,
+  ) async {
+    final harness = await _SessionHarness.create(tester);
+    addTearDown(harness.dispose);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await _tap(tester, const ValueKey('session-lets-go'));
+    expect(find.byKey(const ValueKey('calibration-heading')), findsOneWidget);
+
+    await _tap(tester, const ValueKey('life-happened-link'));
+    await _tap(tester, const ValueKey('life-busy'));
+    await _tap(tester, const ValueKey('swap-candidate-bodyweight-squat'));
+
+    expect(find.byKey(const ValueKey('new-move-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('new-move-chip')), findsOneWidget);
+    expect(find.text('New move'), findsOneWidget);
+    expect(
+      find.text('Show me how · video, setup and where to find it'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('learn-strip')), findsNothing);
+    expect(find.byKey(const ValueKey('prescription-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('watch-movement')), findsNothing);
+  });
+
+  testWidgets('last exercise uses the E1 final copy in calibration mode', (
+    tester,
+  ) async {
+    final harness = await _SessionHarness.create(tester);
+    addTearDown(harness.dispose);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await _tap(tester, const ValueKey('session-lets-go'));
+    await _tap(tester, const ValueKey('calibration-done'));
+    await _tap(tester, const ValueKey('effort-justRight'));
+    await _tap(tester, const ValueKey('rest-skip'));
+    await _tap(tester, const ValueKey('set-done'));
+    await _tap(tester, const ValueKey('effort-justRight'));
+    await _tap(tester, const ValueKey('rest-skip'));
+
+    expect(find.byKey(const ValueKey('calibration-heading')), findsOneWidget);
+    expect(find.text("Last one · then you're done"), findsOneWidget);
+    expect(find.byKey(const ValueKey('ambient-session-strip')), findsOneWidget);
+  });
+
+  testWidgets(
+    'session overview shows current upcoming and completed exercise states',
+    (tester) async {
+      final harness = await _SessionHarness.create(
+        tester,
+        seedCompletedSessionDaysAgo: 1,
+      );
+      addTearDown(harness.dispose);
+
+      await _tap(tester, const ValueKey('start-workout'));
+      await _tap(tester, const ValueKey('session-lets-go'));
+      await _tap(tester, const ValueKey('exercise-progress'));
+
+      expect(
+        find.byKey(const ValueKey('session-overview-sheet')),
+        findsOneWidget,
+      );
+      expect(find.text('Your session'), findsOneWidget);
+      expect(
+        find.text('A little look back, and what is waiting for you.'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('overview-current')), findsOneWidget);
+      expect(find.text('NOW'), findsOneWidget);
+      expect(find.text('set 1 of 2 · 10 kg'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('overview-upcoming-dumbbell-lateral-raise')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('2 sets × '), findsOneWidget);
+      expect(
+        find.text(
+          "You can look ahead. We'll keep you with the move you're on.",
+        ),
+        findsOneWidget,
+      );
+
+      await _tap(
+        tester,
+        const ValueKey('overview-upcoming-dumbbell-lateral-raise'),
+      );
+      expect(
+        find.byKey(const ValueKey('session-overview-sheet')),
+        findsOneWidget,
+      );
+      await _tap(tester, const ValueKey('close-session-overview'));
+
+      await _tap(tester, const ValueKey('set-done'));
+      await _tap(tester, const ValueKey('rest-skip'));
+      await _tap(tester, const ValueKey('set-done'));
+      await _tap(tester, const ValueKey('effort-justRight'));
+      await _tap(tester, const ValueKey('rest-skip'));
+      await _tap(tester, const ValueKey('exercise-progress'));
+
+      expect(
+        find.byKey(const ValueKey('overview-completed-dumbbell-goblet-squat')),
+        findsOneWidget,
+      );
+      expect(find.text('2 sets done · 10 kg'), findsOneWidget);
+      expect(find.byKey(const ValueKey('overview-current')), findsOneWidget);
+
+      await _tap(
+        tester,
+        const ValueKey('overview-completed-dumbbell-goblet-squat'),
+      );
+      expect(
+        find.byKey(const ValueKey('completed-exercise-review')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('2 sets logged. Tap one if the numbers need a correction.'),
+        findsOneWidget,
+      );
+      expect(find.text('Set 1'), findsOneWidget);
+      expect(find.text('Set 2'), findsOneWidget);
+      expect(find.text('10 reps · 10 kg'), findsNWidgets(2));
+    },
+  );
+
+  testWidgets(
     'scripted 390x844 session calibrates, logs, swaps, shortens and keeps swap',
     (tester) async {
       final harness = await _SessionHarness.create(tester);
@@ -263,7 +428,10 @@ void main() {
 
     await _tap(tester, const ValueKey('start-workout'));
     await _tap(tester, const ValueKey('session-lets-go'));
-    await _tap(tester, const ValueKey('exercise-setup-link'));
+    await _tap(tester, const ValueKey('watch-movement'));
+    expect(find.byKey(const ValueKey('exercise-teach-screen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('teach-video')), findsOneWidget);
+    expect(find.text('Beginner friendly'), findsOneWidget);
     await tester.tap(find.text('Swaps'));
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.emoji_events_rounded), findsWidgets);
@@ -492,6 +660,7 @@ Widget _silentVideoPlaybackBuilder({
   required String exerciseId,
   required ExerciseVideoSource source,
   required Widget placeholder,
+  required bool showAngleToggle,
 }) => ColoredBox(key: key, color: Colors.transparent);
 
 final class _SilentVideoCache implements ExerciseVideoCache {

@@ -15,6 +15,7 @@ class CalibrationExerciseView extends StatelessWidget {
     required this.onDone,
     required this.onSetup,
     required this.onLifeHappened,
+    required this.onOverview,
     required this.onPain,
     required this.onSwitchUnits,
     required this.onDismissUnits,
@@ -27,6 +28,7 @@ class CalibrationExerciseView extends StatelessWidget {
   final VoidCallback onDone;
   final VoidCallback onSetup;
   final VoidCallback onLifeHappened;
+  final VoidCallback onOverview;
   final VoidCallback onPain;
   final VoidCallback onSwitchUnits;
   final VoidCallback onDismissUnits;
@@ -46,6 +48,7 @@ class CalibrationExerciseView extends StatelessWidget {
           _ExerciseProgress(
             current: index,
             total: SessionPresentation.exerciseCount(runtime.state),
+            onTap: onOverview,
           ),
           Expanded(
             child: SingleChildScrollView(
@@ -120,11 +123,15 @@ class CalibrationExerciseView extends StatelessWidget {
                         child: Text("I've done my ${probe.probeReps} reps"),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      _ExerciseSupportLinks(
-                        onSetup: onSetup,
+                      _AmbientSessionStrip(
+                        nextExercise: SessionPresentation.nextExercise(
+                          runtime.state,
+                          entry,
+                        ),
                         onLifeHappened: onLifeHappened,
-                        onPain: onPain,
+                        onOverview: onOverview,
                       ),
+                      _PainLink(onPressed: onPain),
                     ],
                   ),
                 ),
@@ -147,6 +154,7 @@ class ActiveExerciseView extends StatelessWidget {
     required this.onReviewSet,
     required this.onSetup,
     required this.onLifeHappened,
+    required this.onOverview,
     required this.onPain,
     required this.onSwitchUnits,
     required this.onDismissUnits,
@@ -162,6 +170,7 @@ class ActiveExerciseView extends StatelessWidget {
   final ValueChanged<int> onReviewSet;
   final VoidCallback onSetup;
   final VoidCallback onLifeHappened;
+  final VoidCallback onOverview;
   final VoidCallback onPain;
   final VoidCallback onSwitchUnits;
   final VoidCallback onDismissUnits;
@@ -178,12 +187,18 @@ class ActiveExerciseView extends StatelessWidget {
       entry,
       override: runtime.loadOverrides[entry.exerciseId],
     );
+    final isFirstExposure = !SessionPresentation.hasLoggedExercise(
+      runtime.history,
+      runtime.state,
+      entry,
+    );
     return SafeArea(
       child: Column(
         children: [
           _ExerciseProgress(
             current: index,
             total: SessionPresentation.exerciseCount(runtime.state),
+            onTap: onOverview,
           ),
           Expanded(
             child: SingleChildScrollView(
@@ -213,12 +228,6 @@ class ActiveExerciseView extends StatelessWidget {
                         _SavedSwapWorkCard(text: savedWork),
                         const SizedBox(height: AppSpacing.sm),
                       ],
-                      _ExerciseVisualCard(
-                        entry: entry,
-                        aspectRatio: 5 / 6,
-                        onWatch: onSetup,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
                       Text(
                         entry.planExercise.name,
                         style: Theme.of(context).textTheme.headlineMedium,
@@ -229,6 +238,12 @@ class ActiveExerciseView extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.inkSoft,
                         ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      _LearnEntry(
+                        entry: entry,
+                        expanded: isFirstExposure,
+                        onTap: onSetup,
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       _SetPills(
@@ -243,6 +258,7 @@ class ActiveExerciseView extends StatelessWidget {
                         reps: reps,
                         unitSystem: runtime.displayUnitSystem,
                         onEdit: onEdit,
+                        compact: isFirstExposure,
                       ),
                       if (entry.prescription.bridge case final bridge?)
                         Padding(
@@ -263,11 +279,15 @@ class ActiveExerciseView extends StatelessWidget {
                         child: const Text('Done'),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      _ExerciseSupportLinks(
-                        onSetup: onSetup,
+                      _AmbientSessionStrip(
+                        nextExercise: SessionPresentation.nextExercise(
+                          runtime.state,
+                          entry,
+                        ),
                         onLifeHappened: onLifeHappened,
-                        onPain: onPain,
+                        onOverview: onOverview,
                       ),
+                      _PainLink(onPressed: onPain),
                     ],
                   ),
                 ),
@@ -447,10 +467,15 @@ class _SavedSwapWorkCard extends StatelessWidget {
 }
 
 class _ExerciseProgress extends StatelessWidget {
-  const _ExerciseProgress({required this.current, required this.total});
+  const _ExerciseProgress({
+    required this.current,
+    required this.total,
+    required this.onTap,
+  });
 
   final int current;
   final int total;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -473,12 +498,38 @@ class _ExerciseProgress extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Text(
-            '$current of $total',
-            key: const ValueKey('exercise-progress'),
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(color: AppColors.inkSoft),
+          Material(
+            color: AppColors.blushSoft,
+            borderRadius: AppRadii.largeBorder,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: const ValueKey('exercise-progress'),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 6,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$current of $total',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.roseDeep,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xxs),
+                    const Icon(
+                      Icons.keyboard_arrow_up_rounded,
+                      color: AppColors.roseDeep,
+                      size: 17,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -544,6 +595,222 @@ class _ExerciseVisualCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LearnEntry extends StatelessWidget {
+  const _LearnEntry({
+    required this.entry,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  final engine.SessionExerciseEntry entry;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = RoundedRectangleBorder(
+      borderRadius: AppRadii.mediumBorder,
+      side: const BorderSide(color: AppColors.line, width: 1.5),
+    );
+    return Material(
+      key: ValueKey(expanded ? 'new-move-card' : 'learn-strip'),
+      color: expanded ? AppColors.blushSoft : AppColors.paper,
+      elevation: 2,
+      shadowColor: AppColors.ink.withValues(alpha: 0.12),
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: const ValueKey('show-me-how'),
+        onTap: onTap,
+        child: expanded ? _expanded(context) : _compact(context),
+      ),
+    );
+  }
+
+  Widget _compact(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      child: Row(
+        children: [
+          SizedBox.square(dimension: 64, child: _LearnVisual(entry: entry)),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Show me how',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  'Video, setup and where to find it',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: AppColors.inkFaint,
+            size: 21,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _expanded(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 190,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ExerciseVisual(
+                exerciseId: entry.exerciseId,
+                exerciseName: entry.planExercise.name,
+                blockRoleLabel: SessionPresentation.blockRole(
+                  entry.planExercise.blockRole,
+                ),
+                compact: true,
+                showAngleToggle: false,
+              ),
+              const Align(
+                alignment: Alignment.center,
+                child: _PlayGlyph(size: 42),
+              ),
+              Positioned(
+                left: AppSpacing.sm,
+                top: AppSpacing.sm,
+                child: Container(
+                  key: const ValueKey('new-move-chip'),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.paper.withValues(alpha: 0.94),
+                    borderRadius: AppRadii.largeBorder,
+                  ),
+                  child: Text(
+                    'New move',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: AppColors.roseDeep,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.sm,
+            AppSpacing.sm,
+            AppSpacing.sm,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Show me how',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      TextSpan(
+                        text: ' · video, setup and where to find it',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.inkSoft,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.inkFaint,
+                size: 21,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LearnVisual extends StatelessWidget {
+  const _LearnVisual({required this.entry});
+
+  final engine.SessionExerciseEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ExerciseVisual(
+          exerciseId: entry.exerciseId,
+          exerciseName: entry.planExercise.name,
+          blockRoleLabel: SessionPresentation.blockRole(
+            entry.planExercise.blockRole,
+          ),
+          compact: true,
+          showAngleToggle: false,
+        ),
+        const Align(alignment: Alignment.center, child: _PlayGlyph(size: 31)),
+      ],
+    );
+  }
+}
+
+class _PlayGlyph extends StatelessWidget {
+  const _PlayGlyph({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: AppColors.paper.withValues(alpha: 0.94),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.ink.withValues(alpha: 0.16),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Icon(
+        Icons.play_arrow_rounded,
+        color: AppColors.roseDeep,
+        size: size * 0.66,
+      ),
     );
   }
 }
@@ -653,48 +920,133 @@ class _SetPill extends StatelessWidget {
   }
 }
 
-class _ExerciseSupportLinks extends StatelessWidget {
-  const _ExerciseSupportLinks({
-    required this.onSetup,
+class _AmbientSessionStrip extends StatelessWidget {
+  const _AmbientSessionStrip({
+    required this.nextExercise,
     required this.onLifeHappened,
-    required this.onPain,
+    required this.onOverview,
   });
 
-  final VoidCallback onSetup;
+  final engine.SessionExerciseEntry? nextExercise;
   final VoidCallback onLifeHappened;
-  final VoidCallback onPain;
+  final VoidCallback onOverview;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: AppSpacing.xs,
-          children: [
-            TextButton(
-              key: const ValueKey('exercise-setup-link'),
-              onPressed: onSetup,
-              child: const Text('How do I set up?'),
-            ),
-            TextButton(
+    final nextName = nextExercise?.planExercise.name;
+    return Container(
+      key: const ValueKey('ambient-session-strip'),
+      height: 48,
+      decoration: const BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: AppRadii.smallBorder,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
               key: const ValueKey('life-happened-link'),
-              onPressed: onLifeHappened,
-              child: const Text('Life happened?'),
+              onTap: onLifeHappened,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.umbrella_outlined,
+                      color: AppColors.inkSoft,
+                      size: 17,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Life happened?',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.inkSoft,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
-        TextButton.icon(
-          key: const ValueKey('pain-affordance'),
-          onPressed: onPain,
-          icon: const Icon(Icons.healing_rounded, size: 17),
-          label: const Text('That hurt'),
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.inkFaint,
-            textStyle: Theme.of(context).textTheme.labelMedium,
           ),
+          const VerticalDivider(
+            width: 1,
+            indent: AppSpacing.sm,
+            endIndent: AppSpacing.sm,
+            color: AppColors.line,
+          ),
+          Expanded(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: const ValueKey('ambient-session-overview'),
+                onTap: onOverview,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    left: AppSpacing.sm,
+                    right: AppSpacing.xs,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          nextName == null
+                              ? "Last one · then you're done"
+                              : 'Up next · $nextName',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: AppColors.inkSoft,
+                                fontWeight: FontWeight.w800,
+                                height: 1.2,
+                              ),
+                        ),
+                      ),
+                      if (nextName != null) ...[
+                        const SizedBox(width: 2),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.inkFaint,
+                          size: 17,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PainLink extends StatelessWidget {
+  const _PainLink({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.center,
+      child: TextButton.icon(
+        key: const ValueKey('pain-affordance'),
+        onPressed: onPressed,
+        icon: const Icon(Icons.healing_rounded, size: 17),
+        label: const Text('That hurt'),
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.inkFaint,
+          textStyle: Theme.of(context).textTheme.labelMedium,
         ),
-      ],
+      ),
     );
   }
 }
@@ -706,6 +1058,7 @@ class _PrescriptionCard extends StatelessWidget {
     required this.reps,
     required this.unitSystem,
     required this.onEdit,
+    required this.compact,
   });
 
   final engine.SessionExerciseEntry entry;
@@ -713,6 +1066,7 @@ class _PrescriptionCard extends StatelessWidget {
   final int reps;
   final engine.UnitSystem unitSystem;
   final VoidCallback onEdit;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -734,19 +1088,50 @@ class _PrescriptionCard extends StatelessWidget {
       onTap: onEdit,
       borderRadius: AppRadii.mediumBorder,
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        constraints: BoxConstraints(minHeight: compact ? 80 : 108),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? AppSpacing.md : 18,
+          vertical: compact ? AppSpacing.sm : AppSpacing.md,
+        ),
         decoration: BoxDecoration(
-          color: AppColors.paper,
+          gradient: compact
+              ? null
+              : const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.paper, AppColors.blushSoft],
+                ),
+          color: compact ? AppColors.paper : null,
           borderRadius: AppRadii.mediumBorder,
-          border: Border.all(color: AppColors.line, width: 1.5),
+          border: Border.all(
+            color: compact ? AppColors.line : AppColors.blush,
+            width: 1.5,
+          ),
+          boxShadow: compact
+              ? null
+              : [
+                  BoxShadow(
+                    color: AppColors.ink.withValues(alpha: 0.08),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
         ),
         child: Row(
           children: [
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(main, style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    main,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontSize: compact ? 24 : 31,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
                     SessionPresentation.prescriptionNote(entry),
@@ -757,6 +1142,7 @@ class _PrescriptionCard extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(width: AppSpacing.xs),
             const Icon(Icons.edit_outlined, color: AppColors.inkFaint),
           ],
         ),
@@ -765,6 +1151,10 @@ class _PrescriptionCard extends StatelessWidget {
   }
 }
 
+/*
+ * Kept below the set hero so adjustment guidance still appears in the same
+ * place without competing with the primary prescription.
+ */
 class _BridgeCard extends StatelessWidget {
   const _BridgeCard({required this.bridge, required this.unitSystem});
 
@@ -822,6 +1212,9 @@ class _BridgeCard extends StatelessWidget {
   }
 }
 
+/*
+ * The remaining helpers are shared by both exercise modes.
+ */
 class _UnitPrompt extends StatelessWidget {
   const _UnitPrompt({
     required this.unitSystem,

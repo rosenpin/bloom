@@ -17,6 +17,7 @@ typedef ExerciseVideoPlaybackBuilder =
       required String exerciseId,
       required ExerciseVideoSource source,
       required Widget placeholder,
+      required bool showAngleToggle,
     });
 
 final exerciseVideoPlaybackBuilderProvider =
@@ -27,11 +28,13 @@ final exerciseVideoPlaybackBuilderProvider =
             required exerciseId,
             required source,
             required placeholder,
+            required showAngleToggle,
           }) => ExerciseVideoPlayer(
             key: key,
             exerciseId: exerciseId,
             source: source,
             placeholder: placeholder,
+            showAngleToggle: showAngleToggle,
           ),
     );
 
@@ -42,6 +45,8 @@ class ExerciseVisual extends ConsumerWidget {
     required this.blockRoleLabel,
     this.height,
     this.aspectRatio,
+    this.compact = false,
+    this.showAngleToggle = true,
     super.key,
   }) : assert(height == null || aspectRatio == null);
 
@@ -50,6 +55,8 @@ class ExerciseVisual extends ConsumerWidget {
   final String blockRoleLabel;
   final double? height;
   final double? aspectRatio;
+  final bool compact;
+  final bool showAngleToggle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -57,6 +64,7 @@ class ExerciseVisual extends ConsumerWidget {
     final placeholder = _ExerciseVideoPlaceholder(
       exerciseName: exerciseName,
       blockRoleLabel: blockRoleLabel,
+      compact: compact,
     );
     final playback = source == null
         ? placeholder
@@ -65,6 +73,7 @@ class ExerciseVisual extends ConsumerWidget {
             exerciseId: exerciseId,
             source: source,
             placeholder: placeholder,
+            showAngleToggle: showAngleToggle,
           );
     final visual = aspectRatio != null
         ? AspectRatio(aspectRatio: aspectRatio!, child: playback)
@@ -82,12 +91,14 @@ class ExerciseVideoPlayer extends ConsumerStatefulWidget {
     required this.exerciseId,
     required this.source,
     required this.placeholder,
+    required this.showAngleToggle,
     super.key,
   });
 
   final String exerciseId;
   final ExerciseVideoSource source;
   final Widget placeholder;
+  final bool showAngleToggle;
 
   @override
   ConsumerState<ExerciseVideoPlayer> createState() =>
@@ -131,7 +142,7 @@ class _ExerciseVideoPlayerState extends ConsumerState<ExerciseVideoPlayer> {
       fit: StackFit.expand,
       children: [
         _videoOrLoading(source),
-        if (source is StreamedExerciseVideoSource)
+        if (widget.showAngleToggle && source is StreamedExerciseVideoSource)
           Positioned(
             right: AppSpacing.xs,
             bottom: AppSpacing.xs,
@@ -250,10 +261,12 @@ class _ExerciseVideoPlaceholder extends StatelessWidget {
   const _ExerciseVideoPlaceholder({
     required this.exerciseName,
     required this.blockRoleLabel,
+    required this.compact,
   });
 
   final String exerciseName;
   final String blockRoleLabel;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -266,35 +279,43 @@ class _ExerciseVideoPlaceholder extends StatelessWidget {
           colors: [AppColors.blushSoft, AppColors.lavenderSoft],
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.fitness_center_rounded,
-              color: AppColors.roseDeep,
-              size: 42,
+      child: compact
+          ? const Center(
+              child: Icon(
+                Icons.fitness_center_rounded,
+                color: AppColors.roseDeep,
+                size: 30,
+              ),
+            )
+          : Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.fitness_center_rounded,
+                    color: AppColors.roseDeep,
+                    size: 42,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    exerciseName,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    blockRoleLabel,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelMedium?.copyWith(color: AppColors.inkSoft),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              exerciseName,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              blockRoleLabel,
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(color: AppColors.inkSoft),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
