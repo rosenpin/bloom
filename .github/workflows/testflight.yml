@@ -49,6 +49,16 @@ jobs:
           channel: stable
           cache: true
 
+      # The image default Xcode ships an SDK Apple no longer accepts for
+      # App Store uploads (the minimum-SDK requirement ratchets yearly).
+      # Always build with the newest Xcode present on the pinned image.
+      - name: Select newest Xcode
+        run: |
+          newest="$(find /Applications -maxdepth 1 -type d -name 'Xcode_*.app' | sort -V | tail -1)"
+          echo "Selecting $newest"
+          sudo xcode-select -s "$newest/Contents/Developer"
+          xcodebuild -version
+
       - name: Get Flutter dependencies
         run: flutter pub get
         working-directory: app
