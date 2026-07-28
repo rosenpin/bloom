@@ -209,6 +209,26 @@ final class SessionLifecycleService {
     );
   }
 
+  Stream<List<SessionRecordRow>> watchCompletedSessionsForWeek({
+    required String planId,
+    required int mesocycleWeekIndex,
+    required int absoluteWeekIndex,
+  }) {
+    final query = _database.select(_database.sessionRecords)
+      ..where(
+        (row) =>
+            row.planId.equals(planId) &
+            row.completedAt.isNotNull() &
+            row.mesocycleWeekIndex.equals(mesocycleWeekIndex) &
+            row.absoluteWeekIndex.equals(absoluteWeekIndex),
+      )
+      ..orderBy([
+        (row) => OrderingTerm.asc(row.completedAt),
+        (row) => OrderingTerm.asc(row.id),
+      ]);
+    return query.watch();
+  }
+
   Future<SessionRuntime?> startOrResume() async {
     await _contentSeeder.seedIfEmpty();
     final openQuery = _database.select(_database.sessionRecords)
@@ -288,8 +308,9 @@ final class SessionLifecycleService {
 
   Future<SessionRuntime> advance(
     SessionRuntime runtime,
-    engine.SessionEvent event,
-  ) async {
+    engine.SessionEvent event, {
+    bool isCorrection = false,
+  }) async {
     final nextState = _reduce(runtime.state, event);
     final encoded = SessionEventCodec.encode(event);
     final recordedAt = _clock();
@@ -381,7 +402,7 @@ final class SessionLifecycleService {
 
     switch (event) {
       case engine.SetCompleted():
-        _events.setLogged();
+        if (!isCorrection) _events.setLogged();
       case engine.EffortReported(:final level):
         _events.effortReported(level);
       case engine.SessionAbandoned():
@@ -392,7 +413,10 @@ final class SessionLifecycleService {
     if (completed) {
       _events.sessionCompleted(
         durationMinutes: recordedAt.difference(runtime.startedAt).inMinutes,
-        exercises: nextState.exercises.length,
+        exercises: nextState.exercises
+            .map((entry) => entry.originalExerciseId)
+            .toSet()
+            .length,
       );
       _requestSync();
     }
@@ -490,6 +514,37 @@ final class SessionLifecycleService {
     },
   );
 
+  Future<SessionRuntime> correctCompletedSet(
+    SessionRuntime runtime, {
+    required String exerciseId,
+    required int setIndex,
+    required engine.Kg load,
+    required int reps,
+  }) async {
+    final entry = runtime.state.exercises
+        .where((entry) => entry.exerciseId == exerciseId)
+        .firstOrNull;
+    final logged = entry?.setLogs
+        .where((set) => set.setIndex == setIndex)
+        .firstOrNull;
+    if (logged == null) return runtime;
+    if (logged.load == load && logged.reps == reps) return runtime;
+    return advance(
+      runtime,
+      engine.SetCompleted(
+        exerciseId: exerciseId,
+        setIndex: setIndex,
+        load: load,
+        reps: reps,
+        unitSystem: runtime.displayUnitSystem,
+        targetReps: logged.targetReps,
+        targetRpe: logged.targetRpe,
+        prescribedLoad: logged.prescribedLoad,
+      ),
+      isCorrection: true,
+    );
+  }
+
   SessionRuntime useUsualWeights(SessionRuntime runtime) {
     final overrides = <String, engine.Kg>{...runtime.loadOverrides};
     final snapshot = engine.foldTrainingHistory(runtime.history);
@@ -502,11 +557,15 @@ final class SessionLifecycleService {
   }
 
   Future<SessionRecap> recap(SessionRuntime runtime) async {
-    var total = engine.Kg.zero;
+    final latestSets = <(String, int), engine.SetCompleted>{};
     for (final event in runtime.state.events) {
       if (event is engine.SetCompleted) {
-        total += event.load * event.reps;
+        latestSets[(event.exerciseId, event.setIndex)] = event;
       }
+    }
+    var total = engine.Kg.zero;
+    for (final set in latestSets.values) {
+      total += set.load * set.reps;
     }
     final rowsQuery = _database.select(_database.sessionRecords)
       ..where((row) => row.completedAt.isNotNull())

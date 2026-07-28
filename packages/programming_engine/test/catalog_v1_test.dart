@@ -173,6 +173,41 @@ void main() {
     },
   );
 
+  test('catalog copy never prescribes load or volume numbers', () {
+    final loadNumber = RegExp(
+      r'\b\d+(?:[.,]\d+)?\s*(?:kg|lb)\b',
+      caseSensitive: false,
+    );
+    final volumeNumber = RegExp(
+      r'\b\d+\s*(?:reps?|sets?)\b',
+      caseSensitive: false,
+    );
+
+    for (final exercise in catalogV1.exercises) {
+      final userFacingCopy = <String>[
+        exercise.name,
+        ...exercise.setupSteps,
+        exercise.shouldFeel,
+        exercise.stopIf,
+        exercise.findIt,
+        ...exercise.dos,
+        ...exercise.donts,
+      ];
+      for (final copy in userFacingCopy) {
+        expect(
+          loadNumber.hasMatch(copy),
+          isFalse,
+          reason: '${exercise.id}: $copy',
+        );
+        expect(
+          volumeNumber.hasMatch(copy),
+          isFalse,
+          reason: '${exercise.id}: $copy',
+        );
+      }
+    }
+  });
+
   test('every rotating catalog role has at least two authored candidates', () {
     for (final role in catalogV1.rotatingBlockRoles) {
       expect(

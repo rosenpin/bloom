@@ -68,10 +68,79 @@ abstract final class SessionPresentation {
   }
 
   static int targetReps(engine.SessionExerciseEntry entry) =>
-      switch (entry.prescription.dose) {
-        engine.RepsDose(:final targetReps) => targetReps,
-        engine.TimedDose() => 1,
+      switch (entry.prescription.suggestion) {
+        engine.NeedsCalibration(:final probeReps) => probeReps,
+        engine.RepOrDurationTarget(:final reps) => reps,
+        engine.SuggestedLoad() ||
+        engine.BodyweightOnly() => switch (entry.prescription.dose) {
+          engine.RepsDose(:final targetReps) => targetReps,
+          engine.TimedDose() => 1,
+        },
       };
+
+  static String prescriptionNote(engine.SessionExerciseEntry entry) {
+    if (entry.calibration.phase == engine.CalibrationPhase.settled &&
+        entry.calibration.probeSetsCompleted > 0) {
+      return 'ready for you · found together';
+    }
+    if (entry.setLogs.isNotEmpty) {
+      return 'ready for you · based on your last set';
+    }
+    return 'ready for you · same as last time';
+  }
+
+  static int exercisePosition(
+    engine.SessionState state,
+    engine.SessionExerciseEntry current,
+  ) {
+    final slots = <String>{};
+    for (final entry in state.exercises) {
+      slots.add(entry.originalExerciseId);
+      if (identical(entry, current) || entry == current) return slots.length;
+    }
+    return slots.length;
+  }
+
+  static int exerciseCount(engine.SessionState state) =>
+      state.exercises.map((entry) => entry.originalExerciseId).toSet().length;
+
+  static String? savedSwapWork(
+    engine.SessionState state,
+    engine.SessionExerciseEntry current,
+  ) {
+    final saved = state.exercises.where(
+      (entry) =>
+          entry != current &&
+          entry.originalExerciseId == current.originalExerciseId &&
+          entry.setLogs.isNotEmpty,
+    );
+    if (saved.isEmpty) return null;
+    final savedSets = saved.fold<int>(
+      0,
+      (total, entry) => total + entry.setLogs.length,
+    );
+    final sourceName = saved.first.planExercise.name;
+    return 'Your $savedSets $sourceName ${savedSets == 1 ? 'set is' : 'sets are'} saved. Only the remaining work moved here.';
+  }
+
+  static List<String> swapRecapLines(engine.SessionState state) {
+    final entriesBySlot = <String, List<engine.SessionExerciseEntry>>{};
+    for (final entry in state.exercises) {
+      (entriesBySlot[entry.originalExerciseId] ??= []).add(entry);
+    }
+    return [
+      for (final entries in entriesBySlot.values)
+        if (entries.length > 1 &&
+            entries.any((entry) => entry.setLogs.isNotEmpty))
+          entries
+              .where((entry) => entry.setLogs.isNotEmpty)
+              .map((entry) {
+                final sets = entry.setLogs.length;
+                return '$sets ${entry.planExercise.name} ${sets == 1 ? 'set' : 'sets'}';
+              })
+              .join(' + '),
+    ];
+  }
 
   static String dayComparison(engine.Kg total) {
     if (total.value >= 1000) {

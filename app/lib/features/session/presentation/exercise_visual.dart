@@ -40,14 +40,16 @@ class ExerciseVisual extends ConsumerWidget {
     required this.exerciseId,
     required this.exerciseName,
     required this.blockRoleLabel,
-    this.height = 220,
+    this.height,
+    this.aspectRatio,
     super.key,
-  });
+  }) : assert(height == null || aspectRatio == null);
 
   final String exerciseId;
   final String exerciseName;
   final String blockRoleLabel;
-  final double height;
+  final double? height;
+  final double? aspectRatio;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -56,21 +58,21 @@ class ExerciseVisual extends ConsumerWidget {
       exerciseName: exerciseName,
       blockRoleLabel: blockRoleLabel,
     );
+    final playback = source == null
+        ? placeholder
+        : ref.watch(exerciseVideoPlaybackBuilderProvider)(
+            key: ValueKey('exercise-video-$exerciseId'),
+            exerciseId: exerciseId,
+            source: source,
+            placeholder: placeholder,
+          );
+    final visual = aspectRatio != null
+        ? AspectRatio(aspectRatio: aspectRatio!, child: playback)
+        : SizedBox(height: height ?? 220, child: playback);
     return ClipRRect(
+      key: const ValueKey('exercise-visual'),
       borderRadius: AppRadii.largeBorder,
-      child: SizedBox(
-        key: const ValueKey('exercise-visual'),
-        height: height,
-        width: double.infinity,
-        child: source == null
-            ? placeholder
-            : ref.watch(exerciseVideoPlaybackBuilderProvider)(
-                key: ValueKey('exercise-video-$exerciseId'),
-                exerciseId: exerciseId,
-                source: source,
-                placeholder: placeholder,
-              ),
-      ),
+      child: SizedBox(width: double.infinity, child: visual),
     );
   }
 }

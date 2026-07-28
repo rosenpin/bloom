@@ -37,22 +37,32 @@ void main() {
       await _tap(tester, const ValueKey('calibration-done'));
       expect(find.byKey(const ValueKey('rest-countdown')), findsOneWidget);
       await _tap(tester, const ValueKey('effort-justRight'));
+      expect(find.byKey(const ValueKey('rest-countdown')), findsOneWidget);
+      expect(find.byKey(const ValueKey('set-done')), findsNothing);
+      await _tap(tester, const ValueKey('rest-skip'));
 
       expect(find.byKey(const ValueKey('set-done')), findsOneWidget);
       await _tap(tester, const ValueKey('set-done'));
       await _tap(tester, const ValueKey('effort-justRight'));
       await _tap(tester, const ValueKey('rest-skip'));
 
-      expect(find.text('Dumbbell Lateral Raise'), findsWidgets);
+      expect(find.byKey(const ValueKey('calibration-heading')), findsOneWidget);
+      expect(find.textContaining('Dumbbell Lateral Raise'), findsOneWidget);
       await _tap(tester, const ValueKey('life-happened-link'));
       await _tap(tester, const ValueKey('life-busy'));
       expect(find.text('Choose a swap'), findsOneWidget);
+      expect(find.byIcon(Icons.emoji_events_rounded), findsWidgets);
+      expect(find.textContaining('Tier '), findsNothing);
       await _tap(tester, const ValueKey('swap-candidate-dumbbell-curl'));
-      expect(find.text('Dumbbell Curl'), findsWidgets);
+      expect(find.textContaining('Dumbbell Curl'), findsOneWidget);
 
       await _tap(tester, const ValueKey('life-happened-link'));
       await _tap(tester, const ValueKey('life-shorten'));
       await _tap(tester, const ValueKey('shorten-15'));
+      expect(
+        find.text('Trimmed to the essentials. About 15 minutes.'),
+        findsOneWidget,
+      );
 
       expect(
         find.byKey(const ValueKey('session-complete-heading')),
@@ -98,14 +108,18 @@ void main() {
 
       await _tap(tester, const ValueKey('start-workout'));
       await _tap(tester, const ValueKey('session-lets-go'));
-      expect(find.textContaining('2 kg × 8 easy reps'), findsOneWidget);
+      expect(find.text('8 reps'), findsOneWidget);
+      expect(find.text('with 2 kg'), findsOneWidget);
       expect(find.byKey(const ValueKey('unit-prompt')), findsOneWidget);
 
       await _tap(tester, const ValueKey('switch-units'));
-      expect(find.textContaining('4.4 lb × 8 easy reps'), findsOneWidget);
+      expect(find.text('8 reps'), findsOneWidget);
+      expect(find.text('with 4.4 lb'), findsOneWidget);
 
       await _tap(tester, const ValueKey('calibration-done'));
       await _tap(tester, const ValueKey('effort-justRight'));
+      expect(find.byKey(const ValueKey('rest-countdown')), findsOneWidget);
+      await _tap(tester, const ValueKey('rest-skip'));
       expect(find.text('8 × 4.4 lb'), findsOneWidget);
 
       final profile = await harness.database
@@ -115,6 +129,115 @@ void main() {
       expect(profile.unitPromptSeen, isTrue);
     },
   );
+
+  testWidgets(
+    'a partial equipment swap keeps completed work and shows one remaining set',
+    (tester) async {
+      final harness = await _SessionHarness.create(tester);
+      addTearDown(harness.dispose);
+
+      await _tap(tester, const ValueKey('start-workout'));
+      await _tap(tester, const ValueKey('session-lets-go'));
+      await _tap(tester, const ValueKey('calibration-done'));
+      await _tap(tester, const ValueKey('effort-justRight'));
+      await _tap(tester, const ValueKey('rest-skip'));
+
+      await _tap(tester, const ValueKey('life-happened-link'));
+      await _tap(tester, const ValueKey('life-busy'));
+      await _tap(tester, const ValueKey('swap-candidate-bodyweight-squat'));
+
+      expect(find.byKey(const ValueKey('saved-swap-work')), findsOneWidget);
+      expect(
+        find.text(
+          'Your 1 Goblet Squat set is saved. Only the remaining work moved here.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Set 1 of 1'), findsOneWidget);
+      expect(find.text('1 of 2'), findsOneWidget);
+
+      await _tap(tester, const ValueKey('set-done'));
+      await _tap(tester, const ValueKey('effort-justRight'));
+      await _tap(tester, const ValueKey('rest-skip'));
+      await _tap(tester, const ValueKey('calibration-done'));
+      await _tap(tester, const ValueKey('effort-justRight'));
+      await _tap(tester, const ValueKey('rest-skip'));
+      await _tap(tester, const ValueKey('set-done'));
+      await _tap(tester, const ValueKey('effort-justRight'));
+      await _tap(tester, const ValueKey('rest-skip'));
+
+      expect(find.byKey(const ValueKey('mixed-swap-recap')), findsOneWidget);
+      expect(
+        find.text('1 Goblet Squat set + 1 Bodyweight Squat set'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('low energy is visible and a second tap still answers', (
+    tester,
+  ) async {
+    final harness = await _SessionHarness.create(
+      tester,
+      seedCompletedSessionDaysAgo: 1,
+    );
+    addTearDown(harness.dispose);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await _tap(tester, const ValueKey('session-lets-go'));
+    expect(find.text('10 kg · 10 reps'), findsOneWidget);
+    await _tap(tester, const ValueKey('life-happened-link'));
+    await _tap(tester, const ValueKey('life-low-energy'));
+
+    expect(
+      find.text('We made today lighter. Same moves, friendlier weights.'),
+      findsOneWidget,
+    );
+    expect(find.text('8 kg · 10 reps'), findsOneWidget);
+
+    await _tap(tester, const ValueKey('life-happened-link'));
+    await _tap(tester, const ValueKey('life-low-energy'));
+    expect(find.text('Today is already lighter.'), findsOneWidget);
+  });
+
+  testWidgets('shorten is visible, idempotent, and setup swaps use medals', (
+    tester,
+  ) async {
+    final harness = await _SessionHarness.create(tester);
+    addTearDown(harness.dispose);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await _tap(tester, const ValueKey('session-lets-go'));
+    await _tap(tester, const ValueKey('exercise-setup-link'));
+    await tester.tap(find.text('Swaps'));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.emoji_events_rounded), findsWidgets);
+    final semantics = tester.ensureSemantics();
+    try {
+      expect(find.bySemanticsLabel(RegExp('Gold match medal')), findsWidgets);
+    } finally {
+      semantics.dispose();
+    }
+    expect(find.textContaining('Tier '), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await _tap(tester, const ValueKey('life-happened-link'));
+    await _tap(tester, const ValueKey('life-shorten'));
+    await _tap(tester, const ValueKey('shorten-20'));
+    expect(
+      find.text('Trimmed to the essentials. About 20 minutes.'),
+      findsOneWidget,
+    );
+
+    await _tap(tester, const ValueKey('life-happened-link'));
+    await _tap(tester, const ValueKey('life-shorten'));
+    await _tap(tester, const ValueKey('shorten-20'));
+    expect(
+      find.text('Today is already trimmed to about 20 minutes.'),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('a two-week layoff renders the comeback start variant', (
     tester,

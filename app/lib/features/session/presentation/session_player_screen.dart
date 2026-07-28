@@ -16,7 +16,13 @@ import '../application/session_controller.dart';
 import '../application/session_lifecycle_service.dart';
 import '../data/exercise_content_repository.dart';
 import '../domain/session_presentation.dart';
+import 'exercise_mode_views.dart';
 import 'exercise_visual.dart';
+
+const _swapGold = Color(0xFFC29A2E);
+const _swapSilver = Color(0xFF8F98A5);
+const _swapBronze = Color(0xFFA8754E);
+const _swapMedalSize = 19.0;
 
 class SessionPlayerScreen extends ConsumerStatefulWidget {
   const SessionPlayerScreen({super.key});
@@ -34,17 +40,13 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
   _RestPhase? _rest;
   final Map<String, int> _repOverrides = <String, int>{};
   bool _loggingSet = false;
+  String? _adjustmentNotice;
 
   @override
   Widget build(BuildContext context) {
     final runtimeValue = ref.watch(sessionControllerProvider);
     return PopScope(
       canPop: _rest == null,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _rest != null) {
-          setState(() => _rest = null);
-        }
-      },
       child: Scaffold(
         key: const ValueKey('session-player'),
         body: runtimeValue.when(
@@ -60,8 +62,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
               return _RestTakeover(
                 runtime: runtime,
                 phase: rest,
-                onEffort: (level) => _reportEffort(rest, level),
-                onFinished: _finishRest,
+                onFinished: (effort) => _finishRest(rest, effort),
               );
             }
             if (_showComplete || runtime.isComplete) {
@@ -69,6 +70,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
               return _SessionComplete(
                 runtime: runtime,
                 recap: ref.read(sessionControllerProvider.notifier).recap(),
+                adjustmentNotice: _adjustmentNotice,
                 onDone: () {
                   ref.read(sessionControllerProvider.notifier).clear();
                   context.go('/today');
@@ -108,22 +110,43 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
                 },
               );
             }
-            return _ActiveExercise(
-              runtime: runtime,
-              entry: entry,
-              reps:
-                  _repOverrides[entry.exerciseId] ??
-                  SessionPresentation.targetReps(entry),
-              onDone: () => _completeSet(runtime, entry),
-              onEdit: () => _editSet(runtime, entry),
-              onSetup: () => _openSetup(entry),
-              onLifeHappened: () => _openLifeSheet(runtime, entry),
-              onPain: () => _openPainPicker(entry),
-              onSwitchUnits: () => _switchUnits(runtime),
-              onDismissUnits: () => ref
-                  .read(sessionControllerProvider.notifier)
-                  .dismissUnitPrompt(),
-            );
+            final reps =
+                _repOverrides[entry.exerciseId] ??
+                SessionPresentation.targetReps(entry);
+            return switch (entry.prescription.suggestion) {
+              engine.NeedsCalibration() => CalibrationExerciseView(
+                runtime: runtime,
+                entry: entry,
+                onDone: () => _completeSet(runtime, entry),
+                onSetup: () => _openSetup(entry),
+                onLifeHappened: () => _openLifeSheet(runtime, entry),
+                onPain: () => _openPainPicker(entry),
+                onSwitchUnits: () => _switchUnits(runtime),
+                onDismissUnits: () => ref
+                    .read(sessionControllerProvider.notifier)
+                    .dismissUnitPrompt(),
+                adjustmentNotice: _adjustmentNotice,
+              ),
+              engine.SuggestedLoad() ||
+              engine.BodyweightOnly() ||
+              engine.RepOrDurationTarget() => ActiveExerciseView(
+                runtime: runtime,
+                entry: entry,
+                reps: reps,
+                onDone: () => _completeSet(runtime, entry),
+                onEdit: () => _editSet(runtime, entry),
+                onReviewSet: (setIndex) =>
+                    _reviewCompletedSet(runtime, entry, setIndex),
+                onSetup: () => _openSetup(entry),
+                onLifeHappened: () => _openLifeSheet(runtime, entry),
+                onPain: () => _openPainPicker(entry),
+                onSwitchUnits: () => _switchUnits(runtime),
+                onDismissUnits: () => ref
+                    .read(sessionControllerProvider.notifier)
+                    .dismissUnitPrompt(),
+                adjustmentNotice: _adjustmentNotice,
+              ),
+            };
           },
         ),
       ),
@@ -177,7 +200,13 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
               load: load,
               reps: reps,
               unitSystem: runtime.displayUnitSystem,
-              targetReps: dose is engine.RepsDose ? dose.targetReps : 1,
+              targetReps: switch (entry.prescription.suggestion) {
+                engine.NeedsCalibration(:final probeReps) => probeReps,
+                engine.SuggestedLoad() ||
+                engine.BodyweightOnly() ||
+                engine.RepOrDurationTarget() =>
+                  dose is engine.RepsDose ? dose.targetReps : 1,
+              },
               targetRpe: dose is engine.RepsDose ? dose.effort.rpe : null,
               prescribedLoad: prescribedLoad,
             ),
@@ -193,7 +222,6 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
           completedSet: setIndex + 1,
           totalSets: dose.sets,
           askForEffort: wasCalibration || isFinalSet,
-          calibration: wasCalibration,
           nextExerciseName: next?.planExercise.name,
           nextSet: next == null
               ? 1
@@ -207,16 +235,14 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
     }
   }
 
-  Future<void> _reportEffort(_RestPhase phase, engine.EffortLevel level) async {
-    await ref
-        .read(sessionControllerProvider.notifier)
-        .advance(
-          engine.EffortReported(exerciseId: phase.exerciseId, level: level),
-        );
-    if (phase.calibration) await _finishRest();
-  }
-
-  Future<void> _finishRest() async {
+  Future<void> _finishRest(_RestPhase phase, engine.EffortLevel? effort) async {
+    if (effort != null) {
+      await ref
+          .read(sessionControllerProvider.notifier)
+          .advance(
+            engine.EffortReported(exerciseId: phase.exerciseId, level: effort),
+          );
+    }
     if (!mounted) return;
     final runtime = ref.read(sessionControllerProvider).value;
     setState(() {
@@ -255,6 +281,42 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
     setState(() => _repOverrides[entry.exerciseId] = result.reps);
   }
 
+  Future<void> _reviewCompletedSet(
+    SessionRuntime runtime,
+    engine.SessionExerciseEntry entry,
+    int setIndex,
+  ) async {
+    final logged = entry.setLogs
+        .where((set) => set.setIndex == setIndex)
+        .firstOrNull;
+    if (logged == null) return;
+    final result = await showModalBottomSheet<({engine.Kg load, int reps})>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.paper,
+      builder: (context) => _SetStepperSheet(
+        entry: entry,
+        unitSystem: runtime.displayUnitSystem,
+        config: runtime.state.config,
+        initialLoad: logged.load,
+        initialReps: logged.reps,
+        title: 'Review set ${setIndex + 1}',
+        supportingText:
+            'The set stays complete. Save only if the logged numbers need a correction.',
+        saveLabel: 'Save correction',
+      ),
+    );
+    if (result == null || !mounted) return;
+    await ref
+        .read(sessionControllerProvider.notifier)
+        .correctCompletedSet(
+          exerciseId: entry.exerciseId,
+          setIndex: setIndex,
+          load: result.load,
+          reps: result.reps,
+        );
+  }
+
   Future<void> _openSetup(engine.SessionExerciseEntry entry) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -278,13 +340,29 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       case _Busy():
         await _openSwapSheet(entry, engine.SwapReason.busy);
       case _Shorten(:final minutes):
+        final alreadyTrimmed = runtime.state.lastShortenMinutes == minutes;
         await ref
             .read(sessionControllerProvider.notifier)
             .advance(engine.Shorten(minutes));
+        if (mounted) {
+          setState(() {
+            _adjustmentNotice = alreadyTrimmed
+                ? 'Today is already trimmed to about $minutes minutes.'
+                : 'Trimmed to the essentials. About $minutes minutes.';
+          });
+        }
       case _LowEnergy():
+        final alreadyLighter = runtime.state.lowEnergyWasApplied;
         await ref
             .read(sessionControllerProvider.notifier)
             .advance(const engine.LowEnergy());
+        if (mounted) {
+          setState(() {
+            _adjustmentNotice = alreadyLighter
+                ? 'Today is already lighter.'
+                : 'We made today lighter. Same moves, friendlier weights.';
+          });
+        }
       case _Abandon():
         await ref
             .read(sessionControllerProvider.notifier)
@@ -505,218 +583,6 @@ class _SessionStart extends StatelessWidget {
   }
 }
 
-class _ActiveExercise extends StatelessWidget {
-  const _ActiveExercise({
-    required this.runtime,
-    required this.entry,
-    required this.reps,
-    required this.onDone,
-    required this.onEdit,
-    required this.onSetup,
-    required this.onLifeHappened,
-    required this.onPain,
-    required this.onSwitchUnits,
-    required this.onDismissUnits,
-  });
-
-  final SessionRuntime runtime;
-  final engine.SessionExerciseEntry entry;
-  final int reps;
-  final VoidCallback onDone;
-  final VoidCallback onEdit;
-  final VoidCallback onSetup;
-  final VoidCallback onLifeHappened;
-  final VoidCallback onPain;
-  final VoidCallback onSwitchUnits;
-  final VoidCallback onDismissUnits;
-
-  @override
-  Widget build(BuildContext context) {
-    final index = runtime.state.exercises.indexOf(entry) + 1;
-    final load = SessionPresentation.suggestionLoad(
-      entry,
-      override: runtime.loadOverrides[entry.exerciseId],
-    );
-    final isCalibration =
-        entry.calibration.phase == engine.CalibrationPhase.awaitingProbe;
-    return SafeArea(
-      child: Column(
-        children: [
-          _ExerciseProgress(
-            current: index,
-            total: runtime.state.exercises.length,
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.lg,
-                AppSpacing.lg,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (!runtime.unitPromptSeen)
-                        _UnitPrompt(
-                          unitSystem: runtime.displayUnitSystem,
-                          onSwitch: onSwitchUnits,
-                          onDismiss: onDismissUnits,
-                        ),
-                      _ExerciseVisual(entry: entry),
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        entry.planExercise.name,
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        SessionPresentation.cue(entry),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.inkSoft,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      _SetPills(
-                        entry: entry,
-                        unitSystem: runtime.displayUnitSystem,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      if (isCalibration)
-                        _CalibrationCard(
-                          entry: entry,
-                          load: load,
-                          unitSystem: runtime.displayUnitSystem,
-                          onDone: onDone,
-                        )
-                      else ...[
-                        _PrescriptionCard(
-                          entry: entry,
-                          load: load,
-                          reps: reps,
-                          unitSystem: runtime.displayUnitSystem,
-                          onEdit: onEdit,
-                        ),
-                        if (entry.prescription.bridge case final bridge?)
-                          Padding(
-                            padding: const EdgeInsets.only(top: AppSpacing.sm),
-                            child: _BridgeCard(
-                              bridge: bridge,
-                              unitSystem: runtime.displayUnitSystem,
-                            ),
-                          ),
-                        const SizedBox(height: AppSpacing.md),
-                        FilledButton(
-                          key: const ValueKey('set-done'),
-                          onPressed: onDone,
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(64),
-                            textStyle: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          child: const Text('Done'),
-                        ),
-                      ],
-                      const SizedBox(height: AppSpacing.sm),
-                      Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: AppSpacing.xs,
-                        children: [
-                          TextButton(
-                            key: const ValueKey('exercise-setup-link'),
-                            onPressed: onSetup,
-                            child: const Text('How do I set up?'),
-                          ),
-                          TextButton(
-                            key: const ValueKey('life-happened-link'),
-                            onPressed: onLifeHappened,
-                            child: const Text('Life happened?'),
-                          ),
-                        ],
-                      ),
-                      Center(
-                        child: TextButton.icon(
-                          key: const ValueKey('pain-affordance'),
-                          onPressed: onPain,
-                          icon: const Icon(Icons.healing_rounded, size: 17),
-                          label: const Text('That hurt'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppColors.inkFaint,
-                            textStyle: Theme.of(context).textTheme.labelMedium,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CalibrationCard extends StatelessWidget {
-  const _CalibrationCard({
-    required this.entry,
-    required this.load,
-    required this.unitSystem,
-    required this.onDone,
-  });
-
-  final engine.SessionExerciseEntry entry;
-  final engine.Kg load;
-  final engine.UnitSystem unitSystem;
-  final VoidCallback onDone;
-
-  @override
-  Widget build(BuildContext context) {
-    final probe = entry.prescription.suggestion as engine.NeedsCalibration;
-    return Container(
-      key: const ValueKey('calibration-card'),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.blushSoft,
-        border: Border.all(color: AppColors.rose, width: 1.5),
-        borderRadius: AppRadii.largeBorder,
-      ),
-      child: Column(
-        children: [
-          Text(
-            "Let's find your weight",
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'We start deliberately light and let your body tell us.',
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            '${SessionPresentation.formatLoad(load, unitSystem)} × ${probe.probeReps} easy reps',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(color: AppColors.roseDeep),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          FilledButton(
-            key: const ValueKey('calibration-done'),
-            onPressed: onDone,
-            child: Text('I did ${probe.probeReps} reps'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _CalibrationEffort extends StatelessWidget {
   const _CalibrationEffort({required this.entry, required this.onEffort});
 
@@ -761,14 +627,12 @@ class _RestTakeover extends ConsumerStatefulWidget {
   const _RestTakeover({
     required this.runtime,
     required this.phase,
-    required this.onEffort,
     required this.onFinished,
   });
 
   final SessionRuntime runtime;
   final _RestPhase phase;
-  final Future<void> Function(engine.EffortLevel) onEffort;
-  final Future<void> Function() onFinished;
+  final Future<void> Function(engine.EffortLevel? effort) onFinished;
 
   @override
   ConsumerState<_RestTakeover> createState() => _RestTakeoverState();
@@ -846,13 +710,11 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
     _finishing = true;
     _timer?.cancel();
     await _foundation.cancel(_notificationId);
-    await widget.onFinished();
+    await widget.onFinished(_selected);
   }
 
-  Future<void> _selectEffort(engine.EffortLevel level) async {
-    if (_selected != null) return;
+  void _selectEffort(engine.EffortLevel level) {
     setState(() => _selected = level);
-    await widget.onEffort(level);
   }
 
   @override
@@ -945,9 +807,7 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
                     _EffortOptions(
                       selected: _selected,
                       compact: true,
-                      onSelected: _selected == null
-                          ? (level) => unawaited(_selectEffort(level))
-                          : null,
+                      onSelected: _selectEffort,
                     ),
                   ],
                   const SizedBox(height: AppSpacing.md),
@@ -1047,7 +907,14 @@ class _ExerciseSetupScreenState extends ConsumerState<ExerciseSetupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _ExerciseVisual(entry: widget.entry, height: 225),
+                    ExerciseVisual(
+                      exerciseId: widget.entry.exerciseId,
+                      exerciseName: widget.entry.planExercise.name,
+                      blockRoleLabel: SessionPresentation.blockRole(
+                        widget.entry.planExercise.blockRole,
+                      ),
+                      height: 225,
+                    ),
                     const SizedBox(height: AppSpacing.md),
                     SegmentedButton<int>(
                       segments: const [
@@ -1130,7 +997,7 @@ class _ExerciseSetupScreenState extends ConsumerState<ExerciseSetupScreen> {
                           subtitle: Text(
                             candidate.tier <= 2 ? 'Good match' : 'Looser match',
                           ),
-                          trailing: Text('Tier ${candidate.tier}'),
+                          trailing: _SwapTierMedal(tier: candidate.tier),
                         ),
                     ],
                   ],
@@ -1446,11 +1313,13 @@ class _SessionComplete extends StatelessWidget {
     required this.runtime,
     required this.recap,
     required this.onDone,
+    this.adjustmentNotice,
   });
 
   final SessionRuntime runtime;
   final Future<SessionRecap?> recap;
   final VoidCallback onDone;
+  final String? adjustmentNotice;
 
   @override
   Widget build(BuildContext context) {
@@ -1459,6 +1328,7 @@ class _SessionComplete extends StatelessWidget {
         future: recap,
         builder: (context, snapshot) {
           final value = snapshot.data;
+          final swapLines = SessionPresentation.swapRecapLines(runtime.state);
           return Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Center(
@@ -1488,6 +1358,14 @@ class _SessionComplete extends StatelessWidget {
                         context,
                       ).textTheme.bodyLarge?.copyWith(color: AppColors.inkSoft),
                     ),
+                    if (adjustmentNotice case final notice?) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _SoftConfirmationCard(text: notice),
+                    ],
+                    if (swapLines.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _MixedSwapRecap(lines: swapLines),
+                    ],
                     const SizedBox(height: AppSpacing.lg),
                     if (value == null)
                       const Center(child: CircularProgressIndicator())
@@ -1555,6 +1433,9 @@ class _SetStepperSheet extends StatefulWidget {
     required this.config,
     required this.initialLoad,
     required this.initialReps,
+    this.title = 'Adjust this set',
+    this.supportingText,
+    this.saveLabel = 'Use for this set',
   });
 
   final engine.SessionExerciseEntry entry;
@@ -1562,6 +1443,9 @@ class _SetStepperSheet extends StatefulWidget {
   final engine.ProgrammingConfig config;
   final engine.Kg initialLoad;
   final int initialReps;
+  final String title;
+  final String? supportingText;
+  final String saveLabel;
 
   @override
   State<_SetStepperSheet> createState() => _SetStepperSheetState();
@@ -1591,9 +1475,18 @@ class _SetStepperSheetState extends State<_SetStepperSheet> {
           children: [
             const _SheetHandle(),
             Text(
-              'Adjust this set',
+              widget.title,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
+            if (widget.supportingText case final supportingText?) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                supportingText,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
+              ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             _StepperRow(
               label: 'Weight',
@@ -1613,200 +1506,11 @@ class _SetStepperSheetState extends State<_SetStepperSheet> {
               key: const ValueKey('stepper-save'),
               onPressed: () =>
                   Navigator.pop(context, (load: _load, reps: _reps)),
-              child: const Text('Use for this set'),
+              child: Text(widget.saveLabel),
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ExerciseProgress extends StatelessWidget {
-  const _ExerciseProgress({required this.current, required this.total});
-
-  final int current;
-  final int total;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.lg,
-        AppSpacing.xs,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: LinearProgressIndicator(
-              value: total == 0 ? 0 : current / total,
-              borderRadius: AppRadii.smallBorder,
-              color: AppColors.rose,
-              backgroundColor: AppColors.blushSoft,
-              minHeight: 6,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            '$current of $total',
-            key: const ValueKey('exercise-progress'),
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(color: AppColors.inkSoft),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExerciseVisual extends StatelessWidget {
-  const _ExerciseVisual({required this.entry, this.height = 220});
-
-  final engine.SessionExerciseEntry entry;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return ExerciseVisual(
-      exerciseId: entry.exerciseId,
-      exerciseName: entry.planExercise.name,
-      blockRoleLabel: SessionPresentation.blockRole(
-        entry.planExercise.blockRole,
-      ),
-      height: height,
-    );
-  }
-}
-
-class _SetPills extends StatelessWidget {
-  const _SetPills({required this.entry, required this.unitSystem});
-
-  final engine.SessionExerciseEntry entry;
-  final engine.UnitSystem unitSystem;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.xs,
-      runSpacing: AppSpacing.xs,
-      children: [
-        for (var index = 0; index < entry.prescription.dose.sets; index++)
-          _Pill(
-            text: index < entry.setLogs.length
-                ? _completedSetLabel(entry.setLogs[index])
-                : index == entry.setLogs.length
-                ? 'Set ${index + 1} of ${entry.prescription.dose.sets}'
-                : 'Set ${index + 1}',
-            color: index < entry.setLogs.length
-                ? AppColors.sageSoft
-                : index == entry.setLogs.length
-                ? AppColors.blush
-                : AppColors.paper,
-            textColor: index < entry.setLogs.length
-                ? AppColors.sage
-                : AppColors.inkSoft,
-          ),
-      ],
-    );
-  }
-
-  String _completedSetLabel(engine.SetCompleted set) => set.load.isZero
-      ? '${set.reps} reps'
-      : '${set.reps} × ${SessionPresentation.formatLoad(set.load, unitSystem)}';
-}
-
-class _PrescriptionCard extends StatelessWidget {
-  const _PrescriptionCard({
-    required this.entry,
-    required this.load,
-    required this.reps,
-    required this.unitSystem,
-    required this.onEdit,
-  });
-
-  final engine.SessionExerciseEntry entry;
-  final engine.Kg load;
-  final int reps;
-  final engine.UnitSystem unitSystem;
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final main = switch (entry.prescription.suggestion) {
-      engine.SuggestedLoad() =>
-        '${SessionPresentation.formatLoad(load, unitSystem)} · $reps reps',
-      engine.BodyweightOnly(:final added) =>
-        added.isZero
-            ? 'Bodyweight · $reps reps'
-            : 'Bodyweight + ${SessionPresentation.formatLoad(load, unitSystem)} · $reps reps',
-      engine.NeedsCalibration() =>
-        '${SessionPresentation.formatLoad(load, unitSystem)} · $reps reps',
-      engine.RepOrDurationTarget(:final hold) when hold != null =>
-        '${hold.inSeconds} second hold',
-      engine.RepOrDurationTarget(:final reps) => '$reps reps',
-    };
-    return InkWell(
-      key: const ValueKey('prescription-card'),
-      onTap: onEdit,
-      borderRadius: AppRadii.mediumBorder,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.paper,
-          borderRadius: AppRadii.mediumBorder,
-          border: Border.all(color: AppColors.line, width: 1.5),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(main, style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    'ready for you',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.edit_outlined, color: AppColors.inkFaint),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BridgeCard extends StatelessWidget {
-  const _BridgeCard({required this.bridge, required this.unitSystem});
-
-  final engine.DropBridge bridge;
-  final engine.UnitSystem unitSystem;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = switch (bridge) {
-      engine.DropSetBridge(
-        :final backOffLoad,
-        :final backOffRepsMin,
-        :final backOffRepsMax,
-      ) =>
-        'If the jump feels big, do what you can, then use ${SessionPresentation.formatLoad(backOffLoad, unitSystem)} for $backOffRepsMin to $backOffRepsMax reps.',
-      engine.EasierVariationBridge() =>
-        'There is an easier variation ready if this jump feels too large.',
-    };
-    return _InfoCard(
-      color: AppColors.lavenderSoft,
-      icon: Icons.call_split_rounded,
-      title: 'A gentler bridge',
-      body: text,
     );
   }
 }
@@ -1837,57 +1541,6 @@ class _EffortOptions extends StatelessWidget {
             onSelected: onSelected == null ? null : (_) => onSelected!(level),
           ),
       ],
-    );
-  }
-}
-
-class _UnitPrompt extends StatelessWidget {
-  const _UnitPrompt({
-    required this.unitSystem,
-    required this.onSwitch,
-    required this.onDismiss,
-  });
-
-  final engine.UnitSystem unitSystem;
-  final VoidCallback onSwitch;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    final current = unitSystem.isMetric ? 'kg' : 'lb';
-    final other = unitSystem.isMetric ? 'lb' : 'kg';
-    return Container(
-      key: const ValueKey('unit-prompt'),
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.xs,
-        AppSpacing.xs,
-        AppSpacing.xs,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.blushSoft,
-        borderRadius: AppRadii.mediumBorder,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Showing weights in $current. Switch to $other?',
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-          ),
-          TextButton(
-            key: const ValueKey('switch-units'),
-            onPressed: onSwitch,
-            child: const Text('Switch'),
-          ),
-          IconButton(
-            onPressed: onDismiss,
-            icon: const Icon(Icons.close_rounded, size: 18),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1977,6 +1630,7 @@ class _SheetOption extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.trailing,
     super.key,
   });
 
@@ -1984,6 +1638,7 @@ class _SheetOption extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -2026,6 +1681,10 @@ class _SheetOption extends StatelessWidget {
                   ],
                 ),
               ),
+              if (trailing case final trailing?) ...[
+                const SizedBox(width: AppSpacing.sm),
+                trailing,
+              ],
             ],
           ),
         ),
@@ -2056,7 +1715,104 @@ class _SwapOption extends StatelessWidget {
           : notRecommended
           ? 'Not recommended'
           : 'Good match for this slot',
+      trailing: _SwapTierMedal(tier: candidate.tier),
       onTap: () => Navigator.pop(context, candidate),
+    );
+  }
+}
+
+class _SwapTierMedal extends StatelessWidget {
+  const _SwapTierMedal({required this.tier});
+
+  final int tier;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (tier) {
+      1 => ('Gold match medal', _swapGold),
+      2 => ('Silver match medal', _swapSilver),
+      _ => ('Bronze match medal', _swapBronze),
+    };
+    return Semantics(
+      label: label,
+      child: ExcludeSemantics(
+        child: Icon(
+          Icons.emoji_events_rounded,
+          color: color,
+          size: _swapMedalSize,
+        ),
+      ),
+    );
+  }
+}
+
+class _SoftConfirmationCard extends StatelessWidget {
+  const _SoftConfirmationCard({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('session-adjustment-card'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: const BoxDecoration(
+        color: AppColors.lavenderSoft,
+        borderRadius: AppRadii.mediumBorder,
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.favorite_outline_rounded,
+            color: AppColors.lavender,
+            size: 20,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MixedSwapRecap extends StatelessWidget {
+  const _MixedSwapRecap({required this.lines});
+
+  final List<String> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('mixed-swap-recap'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: const BoxDecoration(
+        color: AppColors.sageSoft,
+        borderRadius: AppRadii.mediumBorder,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Today's saved work",
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          for (final line in lines)
+            Text(
+              line,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -2260,7 +2016,6 @@ final class _RestPhase {
     required this.completedSet,
     required this.totalSets,
     required this.askForEffort,
-    required this.calibration,
     required this.nextExerciseName,
     required this.nextSet,
   });
@@ -2270,7 +2025,6 @@ final class _RestPhase {
   final int completedSet;
   final int totalSets;
   final bool askForEffort;
-  final bool calibration;
   final String? nextExerciseName;
   final int nextSet;
 }

@@ -206,6 +206,110 @@ void main() {
       },
     );
 
+    test(
+      'busy swap after 2 of 3 leg press sets keeps both and transfers one',
+      () {
+        var state = _freshState();
+        const sourceId = 'machine-leg-press';
+        state = _replaceWithWorkingLoad(state, sourceId, const Kg(20));
+        var source = _entryWithExerciseId(state, sourceId);
+        expect(source.prescription.dose.sets, 3);
+
+        for (var setIndex = 0; setIndex < 2; setIndex++) {
+          state = advanceSession(
+            state,
+            _completedSet(source, setIndex, load: const Kg(20)),
+          );
+          source = _entryWithExerciseId(state, sourceId);
+        }
+        state = advanceSession(
+          state,
+          const SwapRequested(exerciseId: sourceId, reason: SwapReason.busy),
+        );
+
+        final completedSource = _entryWithExerciseId(state, sourceId);
+        final replacement = state.exercises.singleWhere(
+          (entry) =>
+              entry.originalExerciseId == sourceId &&
+              entry.exerciseId != sourceId,
+        );
+        expect(completedSource.status, SessionExerciseStatus.done);
+        expect(completedSource.setLogs, hasLength(2));
+        expect(completedSource.prescription.dose.sets, 2);
+        expect(replacement.status, SessionExerciseStatus.swapped);
+        expect(replacement.setLogs, isEmpty);
+        expect(replacement.prescription.dose.sets, 1);
+        expect(state.budget.completedSetCount, 2);
+
+        final history = foldTrainingHistory(
+          TrainingHistory(
+            records: [state.toRecord(sessionId: 'partial-leg-press-swap')],
+          ),
+        );
+        expect(history.exercise(sourceId).everSeen, isTrue);
+        expect(history.exercise(sourceId).lastLoad, const Kg(20));
+        expect(history.exercise(sourceId).lastReps, isNotNull);
+        expect(history.exercise(replacement.exerciseId).everSeen, isFalse);
+
+        final shortened = advanceSession(state, const Shorten(30));
+        final liveSlots = {
+          for (final entry in shortened.exercises)
+            if (entry.status != SessionExerciseStatus.removed &&
+                entry.status != SessionExerciseStatus.skipped)
+              entry.originalExerciseId,
+        };
+        expect(liveSlots, hasLength(4));
+      },
+    );
+
+    test('busy swap before leg press starts transfers all 3 sets', () {
+      final initial = _freshState();
+      const sourceId = 'machine-leg-press';
+      final source = _entryWithExerciseId(initial, sourceId);
+      expect(source.prescription.dose.sets, 3);
+
+      final swapped = advanceSession(
+        initial,
+        const SwapRequested(exerciseId: sourceId, reason: SwapReason.busy),
+      );
+
+      expect(
+        swapped.exercises.where((entry) => entry.exerciseId == sourceId),
+        isEmpty,
+      );
+      final replacement = swapped.exercises.singleWhere(
+        (entry) => entry.originalExerciseId == sourceId,
+      );
+      expect(replacement.prescription.dose.sets, 3);
+      expect(replacement.setLogs, isEmpty);
+      expect(replacement.status, SessionExerciseStatus.swapped);
+    });
+
+    test('busy swap after the last leg press set is a no-op', () {
+      var state = _freshState();
+      const sourceId = 'machine-leg-press';
+      state = _replaceWithWorkingLoad(state, sourceId, const Kg(20));
+      final source = _entryWithExerciseId(state, sourceId);
+      expect(source.prescription.dose.sets, 3);
+      for (var setIndex = 0; setIndex < 3; setIndex++) {
+        state = advanceSession(
+          state,
+          _completedSet(source, setIndex, load: const Kg(20)),
+        );
+      }
+      final completedExercises = state.exercises;
+
+      final afterSwap = advanceSession(
+        state,
+        const SwapRequested(exerciseId: sourceId, reason: SwapReason.busy),
+      );
+
+      expect(afterSwap.exercises, completedExercises);
+      expect(afterSwap.pendingPlanEditSuggestions, isEmpty);
+      expect(afterSwap.warnings.last.code, WarningCode.sessionEventIgnored);
+      expect(afterSwap.reasonCodes, isNot(contains(ReasonCode.swapApplied)));
+    });
+
     test('LowEnergy lowers only unstarted work and uses bottom targets', () {
       var state = _freshState();
       final first = _firstLoadEntry(state);
@@ -618,6 +722,11 @@ SessionExerciseEntry _entry(SessionState state, String exerciseId) =>
           entry.exerciseId == exerciseId ||
           entry.originalExerciseId == exerciseId,
     );
+
+SessionExerciseEntry _entryWithExerciseId(
+  SessionState state,
+  String exerciseId,
+) => state.exercises.firstWhere((entry) => entry.exerciseId == exerciseId);
 
 SessionState _replaceWithWorkingLoad(
   SessionState state,

@@ -70,6 +70,25 @@ final class SessionController extends AsyncNotifier<SessionRuntime?> {
     state = AsyncData(_service.overrideLoad(current, exerciseId, load));
   }
 
+  Future<void> correctCompletedSet({
+    required String exerciseId,
+    required int setIndex,
+    required engine.Kg load,
+    required int reps,
+  }) async {
+    final current = state.value;
+    if (current == null) return;
+    state = await AsyncValue.guard(
+      () => _service.correctCompletedSet(
+        current,
+        exerciseId: exerciseId,
+        setIndex: setIndex,
+        load: load,
+        reps: reps,
+      ),
+    );
+  }
+
   void useUsualWeights() {
     final current = state.value;
     if (current == null) return;

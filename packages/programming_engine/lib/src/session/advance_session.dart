@@ -259,7 +259,16 @@ final class _SessionReducer {
       return _warn(state, WarningCode.noEligibleSessionSwap, event.exerciseId);
     }
 
-    final resolution = _prescribeCandidate(state, candidate);
+    final completedSets = entry.setsCompleted;
+    final remainingSets = entry.prescription.dose.sets - completedSets;
+    if (remainingSets <= 0) {
+      return _ignored('${event.exerciseId}/swap/no-remaining-sets');
+    }
+    final resolution = _prescribeCandidate(
+      state,
+      candidate,
+      sets: remainingSets,
+    );
     final prescription = resolution.prescription;
     final replacementPlan = _candidatePlanExercise(entry, candidate);
     final replacement = SessionExerciseEntry(
@@ -281,7 +290,24 @@ final class _SessionReducer {
       tier: candidate.tier,
       reason: event.reason,
     );
-    var nextState = _replaceEntry(state, index, replacement);
+    var nextState = completedSets == 0
+        ? _replaceEntry(state, index, replacement)
+        : state.copyWith(
+            exercises: <SessionExerciseEntry>[
+              ...state.exercises.take(index),
+              entry.copyWith(
+                prescription: _withDose(
+                  _withWhy(entry.prescription, const <ReasonCode>[
+                    ReasonCode.swapApplied,
+                  ]),
+                  _doseWithSets(entry.prescription.dose, completedSets),
+                ),
+                status: SessionExerciseStatus.done,
+              ),
+              replacement,
+              ...state.exercises.skip(index + 1),
+            ],
+          );
     nextState = nextState.copyWith(
       pendingPlanEditSuggestions: <PendingPlanEditSuggestion>[
         ...nextState.pendingPlanEditSuggestions.where(
@@ -306,13 +332,12 @@ final class _SessionReducer {
         : state.budget.availableMinutes;
     final targetCount = _exerciseTargetForMinutes(event.minutes, state.config);
     final exercises = <SessionExerciseEntry>[...state.exercises];
-    final liveCount = exercises
-        .where(
-          (entry) =>
-              entry.status != SessionExerciseStatus.removed &&
-              entry.status != SessionExerciseStatus.skipped,
-        )
-        .length;
+    final liveCount = {
+      for (final entry in exercises)
+        if (entry.status != SessionExerciseStatus.removed &&
+            entry.status != SessionExerciseStatus.skipped)
+          entry.originalExerciseId,
+    }.length;
     var toDrop = (liveCount - targetCount).clamp(0, liveCount);
     final candidates =
         <(int, SessionExerciseEntry)>[
@@ -674,12 +699,14 @@ _ResolvedPrescription _fractionalAdjustment(
 
 _ResolvedPrescription _prescribeCandidate(
   SessionState state,
-  PlanSwapCandidate candidate,
-) {
+  PlanSwapCandidate candidate, {
+  required int sets,
+}) {
   var dose = state.config.doseForWeek(
     candidate.baseDose,
     state.mesocycleWeekIndex,
   );
+  dose = _doseWithSets(dose, sets);
   final range = dose is RepsDose ? dose.range : const RepRange(1, 1);
   final decision = LoadSuggester(state.config).suggest(
     ProgressionInput(
@@ -714,6 +741,21 @@ _ResolvedPrescription _prescribeCandidate(
 }
 
 typedef _ResolvedPrescription = ({ExercisePrescription prescription});
+
+Dose _doseWithSets(Dose dose, int sets) => switch (dose) {
+  RepsDose() => dose.copyWith(sets: sets),
+  TimedDose() => dose.copyWith(sets: sets),
+};
+
+ExercisePrescription _withDose(ExercisePrescription prescription, Dose dose) =>
+    ExercisePrescription(
+      exerciseId: prescription.exerciseId,
+      dose: dose,
+      suggestion: prescription.suggestion,
+      laterality: prescription.laterality,
+      bridge: prescription.bridge,
+      why: prescription.why,
+    );
 
 PlanExercise _candidatePlanExercise(
   SessionExerciseEntry source,

@@ -52,7 +52,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If your lower back rounds or a knee pinches, stop and tap Swaps for a kinder version.',
     findIt:
-        'Find the dumbbell rack by the mirrors, start around 10-14 kg, and use any open floor space.',
+        'Find the dumbbell rack by the mirrors, choose one dumbbell you can hold comfortably, and use any open floor space.',
     dos: const [
       'Keep the dumbbell touching your chest so it cannot pull you forward.',
       'Share your weight across your heel, big toe, and little toe.',
@@ -91,7 +91,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the bar presses your neck, your wrists ache, or your back folds, re-rack it and tap Swaps.',
     findIt:
-        'Head to the squat racks in the weights area; an empty 15-20 kg bar is plenty for a first try.',
+        'Head to the squat racks in the weights area. An empty bar is plenty for a first try.',
     dos: const [
       'Tighten your middle as if you expect a cough so your torso stays steady.',
       'Point your knees the same way as your toes to give your hips room.',
@@ -120,7 +120,7 @@ final List<Exercise> _exercises = <Exercise>[
     setupSteps: const [
       'Adjust the seat so your knees start near a right angle and your lower back stays on the pad.',
       'Place both feet shoulder-width apart in the middle of the large footplate.',
-      'Choose a light pin setting, around 20-40 kg, then release the safety handles.',
+      'Choose a light pin setting, then release the safety handles.',
       'Lower the plate until your knees feel comfortably bent, then press it away without locking them.',
     ],
     shouldFeel:
@@ -128,7 +128,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If your hips curl off the pad or a knee pinches, stop, shorten the depth, and tap Swaps.',
     findIt:
-        'Look in the leg-machine row for a reclined seat facing a broad footplate; start with 20-40 kg on the pin.',
+        'Look in the leg-machine row for a reclined seat facing a broad footplate and a weight stack beside it.',
     dos: const [
       'Press through your whole foot so your heels stay planted.',
       'Let your knees travel in line with your middle toes.',
@@ -169,7 +169,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the front knee pinches, the back hip pulls sharply, or balance feels unsafe, tap Swaps.',
     findIt:
-        'Take a flat bench near the dumbbell rack; begin bodyweight or with 4-8 kg in each hand.',
+        'Take a flat bench near the dumbbell rack. You can begin with bodyweight or a comfortable dumbbell in each hand.',
     dos: const [
       'Keep your feet hip-width apart so you have a stable base.',
       'Lean your chest forward a little to load the front glute.',
@@ -287,7 +287,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If your lower back takes over or you feel a sharp pull behind a knee, rack the bar and tap Swaps.',
     findIt:
-        'Use a squat rack in the weights area; set the empty 15-20 kg bar on hooks just below hip height.',
+        'Use a squat rack in the weights area. Place an empty bar on hooks just below hip height.',
     dos: const [
       'Keep the bar brushing your legs so it cannot pull your back forward.',
       'Send your hips toward the wall behind you.',
@@ -324,7 +324,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If your lower back aches or the stretch turns sharp near your sitting bones, set the weights down and tap Swaps.',
     findIt:
-        'Pick a pair of 6-10 kg dumbbells from the rack and use a clear patch in front of it.',
+        'Pick a comfortable pair of dumbbells from the rack and use a clear patch in front of it.',
     dos: const [
       'Keep the dumbbells directly below your shoulders.',
       'Think of closing a car door with your hips.',
@@ -367,7 +367,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If your back rounds before the bar moves or you feel a sharp groin or back tug, lower it and tap Swaps.',
     findIt:
-        'Find the rubber lifting platforms by the racks; start around 20-30 kg with full-size light plates.',
+        'Find the rubber lifting platforms by the racks. Use an empty bar or add full-size light plates.',
     dos: const [
       'Pull gently on the bar before lifting to remove any loose clank.',
       'Push the floor away instead of yanking with your arms.',
@@ -396,7 +396,7 @@ final List<Exercise> _exercises = <Exercise>[
     machineLean: true,
     intimidation: IntimidationTier.moderate,
     setupSteps: const [
-      'Clip a rope to the lowest cable setting and choose a light pin, around 10-20 kg.',
+      'Clip a rope to the lowest cable setting and choose a light pin.',
       'Face away, straddle the rope, and hold one rope end in each hand.',
       'Walk forward until the cable stays taut, then soften your knees and push your hips back.',
       'Let the rope pass between your legs, then squeeze your glutes to stand tall.',
@@ -406,7 +406,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the rope rubs your groin or your lower back arches at the top, stop and tap Swaps.',
     findIt:
-        'Find a cable tower by the upper-body machines and a rope on its attachment rack; start around 10-20 kg.',
+        'Find a cable tower by the upper-body machines and a rope on its attachment rack. Use the lowest pulley.',
     dos: const [
       'Step far enough forward that the stack never goes slack.',
       'Reach your hips back toward the machine.',
@@ -436,7 +436,7 @@ final List<Exercise> _exercises = <Exercise>[
     seated: true,
     setupSteps: const [
       'Adjust the foot brace so your knees stay softly bent and your hips sit firmly against the seat.',
-      'Set the rolling pad across your upper back, lower the lap pad snugly, and choose 10-20 kg.',
+      'Set the rolling pad across your upper back, lower the lap pad snugly, and choose a light pin.',
       'Sit tall with your ribs down, then let your torso tip forward a small amount.',
       'Press your upper back into the roller until you are upright, then return slowly.',
     ],
@@ -445,7 +445,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If your lower spine feels pinched or the roller presses your neck, stop, readjust, and tap Swaps.',
     findIt:
-        'Look for a chair with a curved back roller and foot brace in the core or leg area; start around 10-20 kg.',
+        'Look for a chair with a curved back roller and foot brace in the core or leg area.',
     dos: const [
       'Keep the movement small enough that your hips stay planted.',
       'Press both feet into the brace for a steady base.',
@@ -485,7 +485,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the bar hurts your hip bones despite the pad or your lower back pinches, unload it and tap Swaps.',
     findIt:
-        'Use a rack or platform, a flat bench, and a thick bar pad; start around 20-30 kg total.',
+        'Use a rack or platform, a flat bench, and a thick bar pad. An empty bar is plenty to begin.',
     dos: const [
       'Anchor the bench so it cannot slide behind you.',
       'Keep your shins close to upright at the top.',
@@ -523,7 +523,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If your hamstrings cramp or your lower back pinches, move your feet slightly and tap Swaps if it continues.',
     findIt:
-        'Take a mat and one 8-14 kg dumbbell to the stretching area, away from the busy rack.',
+        'Take a mat and one comfortable dumbbell to the stretching area, away from the busy rack.',
     dos: const [
       'Hold both ends of the dumbbell so it cannot roll.',
       'Set your ribs before your hips leave the floor.',
@@ -561,7 +561,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the bench presses into your neck or your lower back pinches, reposition and tap Swaps.',
     findIt:
-        'Pair a flat bench with one 8-16 kg dumbbell near the rack, ideally where the bench can meet a wall.',
+        'Pair a flat bench with one comfortable dumbbell near the rack, ideally where the bench can meet a wall.',
     dos: const [
       'Check that the bench cannot slide before you start.',
       'Keep your gaze forward so your ribs stay down.',
@@ -590,7 +590,7 @@ final List<Exercise> _exercises = <Exercise>[
     setupSteps: const [
       'Sit back in the seat and use the start lever to bring the leg pads to a comfortable narrow position.',
       'Place the pads against the outside of your knees or lower thighs and set both feet on the rests.',
-      'Choose a light pin, around 15-30 kg, and hold the side handles.',
+      'Choose a light pin and hold the side handles.',
       'Press your knees apart, pause before your hips shift, then return slowly.',
     ],
     shouldFeel:
@@ -598,7 +598,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the front or inside of a hip pinches or a knee twists, narrow the start position and tap Swaps.',
     findIt:
-        'Look in the leg-machine row for a chair with two pads outside the knees; start around 15-30 kg.',
+        'Look in the leg-machine row for a chair with two pads outside the knees and a weight stack beside it.',
     dos: const [
       'Keep both sides of your hips heavy on the seat.',
       'Lead the press with your knees.',
@@ -624,7 +624,7 @@ final List<Exercise> _exercises = <Exercise>[
     stability: 3,
     intimidation: IntimidationTier.moderate,
     setupSteps: const [
-      'Clip an ankle strap to the lowest cable setting and choose 2.5-7.5 kg on the pin.',
+      'Clip an ankle strap to the lowest cable setting and choose a light pin.',
       'Face the tower, secure the strap around one ankle, and hold the frame with both hands.',
       'Step back until the cable is taut, soften the standing knee, and lean forward slightly.',
       'Sweep the strapped leg behind you without turning your hips, then return slowly.',
@@ -634,7 +634,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the strap pulls at your ankle or your lower back tightens, unclip it and tap Swaps.',
     findIt:
-        'Find a cable tower and the nearby basket of ankle straps; start with 2.5-7.5 kg on the lowest pulley.',
+        'Find a cable tower and the nearby basket of ankle straps. Use the lowest pulley.',
     dos: const [
       'Hold the frame so balance does not steal the rep.',
       'Squeeze the working glute before the leg travels high.',
@@ -660,7 +660,7 @@ final List<Exercise> _exercises = <Exercise>[
     stability: 1,
     machineLean: true,
     setupSteps: const [
-      'Choose 10-20 kg on the pin and adjust the knee pad, if it moves, so your hips meet the machine pivot.',
+      'Choose a light pin and adjust the knee pad, if it moves, so your hips meet the machine pivot.',
       'Set up on all fours on the machine: one knee on the pad, hands on the handles, and your working foot resting on the plate behind you.',
       'Start with the working knee under your hip, then press the footplate back with your heel.',
       'Stop before your back arches and return without resting the stack, then switch sides.',
@@ -670,7 +670,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the support pad hurts your knee or your lower back pinches, add padding, readjust, and tap Swaps.',
     findIt:
-        'Look by the leg machines for a kneeling pad and one moving footplate; start around 10-20 kg.',
+        'Look by the leg machines for a kneeling pad, one moving footplate, and a weight stack beside them.',
     dos: const [
       'Drive the footplate back through your heel.',
       'Keep both hip bones facing the floor.',
@@ -701,7 +701,7 @@ final List<Exercise> _exercises = <Exercise>[
     setupSteps: const [
       'Adjust the backrest so your knees line up with the machine hinge beside them.',
       'Move the shin roller to sit above your ankles, not on your feet.',
-      'Choose 10-20 kg on the pin, sit back, and hold the side handles.',
+      'Choose a light pin, sit back, and hold the side handles.',
       'Lift the roller until your legs are almost straight, then lower it without dropping the stack.',
     ],
     shouldFeel:
@@ -709,7 +709,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If you feel pressure behind the kneecap or the roller digs into your ankles, stop, readjust, and tap Swaps.',
     findIt:
-        'Find the chair with a padded roller in front of the shins in the leg-machine row; start around 10-20 kg.',
+        'Find the chair with a padded roller in front of the shins in the leg-machine row.',
     dos: const [
       'Match your knees to the machine hinge before moving the pin.',
       'Lift smoothly so the thigh muscles do the work.',
@@ -738,7 +738,7 @@ final List<Exercise> _exercises = <Exercise>[
     setupSteps: const [
       'Slide the backrest until the machine hinge at the side sits level with your knees.',
       'Set the lower roller just above your heels and lower the thigh pad snugly above your knees.',
-      'Choose 10-20 kg on the pin, sit fully back, and hold the handles.',
+      'Choose a light pin, sit fully back, and hold the handles.',
       'Pull your heels under the seat, pause, then let the roller travel forward slowly.',
     ],
     shouldFeel:
@@ -746,7 +746,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If you cramp behind a knee or your calf does most of the work, stop, adjust the roller, and tap Swaps.',
     findIt:
-        'Look for a seated leg machine with a thigh clamp and roller behind the legs; start around 10-20 kg.',
+        'Look for a seated leg machine with a thigh clamp, a roller behind the legs, and a weight stack.',
     dos: const [
       'Pull the roller back with your heels.',
       'Keep your hips heavy against the seat.',
@@ -773,7 +773,7 @@ final List<Exercise> _exercises = <Exercise>[
     machineLean: true,
     setupSteps: const [
       'Set the shoulder pads so you need only a tiny squat to get underneath them.',
-      'Choose 10-20 kg on the pin and place the balls of both feet on the edge of the step.',
+      'Choose a light pin and place the balls of both feet on the edge of the step.',
       'Stand tall into the pads with knees softly straight and heels hanging free.',
       'Rise onto your toes, pause, then lower your heels below the step under control.',
     ],
@@ -782,7 +782,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the back of your ankle pulls sharply or a foot slips on the edge, re-rack the weight and tap Swaps.',
     findIt:
-        'Look in the leg area for a tall machine with shoulder pads and a raised foot step; start around 10-20 kg.',
+        'Look in the leg area for a tall machine with shoulder pads, a raised foot step, and a weight stack.',
     dos: const [
       'Hold the handles before lifting the shoulder pads.',
       'Travel all the way up and down through a smooth ankle range.',
@@ -823,7 +823,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the front of a shoulder pinches or a wrist buckles, bring the weights to your thighs and tap Swaps.',
     findIt:
-        'Take a flat bench beside the dumbbell rack and start with 4-8 kg in each hand.',
+        'Take a flat bench beside the dumbbell rack and choose a comfortable dumbbell for each hand.',
     dos: const [
       'Plant your feet before the first press.',
       'Keep each wrist directly above its elbow.',
@@ -862,7 +862,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If a shoulder pinches or the bar drifts toward your neck, set it on the safeties and tap Swaps.',
     findIt:
-        'Find a bench station inside a rack; use the empty 15-20 kg bar first and ask for a spotter before plates.',
+        'Find a bench station inside a rack. Use an empty bar first and ask for a spotter before adding plates.',
     dos: const [
       'Set the safety arms before you lie down.',
       'Wrap your thumbs around the bar for a secure grip.',
@@ -892,7 +892,7 @@ final List<Exercise> _exercises = <Exercise>[
     seated: true,
     setupSteps: const [
       'Adjust the seat so the handles line up with the middle of your chest.',
-      'Choose 5-15 kg on the pin and set the start position so elbows sit a little behind your hands.',
+      'Choose a light pin and set the start position so elbows sit a little behind your hands.',
       'Sit with your back on the pad, feet flat, and wrists straight on the handles.',
       'Press forward until your arms are long, then return before your shoulders roll forward.',
     ],
@@ -901,7 +901,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the handles pull your elbows far behind you or a shoulder pinches, adjust the seat or tap Swaps.',
     findIt:
-        'Look for a padded chair with two handles that press forward in the upper-body row; start around 5-15 kg.',
+        'Look for a padded chair with two handles that press forward and a weight stack beside it.',
     dos: const [
       'Center your palms on the handles so your wrists stay straight.',
       'Press both sides at the same pace.',
@@ -940,7 +940,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If a shoulder catches at the bottom or your neck strains, bring the weights down and tap Swaps.',
     findIt:
-        'Use an adjustable bench by the dumbbells, set low, and start with 4-8 kg in each hand.',
+        'Use an adjustable bench by the dumbbells, set it to a low incline, and choose a comfortable pair.',
     dos: const [
       'Use a low incline so your upper chest stays involved.',
       'Keep your wrists stacked over your elbows.',
@@ -978,7 +978,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the top or front of a shoulder pinches or your back lifts from the pad, set the weights down and tap Swaps.',
     findIt:
-        'Take an adjustable bench near the dumbbell rack, set it near upright, and start with 3-6 kg each.',
+        'Take an adjustable bench near the dumbbell rack, set it near upright, and choose a comfortable pair.',
     dos: const [
       'Keep your ribs over your hips so the bench supports you.',
       'Press the dumbbells slightly toward each other.',
@@ -1050,7 +1050,7 @@ final List<Exercise> _exercises = <Exercise>[
     machineLean: true,
     intimidation: IntimidationTier.moderate,
     setupSteps: const [
-      'Set the assistance pin around 30-45 kg; more stack weight means more help and an easier rep.',
+      'Set the assistance pin to give plenty of help. More stack weight makes the movement easier.',
       'Climb the steps, grip the parallel handles, and place one knee at a time on the moving pad.',
       'Let your shoulders stay down and lean your chest forward a little.',
       'Bend your elbows to lower comfortably, then press the handles down until your arms are long.',
@@ -1060,7 +1060,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the front of a shoulder pinches or your hands go numb, let the pad rise, step off, and tap Swaps.',
     findIt:
-        'Find the tall assisted machine by the cable towers, with steps and a knee pad; start with 30-45 kg of help.',
+        'Find the tall assisted machine by the cable towers, with steps, a knee pad, and an assistance stack.',
     dos: const [
       'Choose more assistance when you need an easier starting point.',
       'Keep your forearms close to upright as you lower.',
@@ -1091,7 +1091,7 @@ final List<Exercise> _exercises = <Exercise>[
     machineLean: true,
     seated: true,
     setupSteps: const [
-      'Choose 10-20 kg on the pin and adjust the thigh pad so it holds you down with feet flat.',
+      'Choose a light pin and adjust the thigh pad so it holds you down with feet flat.',
       'Grip the wide bar a little beyond shoulder-width and sit with your chest gently lifted.',
       'Pull the bar toward your collarbone by bringing your elbows down beside your ribs.',
       'Pause near your upper chest, then let your arms reach long overhead without losing the seat.',
@@ -1101,7 +1101,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If a shoulder pinches overhead or your neck works harder than your back, reduce the weight or tap Swaps.',
     findIt:
-        'Look for a tall cable machine with a wide bar and thigh pad in the upper-body row; start around 10-20 kg.',
+        'Look for a tall cable machine with a wide bar, thigh pad, and weight stack in the upper-body row.',
     dos: const [
       'Bring the bar toward your collarbone.',
       'Lead the pull by driving your elbows down.',
@@ -1130,7 +1130,7 @@ final List<Exercise> _exercises = <Exercise>[
     machineLean: true,
     seated: true,
     setupSteps: const [
-      'Clip on the close-grip handle and choose 10-20 kg on the pin.',
+      'Clip on the close-grip handle and choose a light pin.',
       'Sit on the bench, place both feet on the plates, and keep your knees softly bent.',
       'Hold the handle with long arms and sit tall before the stack leaves its rest.',
       'Pull toward your lower ribs, keeping elbows close, then reach forward without rocking your torso.',
@@ -1140,7 +1140,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If your lower back starts doing the pulling or a shoulder pinches forward, release the handle and tap Swaps.',
     findIt:
-        'Find the low cable station facing two footplates, often at the end of a tower; start around 10-20 kg.',
+        'Find the low cable station facing two footplates, often at the end of a tower.',
     dos: const [
       'Sit tall before you move the handle.',
       'Drive your elbows behind you toward your back pockets.',
@@ -1180,7 +1180,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If your support shoulder collapses or your lower back twists or aches, set the dumbbell down and tap Swaps.',
     findIt:
-        'Use a flat bench beside the dumbbell rack and start with one 6-10 kg dumbbell.',
+        'Use a flat bench beside the dumbbell rack and choose one comfortable dumbbell.',
     dos: const [
       'Press the support hand into the bench.',
       'Pull your elbow toward the hip, not straight toward the ceiling.',
@@ -1211,7 +1211,7 @@ final List<Exercise> _exercises = <Exercise>[
     seated: true,
     intimidation: IntimidationTier.moderate,
     setupSteps: const [
-      'Set the assistance pin around 30-50 kg; more stack weight means more help and an easier pull-up.',
+      'Set the assistance pin to give plenty of help. More stack weight makes the pull-up easier.',
       'Climb the steps, take an overhand grip, and place one knee at a time on the moving pad.',
       'Start with long arms and a quiet body, keeping your shoulders away from your ears.',
       'Pull your chest toward the handles until your chin reaches hand height, then lower slowly.',
@@ -1221,7 +1221,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If a shoulder pinches in the hang or an elbow feels sharply strained, let the pad rise and tap Swaps.',
     findIt:
-        'Find the tall Gravitron by the cable towers, with steps and a moving knee pad; start with 30-50 kg of help.',
+        'Find the tall Gravitron by the cable towers, with steps, a moving knee pad, and an assistance stack.',
     dos: const [
       'Add more assistance whenever you need the rep to feel easier.',
       'Bring your elbows down toward your ribs.',
@@ -1251,7 +1251,7 @@ final List<Exercise> _exercises = <Exercise>[
     seated: true,
     setupSteps: const [
       'Adjust the seat so the handles sit near shoulder height and your chest rests fully on the pad.',
-      'Choose 5-15 kg on the pin and take the handles with palms facing the floor.',
+      'Choose a light pin and take the handles with palms facing the floor.',
       'Keep your chest on the pad and begin with arms reaching forward.',
       'Pull your elbows wide until your hands reach your ribs, then return without dropping the stack.',
     ],
@@ -1260,7 +1260,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the front of a shoulder pinches or your hands tingle, stop, change the seat or grip, and tap Swaps.',
     findIt:
-        'Look near the chest and back machines for a chest pad with handles that sweep back; start around 5-15 kg.',
+        'Look near the chest and back machines for a chest pad with handles that sweep back.',
     dos: const [
       'Keep your chest touching the pad throughout the pull.',
       'Drive your elbows wide and back.',
@@ -1297,7 +1297,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the top of a shoulder pinches or your neck takes over, lower the weights and tap Swaps.',
     findIt:
-        'Pick 2-5 kg dumbbells from the light end of the rack, often the top shelf by the mirrors.',
+        'Pick a comfortable pair from the light end of the dumbbell rack, often the top shelf by the mirrors.',
     dos: const [
       'Lead with your elbows so your hands stay relaxed.',
       'Use a weight that lets your torso stay still.',
@@ -1334,7 +1334,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If the crease of an elbow feels sharp or a wrist bends back under the load, set the weights down and tap Swaps.',
     findIt:
-        'Choose 3-7 kg dumbbells from the lighter half of the rack and stand clear of the bench aisle.',
+        'Choose a comfortable pair from the lighter half of the dumbbell rack and stand clear of the bench aisle.',
     dos: const [
       'Keep your elbows beside your ribs.',
       'Turn your palms fully forward as you curl.',
@@ -1360,7 +1360,7 @@ final List<Exercise> _exercises = <Exercise>[
     stability: 1,
     machineLean: true,
     setupSteps: const [
-      'Clip a rope to the highest cable setting and choose 5-12.5 kg on the pin.',
+      'Clip a rope to the highest cable setting and choose a light pin.',
       'Face the tower, hold one rope end in each hand, and tuck your elbows beside your ribs.',
       'Take a small step back and keep your knees soft with your chest tall.',
       'Press the rope down, separate its ends by your thighs, then return using only your forearms.',
@@ -1370,7 +1370,7 @@ final List<Exercise> _exercises = <Exercise>[
     stopIf:
         'If an elbow or wrist pinches or a shoulder gets pulled forward, release the rope and tap Swaps.',
     findIt:
-        'Use a cable tower and the rope from its attachment rack; set the pulley high and start around 5-12.5 kg.',
+        'Use a cable tower and the rope from its attachment rack. Set the pulley high.',
     dos: const [
       'Pin your elbows beside your body.',
       'Split the rope ends at the bottom.',
@@ -1437,7 +1437,7 @@ final List<Exercise> _exercises = <Exercise>[
     stability: 2,
     intimidation: IntimidationTier.moderate,
     setupSteps: const [
-      'Clip a rope to the highest cable setting, place a mat down, and choose 10-20 kg.',
+      'Clip a rope to the highest cable setting, place a mat down, and choose a light pin.',
       'Kneel facing the tower about one long step away and hold the rope ends beside your temples.',
       'Keep your hips over your knees and your hands still as you curl your ribs toward your hips.',
       'Pause low, then uncurl slowly until your abs lengthen without letting the stack rest.',
@@ -1446,8 +1446,7 @@ final List<Exercise> _exercises = <Exercise>[
         'The front of your abs doing the curl, with your hips steady and your arms only holding the rope.',
     stopIf:
         'If your lower back pinches or the rope pulls on your neck, lighten the pin or tap Swaps.',
-    findIt:
-        'Find a cable tower, a rope, and a mat; use the high pulley and start around 10-20 kg.',
+    findIt: 'Find a cable tower, a rope, and a mat. Use the high pulley.',
     dos: const [
       'Keep the rope beside your head.',
       'Curl your ribs toward your hips.',
