@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../history/domain/history_presentation.dart';
 import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../plan/domain/plan_presentation.dart';
 import '../../session/application/session_controller.dart';
+import '../../session/application/session_lifecycle_service.dart';
 
 class TodayScreen extends ConsumerStatefulWidget {
   const TodayScreen({super.key});
@@ -44,7 +47,8 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     }
 
     final preview = previewState.value;
-    final day = preview?.day ?? document.plan.days.first;
+    final completed = preview?.completedToday;
+    final day = completed?.day ?? preview?.day ?? document.plan.days.first;
     final weekKind =
         preview?.state.weekKind ?? document.plan.mesocycleCalendar.first.kind;
     final weekExplanation = PlanPresentation.weekKindExplanation(weekKind);
@@ -91,74 +95,28 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ),
                 ],
                 const SizedBox(height: AppSpacing.lg),
-                ClipRRect(
-                  borderRadius: AppRadii.largeBorder,
-                  child: Stack(
-                    alignment: Alignment.bottomLeft,
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 0.92,
-                        child: Image.asset(
-                          'assets/images/hip-thrust-2.jpg',
-                          fit: BoxFit.cover,
-                          alignment: Alignment.topCenter,
+                _TodayHeroCard(
+                  dayName: PlanPresentation.dayName(day, answers),
+                  weekKind: weekKind,
+                  exerciseCount: day.exercises.length,
+                  plannedMinutes: answers.sessionMinutes?.value ?? 45,
+                  completed: completed,
+                  hasOpenSession: preview?.hasOpenSessionToday ?? false,
+                  onStart: preview == null
+                      ? null
+                      : () => _startSession(context),
+                  onSummary: completed == null
+                      ? null
+                      : () => context.push(
+                          '/history/session/${completed.record.id}',
                         ),
-                      ),
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                AppColors.ink.withValues(alpha: 0),
-                                AppColors.ink.withValues(alpha: 0.84),
-                              ],
-                              stops: const [0.35, 1],
-                            ),
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm,
-                                vertical: AppSpacing.xs,
-                              ),
-                              decoration: const BoxDecoration(
-                                color: AppColors.blushSoft,
-                                borderRadius: AppRadii.largeBorder,
-                              ),
-                              child: Text(
-                                PlanPresentation.weekKindLabel(weekKind),
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(color: AppColors.roseDeep),
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            Text(
-                              PlanPresentation.dayName(day, answers),
-                              style: Theme.of(context).textTheme.headlineMedium
-                                  ?.copyWith(color: AppColors.paper),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              '${day.exercises.length} exercises · ${answers.sessionMinutes?.value ?? 45} min',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppColors.paper),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
-                if (weekExplanation != null) ...[
+                if (completed case final session?) ...[
                   const SizedBox(height: AppSpacing.sm),
+                  _NextSessionLine(session: session),
+                ],
+                if (weekExplanation != null) ...[
+                  const SizedBox(height: AppSpacing.md),
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: const BoxDecoration(
@@ -173,26 +131,218 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.md),
-                FilledButton.icon(
-                  key: const ValueKey('start-workout'),
-                  onPressed: preview == null
-                      ? null
-                      : () async {
-                          final runtime = await ref
-                              .read(sessionControllerProvider.notifier)
-                              .start();
-                          if (runtime != null && context.mounted) {
-                            context.push('/session');
-                          }
-                        },
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Start workout'),
-                ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> _startSession(BuildContext context) async {
+    final runtime = await ref.read(sessionControllerProvider.notifier).start();
+    if (runtime != null && context.mounted) context.push('/session');
+  }
+}
+
+class _TodayHeroCard extends StatelessWidget {
+  const _TodayHeroCard({
+    required this.dayName,
+    required this.weekKind,
+    required this.exerciseCount,
+    required this.plannedMinutes,
+    required this.hasOpenSession,
+    required this.onStart,
+    required this.onSummary,
+    this.completed,
+  });
+
+  final String dayName;
+  final engine.MesocycleWeekKind weekKind;
+  final int exerciseCount;
+  final int plannedMinutes;
+  final CompletedSession? completed;
+  final bool hasOpenSession;
+  final VoidCallback? onStart;
+  final VoidCallback? onSummary;
+
+  @override
+  Widget build(BuildContext context) {
+    final done = completed != null;
+    final summary = completed;
+    final detail = summary == null
+        ? '$exerciseCount exercises · $plannedMinutes min'
+        : [
+            HistoryPresentation.duration(summary.duration),
+            if (summary.lastEffort case final effort?)
+              HistoryPresentation.feel(effort),
+          ].join(' · ');
+    return ClipRRect(
+      borderRadius: AppRadii.largeBorder,
+      child: Stack(
+        alignment: Alignment.bottomLeft,
+        children: [
+          AspectRatio(
+            aspectRatio: 0.92,
+            child: Image.asset(
+              'assets/images/hip-thrust-2.jpg',
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+            ),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.ink.withValues(alpha: 0.02),
+                    AppColors.ink.withValues(alpha: 0.88),
+                  ],
+                  stops: const [0.3, 1],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: done ? AppColors.sageSoft : AppColors.blushSoft,
+                      borderRadius: AppRadii.largeBorder,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (done) ...[
+                          const Icon(
+                            Icons.check_rounded,
+                            size: 15,
+                            color: AppColors.sage,
+                          ),
+                          const SizedBox(width: AppSpacing.xxs),
+                        ],
+                        Text(
+                          done
+                              ? 'DONE · ${HistoryPresentation.weekday(summary!.record.completedAt!, uppercase: true)}'
+                              : PlanPresentation.weekKindLabel(weekKind),
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: done
+                                    ? AppColors.sage
+                                    : AppColors.roseDeep,
+                                letterSpacing: done ? 0.7 : null,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  dayName,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineMedium?.copyWith(color: AppColors.paper),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  detail,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppColors.paper),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (done)
+                  FilledButton(
+                    key: const ValueKey('see-what-you-did'),
+                    onPressed: onSummary,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.sageSoft,
+                      foregroundColor: AppColors.sage,
+                    ),
+                    child: const Text('See what you did'),
+                  )
+                else
+                  FilledButton.icon(
+                    key: ValueKey(
+                      hasOpenSession ? 'resume-workout' : 'start-workout',
+                    ),
+                    onPressed: onStart,
+                    icon: Icon(
+                      hasOpenSession
+                          ? Icons.refresh_rounded
+                          : Icons.play_arrow_rounded,
+                    ),
+                    label: Text(
+                      hasOpenSession
+                          ? 'Pick up where you left off'
+                          : 'Start workout',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NextSessionLine extends StatelessWidget {
+  const _NextSessionLine({required this.session});
+
+  final CompletedSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final days = session.document.plan.days;
+    final currentIndex = days.indexWhere(
+      (day) => day.dayIndex == session.record.dayIndex,
+    );
+    final next = days[currentIndex < 0 ? 0 : (currentIndex + 1) % days.length];
+    final daysPerWeek = session.answers.daysPerWeek?.value ?? days.length;
+    final uppercaseWeekday = PlanPresentation.weekdayLabel(
+      next.dayIndex,
+      daysPerWeek,
+    );
+    final weekday =
+        '${uppercaseWeekday[0]}${uppercaseWeekday.substring(1).toLowerCase()}';
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: AppColors.sage,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              'Next up · $weekday · ${PlanPresentation.dayName(next, session.answers)}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+            ),
+          ),
+        ],
       ),
     );
   }

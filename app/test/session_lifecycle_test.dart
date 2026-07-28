@@ -209,4 +209,122 @@ void main() {
       expect(folded.excludedExerciseIds, contains(entry.exerciseId));
     },
   );
+
+  test(
+    'completed session queries use the latest write for each set index',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      final now = DateTime.utc(2026, 7, 26, 10);
+      final container = ProviderContainer(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          clockProvider.overrideWithValue(() => now),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+      final document = await storeSessionTestPlan(container);
+      await database
+          .into(database.sessionRecords)
+          .insert(
+            SessionRecordRow(
+              id: 'completed-history-session',
+              planId: document.row.id,
+              planRef: document.plan.reference,
+              dayIndex: 1,
+              mesocycleIndex: 1,
+              mesocycleWeekIndex: 1,
+              absoluteWeekIndex: 1,
+              weekKind: engine.MesocycleWeekKind.build,
+              startedAt: now,
+              completedAt: now.add(const Duration(minutes: 44)),
+            ),
+          );
+
+      final events = <engine.SessionEvent>[
+        engine.SetCompleted(
+          exerciseId: 'dumbbell-goblet-squat',
+          setIndex: 0,
+          load: engine.Kg(10),
+          reps: 10,
+          unitSystem: engine.UnitSystem.metric,
+          targetReps: 10,
+          targetRpe: 7,
+          prescribedLoad: engine.Kg(10),
+        ),
+        engine.SetCompleted(
+          exerciseId: 'dumbbell-goblet-squat',
+          setIndex: 0,
+          load: engine.Kg(12),
+          reps: 10,
+          unitSystem: engine.UnitSystem.metric,
+          targetReps: 10,
+          targetRpe: 7,
+          prescribedLoad: engine.Kg(10),
+        ),
+        engine.SetCompleted(
+          exerciseId: 'dumbbell-goblet-squat',
+          setIndex: 1,
+          load: engine.Kg(12),
+          reps: 8,
+          unitSystem: engine.UnitSystem.metric,
+          targetReps: 10,
+          targetRpe: 7,
+          prescribedLoad: engine.Kg(12),
+        ),
+        engine.SwapRequested(
+          exerciseId: 'dumbbell-goblet-squat',
+          reason: engine.SwapReason.busy,
+        ),
+        engine.SetCompleted(
+          exerciseId: 'bodyweight-squat',
+          setIndex: 0,
+          load: engine.Kg.zero,
+          reps: 10,
+          unitSystem: engine.UnitSystem.metric,
+          targetReps: 10,
+          targetRpe: 7,
+          prescribedLoad: engine.Kg.zero,
+        ),
+        engine.EffortReported(
+          exerciseId: 'dumbbell-goblet-squat',
+          level: engine.EffortLevel.justRight,
+        ),
+      ];
+      for (var index = 0; index < events.length; index++) {
+        final encoded = SessionEventCodec.encode(events[index]);
+        await database
+            .into(database.sessionEvents)
+            .insert(
+              SessionEventRow(
+                id: 'completed-history-event-$index',
+                sessionId: 'completed-history-session',
+                seq: index,
+                type: encoded.type,
+                payloadJson: encoded.payloadJson,
+                recordedAt: now.add(Duration(minutes: index + 1)),
+                unitSystemAtEntry: engine.UnitSystem.metric,
+              ),
+            );
+      }
+
+      final service = container.read(sessionLifecycleServiceProvider);
+      final history = await service.completedSessions();
+      final detail = await service.completedSession(
+        'completed-history-session',
+      );
+      final preview = await service.preview();
+
+      expect(history, hasLength(1));
+      expect(detail, isNotNull);
+      expect(detail!.latestSets, hasLength(3));
+      expect(detail.totalLoad, engine.Kg(216));
+      expect(detail.duration, const Duration(minutes: 44));
+      expect(detail.lastEffort, engine.EffortLevel.justRight);
+      expect(detail.swappedExerciseIds, contains('bodyweight-squat'));
+      expect(preview!.completedToday?.record.id, 'completed-history-session');
+    },
+  );
 }

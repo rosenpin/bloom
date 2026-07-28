@@ -70,8 +70,45 @@ void main() {
       );
       expect(find.text("Keep today's swap?"), findsOneWidget);
       await _tap(tester, const ValueKey('keep-swap-yes'));
-      await _tap(tester, const ValueKey('session-complete-done'));
+      expect(find.text("That's your workout."), findsOneWidget);
+      expect(find.text('Show me my recap'), findsOneWidget);
+      await _tap(tester, const ValueKey('session-complete-recap'));
+      expect(find.byKey(const ValueKey('share-recap-screen')), findsOneWidget);
+      expect(find.text('Share'), findsOneWidget);
+      await _tap(tester, const ValueKey('share-recap-later'));
       expect(find.byKey(const ValueKey('today-screen')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('start-workout')),
+        findsNothing,
+        reason: 'Today must not offer the completed session again.',
+      );
+      expect(find.textContaining('DONE ·'), findsOneWidget);
+      expect(find.textContaining('felt just right'), findsOneWidget);
+      expect(find.byKey(const ValueKey('see-what-you-did')), findsOneWidget);
+
+      await _tap(tester, const ValueKey('see-what-you-did'));
+      expect(
+        find.byKey(const ValueKey('session-summary-screen')),
+        findsOneWidget,
+      );
+      expect(find.text('WHAT YOU DID'), findsOneWidget);
+      expect(find.text('Set 1'), findsOneWidget);
+      await _tap(tester, const ValueKey('session-summary-back'));
+      final completedSessionId =
+          (await harness.database
+                  .select(harness.database.sessionRecords)
+                  .getSingle())
+              .id;
+      await _tap(tester, const ValueKey('me-tab'));
+      expect(
+        find.byKey(ValueKey('history-session-$completedSessionId')),
+        findsOneWidget,
+      );
+      await _tap(tester, ValueKey('history-session-$completedSessionId'));
+      expect(
+        find.byKey(const ValueKey('session-summary-screen')),
+        findsOneWidget,
+      );
 
       final editedDocument = await harness.container
           .read(planRepositoryProvider)
@@ -129,6 +166,24 @@ void main() {
       expect(profile.unitPromptSeen, isTrue);
     },
   );
+
+  testWidgets('a same-day unfinished session gets the warm resume path', (
+    tester,
+  ) async {
+    final harness = await _SessionHarness.create(tester);
+    addTearDown(harness.dispose);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await tester.tap(find.widgetWithText(TextButton, 'Today'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('start-workout')), findsNothing);
+    expect(find.byKey(const ValueKey('resume-workout')), findsOneWidget);
+    expect(find.text('Pick up where you left off'), findsOneWidget);
+
+    await _tap(tester, const ValueKey('resume-workout'));
+    expect(find.byKey(const ValueKey('session-start-heading')), findsOneWidget);
+  });
 
   testWidgets(
     'a partial equipment swap keeps completed work and shows one remaining set',

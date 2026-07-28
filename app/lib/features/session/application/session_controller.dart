@@ -19,6 +19,7 @@ final class SessionController extends AsyncNotifier<SessionRuntime?> {
   Future<SessionRuntime?> start() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(_service.startOrResume);
+    if (state.value != null) _invalidateSessionViews();
     return state.value;
   }
 
@@ -26,6 +27,11 @@ final class SessionController extends AsyncNotifier<SessionRuntime?> {
     final current = state.value;
     if (current == null) return;
     state = await AsyncValue.guard(() => _service.advance(current, event));
+    final next = state.value;
+    if ((!current.isComplete && (next?.isComplete ?? false)) ||
+        event is engine.SessionAbandoned) {
+      _invalidateSessionViews();
+    }
   }
 
   Future<void> swapToCandidate(
@@ -46,6 +52,7 @@ final class SessionController extends AsyncNotifier<SessionRuntime?> {
       () => _service.keepSwap(current, suggestion),
     );
     ref.invalidate(latestPlanProvider);
+    _invalidateSessionViews();
   }
 
   Future<void> changeUnitSystem(engine.UnitSystem unitSystem) async {
@@ -102,6 +109,12 @@ final class SessionController extends AsyncNotifier<SessionRuntime?> {
 
   void clear() {
     state = const AsyncData(null);
+    _invalidateSessionViews();
+  }
+
+  void _invalidateSessionViews() {
     ref.invalidate(sessionPreviewProvider);
+    ref.invalidate(completedSessionsProvider);
+    ref.invalidate(completedSessionProvider);
   }
 }

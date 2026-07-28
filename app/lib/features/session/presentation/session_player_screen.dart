@@ -9,6 +9,8 @@ import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../history/domain/history_presentation.dart';
+import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../plan/domain/plan_presentation.dart';
 import '../application/exercise_video_prefetch.dart';
 import '../application/rest_timer_foundation.dart';
@@ -18,6 +20,7 @@ import '../data/exercise_content_repository.dart';
 import '../domain/session_presentation.dart';
 import 'exercise_mode_views.dart';
 import 'exercise_visual.dart';
+import 'share_recap_screen.dart';
 
 const _swapGold = Color(0xFFC29A2E);
 const _swapSilver = Color(0xFF8F98A5);
@@ -41,6 +44,9 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
   final Map<String, int> _repOverrides = <String, int>{};
   bool _loggingSet = false;
   String? _adjustmentNotice;
+  String? _recapSessionId;
+  Future<SessionRecap?>? _recapFuture;
+  SessionRecap? _shareRecap;
 
   @override
   Widget build(BuildContext context) {
@@ -65,16 +71,21 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
                 onFinished: (effort) => _finishRest(rest, effort),
               );
             }
+            if (_shareRecap case final recap?) {
+              return ShareRecapScreen(
+                runtime: runtime,
+                recap: recap,
+                onFinished: _finishCompletion,
+              );
+            }
             if (_showComplete || runtime.isComplete) {
               _queueKeepSwap(runtime);
               return _SessionComplete(
                 runtime: runtime,
-                recap: ref.read(sessionControllerProvider.notifier).recap(),
+                recap: _completionRecap(runtime),
                 adjustmentNotice: _adjustmentNotice,
-                onDone: () {
-                  ref.read(sessionControllerProvider.notifier).clear();
-                  context.go('/today');
-                },
+                onRecap: (recap) => setState(() => _shareRecap = recap),
+                onDone: _finishCompletion,
               );
             }
             if (!_begun && runtime.state.events.isEmpty) {
@@ -151,6 +162,19 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
         ),
       ),
     );
+  }
+
+  Future<SessionRecap?> _completionRecap(SessionRuntime runtime) {
+    if (_recapSessionId != runtime.sessionId || _recapFuture == null) {
+      _recapSessionId = runtime.sessionId;
+      _recapFuture = ref.read(sessionControllerProvider.notifier).recap();
+    }
+    return _recapFuture!;
+  }
+
+  void _finishCompletion() {
+    ref.read(sessionControllerProvider.notifier).clear();
+    context.go('/today');
   }
 
   void _queueExerciseVideoPrefetch(SessionRuntime runtime) {
@@ -1312,115 +1336,198 @@ class _SessionComplete extends StatelessWidget {
   const _SessionComplete({
     required this.runtime,
     required this.recap,
+    required this.onRecap,
     required this.onDone,
     this.adjustmentNotice,
   });
 
   final SessionRuntime runtime;
   final Future<SessionRecap?> recap;
+  final ValueChanged<SessionRecap> onRecap;
   final VoidCallback onDone;
   final String? adjustmentNotice;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: FutureBuilder<SessionRecap?>(
-        future: recap,
-        builder: (context, snapshot) {
-          final value = snapshot.data;
-          final swapLines = SessionPresentation.swapRecapLines(runtime.state);
-          return Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: AppSpacing.lg),
-                    const Icon(
-                      Icons.local_florist_rounded,
-                      color: AppColors.rose,
-                      size: 44,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'That session is done.',
-                      key: const ValueKey('session-complete-heading'),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineLarge,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      PlanPresentation.dayName(runtime.day, runtime.answers),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyLarge?.copyWith(color: AppColors.inkSoft),
-                    ),
-                    if (adjustmentNotice case final notice?) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      _SoftConfirmationCard(text: notice),
-                    ],
-                    if (swapLines.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      _MixedSwapRecap(lines: swapLines),
-                    ],
-                    const SizedBox(height: AppSpacing.lg),
-                    if (value == null)
-                      const Center(child: CircularProgressIndicator())
-                    else ...[
-                      _AdherenceDots(
-                        completed: value.completedThisWeek,
-                        total: value.plannedThisWeek,
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      _StatCard(
-                        value: SessionPresentation.formatLoad(
-                          value.totalLoad,
-                          runtime.displayUnitSystem,
-                        ),
-                        label:
-                            'moved today, ${SessionPresentation.dayComparison(value.totalLoad)}',
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _StatCard(
-                              value: '${value.duration.inMinutes} min',
-                              label: 'from start to finish',
-                            ),
+    return ColoredBox(
+      color: AppColors.blushSoft,
+      child: SafeArea(
+        child: FutureBuilder<SessionRecap?>(
+          future: recap,
+          builder: (context, snapshot) {
+            final value = snapshot.data;
+            final swapLines = SessionPresentation.swapRecapLines(runtime.state);
+            return Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              const SizedBox(height: AppSpacing.lg),
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0.72, end: 1),
+                                duration: const Duration(milliseconds: 700),
+                                curve: Curves.easeOutBack,
+                                builder: (context, scale, child) =>
+                                    Transform.scale(scale: scale, child: child),
+                                child: Container(
+                                  width: 76,
+                                  height: 76,
+                                  alignment: Alignment.center,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.paper,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Transform.scale(
+                                    scale: 1.65,
+                                    child: const BloomMark(showWordmark: false),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              Text(
+                                "That's your workout.",
+                                key: const ValueKey('session-complete-heading'),
+                                textAlign: TextAlign.center,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineLarge,
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              if (value == null)
+                                const Padding(
+                                  padding: EdgeInsets.all(AppSpacing.xl),
+                                  child: CircularProgressIndicator(),
+                                )
+                              else ...[
+                                Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: HistoryPresentation.duration(
+                                          value.duration,
+                                        ),
+                                      ),
+                                      const TextSpan(text: '  ·  '),
+                                      TextSpan(
+                                        text: SessionPresentation.formatLoad(
+                                          value.totalLoad,
+                                          runtime.displayUnitSystem,
+                                        ),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: AppSpacing.xxs),
+                                Text(
+                                  SessionPresentation.dayComparison(
+                                    value.totalLoad,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(color: AppColors.inkSoft),
+                                ),
+                                const SizedBox(height: AppSpacing.lg),
+                                _AdherenceDots(
+                                  completed: value.completedThisWeek,
+                                  total: value.plannedThisWeek,
+                                ),
+                                if (value.weekStreak case final streak?) ...[
+                                  const SizedBox(height: AppSpacing.md),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpacing.sm,
+                                      vertical: AppSpacing.xs,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.paper,
+                                      borderRadius: AppRadii.largeBorder,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.roseDeep.withValues(
+                                            alpha: 0.1,
+                                          ),
+                                          blurRadius: 18,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.local_florist_rounded,
+                                          color: AppColors.roseDeep,
+                                          size: 16,
+                                        ),
+                                        const SizedBox(width: AppSpacing.xxs),
+                                        Text(
+                                          '$streak-week streak',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                color: AppColors.roseDeep,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                if (value.totalSessions == 1) ...[
+                                  const SizedBox(height: AppSpacing.md),
+                                  Text(
+                                    'Each session teaches your plan.',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(color: AppColors.inkSoft),
+                                  ),
+                                ],
+                              ],
+                              if (adjustmentNotice case final notice?) ...[
+                                const SizedBox(height: AppSpacing.md),
+                                _SoftConfirmationCard(text: notice),
+                              ],
+                              if (swapLines.isNotEmpty) ...[
+                                const SizedBox(height: AppSpacing.sm),
+                                _MixedSwapRecap(lines: swapLines),
+                              ],
+                              const SizedBox(height: AppSpacing.md),
+                            ],
                           ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: _StatCard(
-                              value: '${value.totalSessions}',
-                              label: 'sessions together',
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (value.weekStreak case final streak?) ...[
-                        const SizedBox(height: AppSpacing.sm),
-                        _StatCard(
-                          value: '$streak weeks',
-                          label: 'with training in each week',
                         ),
-                      ],
+                      ),
+                      FilledButton(
+                        key: const ValueKey('session-complete-recap'),
+                        onPressed: value == null ? null : () => onRecap(value),
+                        child: const Text('Show me my recap'),
+                      ),
+                      TextButton(
+                        key: const ValueKey('session-complete-done'),
+                        onPressed: onDone,
+                        child: const Text('Back to today'),
+                      ),
                     ],
-                    const Spacer(),
-                    FilledButton(
-                      key: const ValueKey('session-complete-done'),
-                      onPressed: onDone,
-                      child: const Text('Done'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -1929,37 +2036,6 @@ class _AdherenceDots extends StatelessWidget {
           ).textTheme.labelMedium?.copyWith(color: AppColors.inkSoft),
         ),
       ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: const BoxDecoration(
-        color: AppColors.paper,
-        borderRadius: AppRadii.mediumBorder,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../features/history/presentation/session_summary_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screens.dart';
 import '../../features/plan/presentation/plan_day_detail_screen.dart';
 import '../../features/plan/presentation/plan_reveal_screen.dart';
@@ -30,7 +31,8 @@ GoRouter router(Ref ref) {
           (location == '/today' ||
               location == '/plan' ||
               location == '/me' ||
-              location == '/session')) {
+              location == '/session' ||
+              location.startsWith('/history/'))) {
         return '/onboarding';
       }
       return null;
@@ -84,6 +86,11 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: '/session',
         builder: (context, state) => const SessionPlayerScreen(),
+      ),
+      GoRoute(
+        path: '/history/session/:id',
+        builder: (context, state) =>
+            SessionSummaryScreen(sessionId: state.pathParameters['id'] ?? ''),
       ),
       GoRoute(
         path: '/plan/day/:dayIndex',

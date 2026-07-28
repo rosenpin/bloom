@@ -36,6 +36,8 @@ final class SessionPreview {
     required this.history,
     required this.previousMemory,
     required this.unitPromptSeen,
+    required this.completedToday,
+    required this.hasOpenSessionToday,
   });
 
   final StoredPlanDocument document;
@@ -44,6 +46,8 @@ final class SessionPreview {
   final engine.TrainingHistory history;
   final PreviousSessionMemory? previousMemory;
   final bool unitPromptSeen;
+  final CompletedSession? completedToday;
+  final bool hasOpenSessionToday;
 
   engine.PlanDay get day => document.plan.days.firstWhere(
     (day) => day.dayIndex == state.dayIndex,
@@ -144,6 +148,134 @@ final class SessionRuntime {
   );
 }
 
+final class CompletedSession {
+  const CompletedSession({
+    required this.record,
+    required this.document,
+    required this.answers,
+    required this.events,
+    required this.exerciseNames,
+    required this.exerciseLateralities,
+  });
+
+  final SessionRecordRow record;
+  final StoredPlanDocument document;
+  final OnboardingAnswers answers;
+  final List<engine.SessionEvent> events;
+  final Map<String, String> exerciseNames;
+  final Map<String, engine.Laterality> exerciseLateralities;
+
+  engine.PlanDay get day => document.plan.days.firstWhere(
+    (day) => day.dayIndex == record.dayIndex,
+    orElse: () => document.plan.days.first,
+  );
+
+  Duration get duration {
+    final value = record.completedAt!.difference(record.startedAt);
+    return value.isNegative ? Duration.zero : value;
+  }
+
+  engine.EffortLevel? get lastEffort =>
+      events.whereType<engine.EffortReported>().lastOrNull?.level;
+
+  Map<(String, int), engine.SetCompleted> get latestSets {
+    final latest = <(String, int), engine.SetCompleted>{};
+    for (final event in events) {
+      if (event is engine.SetCompleted) {
+        latest[(event.exerciseId, event.setIndex)] = event;
+      }
+    }
+    return Map.unmodifiable(latest);
+  }
+
+  engine.Kg get totalLoad {
+    var total = engine.Kg.zero;
+    for (final set in latestSets.values) {
+      total += set.load * set.reps;
+    }
+    return total;
+  }
+
+  String exerciseName(String exerciseId) {
+    if (exerciseNames[exerciseId] case final name?) return name;
+    for (final day in document.plan.days) {
+      for (final exercise in day.exercises) {
+        if (exercise.exerciseId == exerciseId) return exercise.name;
+        for (final candidate in exercise.orderedSwapCandidates) {
+          if (candidate.exerciseId == exerciseId) return candidate.name;
+        }
+      }
+    }
+    return exerciseId;
+  }
+
+  engine.Laterality? exerciseLaterality(String exerciseId) {
+    if (exerciseLateralities[exerciseId] case final laterality?) {
+      return laterality;
+    }
+    for (final day in document.plan.days) {
+      for (final exercise in day.exercises) {
+        if (exercise.exerciseId == exerciseId) return exercise.laterality;
+        for (final candidate in exercise.orderedSwapCandidates) {
+          if (candidate.exerciseId == exerciseId) {
+            return candidate.laterality;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  Set<String> get swappedExerciseIds {
+    final result = <String>{};
+    final pendingSources = <String>[];
+    for (final event in events) {
+      switch (event) {
+        case engine.SwapRequested(:final exerciseId):
+          pendingSources.add(exerciseId);
+        case engine.SetCompleted(:final exerciseId):
+          for (var index = 0; index < pendingSources.length; index++) {
+            final sourceId = pendingSources[index];
+            if (exerciseId == sourceId) {
+              pendingSources.removeAt(index);
+              break;
+            }
+            if (_isSwapCandidate(sourceId, exerciseId) ||
+                !_containsExercise(sourceId)) {
+              result.add(exerciseId);
+              pendingSources.removeAt(index);
+              break;
+            }
+          }
+        default:
+          break;
+      }
+    }
+    return result;
+  }
+
+  bool _containsExercise(String exerciseId) {
+    for (final day in document.plan.days) {
+      for (final exercise in day.exercises) {
+        if (exercise.exerciseId == exerciseId) return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isSwapCandidate(String sourceId, String candidateId) {
+    for (final day in document.plan.days) {
+      for (final exercise in day.exercises) {
+        if (exercise.exerciseId != sourceId) continue;
+        return exercise.orderedSwapCandidates.any(
+          (candidate) => candidate.exerciseId == candidateId,
+        );
+      }
+    }
+    return false;
+  }
+}
+
 final class SessionRecap {
   const SessionRecap({
     required this.totalLoad,
@@ -193,11 +325,17 @@ final class SessionLifecycleService {
     final answers = await _onboardingRepository.load();
     if (document == null || answers == null) return null;
     final history = await loadHistory(unitSystem: answers.unitSystem);
+    final now = _clock();
     final state = engine.resolveSession(
       document.plan,
       history,
-      _clock(),
+      now,
       config: _config,
+    );
+    final completedToday = await _completedToday(
+      document: document,
+      answers: answers,
+      now: now,
     );
     return SessionPreview(
       document: document,
@@ -206,6 +344,8 @@ final class SessionLifecycleService {
       history: history,
       previousMemory: await _previousMemory(),
       unitPromptSeen: await _unitPromptSeen(),
+      completedToday: completedToday,
+      hasOpenSessionToday: await _hasOpenSessionToday(now),
     );
   }
 
@@ -231,11 +371,13 @@ final class SessionLifecycleService {
 
   Future<SessionRuntime?> startOrResume() async {
     await _contentSeeder.seedIfEmpty();
+    final now = _clock();
     final openQuery = _database.select(_database.sessionRecords)
       ..where((row) => row.completedAt.isNull() & row.abandonedAt.isNull())
-      ..orderBy([(row) => OrderingTerm.desc(row.startedAt)])
-      ..limit(1);
-    final open = await openQuery.getSingleOrNull();
+      ..orderBy([(row) => OrderingTerm.desc(row.startedAt)]);
+    final open = (await openQuery.get())
+        .where((row) => _isSameLocalDay(row.startedAt, now))
+        .firstOrNull;
     if (open != null) {
       final document = await _planRepository.loadById(open.planId);
       final answers = await _onboardingRepository.load();
@@ -557,12 +699,7 @@ final class SessionLifecycleService {
   }
 
   Future<SessionRecap> recap(SessionRuntime runtime) async {
-    final latestSets = <(String, int), engine.SetCompleted>{};
-    for (final event in runtime.state.events) {
-      if (event is engine.SetCompleted) {
-        latestSets[(event.exerciseId, event.setIndex)] = event;
-      }
-    }
+    final latestSets = _latestSets(runtime.state.events);
     var total = engine.Kg.zero;
     for (final set in latestSets.values) {
       total += set.load * set.reps;
@@ -655,6 +792,99 @@ final class SessionLifecycleService {
     );
   }
 
+  Future<List<CompletedSession>> completedSessions() async {
+    await _contentSeeder.seedIfEmpty();
+    final query = _database.select(_database.sessionRecords)
+      ..where((row) => row.completedAt.isNotNull())
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.completedAt),
+        (row) => OrderingTerm.desc(row.id),
+      ]);
+    final answers =
+        await _onboardingRepository.load() ??
+        const OnboardingAnswers(unitSystem: engine.UnitSystem.metric);
+    final sessions = <CompletedSession>[];
+    for (final row in await query.get()) {
+      final value = await _completedSession(row, answers);
+      if (value != null) sessions.add(value);
+    }
+    return sessions;
+  }
+
+  Future<CompletedSession?> completedSession(String sessionId) async {
+    await _contentSeeder.seedIfEmpty();
+    final query = _database.select(_database.sessionRecords)
+      ..where((row) => row.id.equals(sessionId) & row.completedAt.isNotNull());
+    final row = await query.getSingleOrNull();
+    if (row == null) return null;
+    final answers =
+        await _onboardingRepository.load() ??
+        const OnboardingAnswers(unitSystem: engine.UnitSystem.metric);
+    return _completedSession(row, answers);
+  }
+
+  Future<CompletedSession?> _completedToday({
+    required StoredPlanDocument document,
+    required OnboardingAnswers answers,
+    required DateTime now,
+  }) async {
+    final query = _database.select(_database.sessionRecords)
+      ..where(
+        (row) =>
+            row.planId.equals(document.row.id) & row.completedAt.isNotNull(),
+      )
+      ..orderBy([
+        (row) => OrderingTerm.desc(row.completedAt),
+        (row) => OrderingTerm.desc(row.id),
+      ]);
+    final row = (await query.get())
+        .where((row) => _isSameLocalDay(row.completedAt!, now))
+        .firstOrNull;
+    return row == null ? null : _completedSession(row, answers);
+  }
+
+  Future<CompletedSession?> _completedSession(
+    SessionRecordRow row,
+    OnboardingAnswers answers,
+  ) async {
+    final document = await _planRepository.loadById(row.planId);
+    if (document == null) return null;
+    final events = [
+      for (final event in await _database.sessionEventLog(row.id))
+        SessionEventCodec.decode(event),
+    ];
+    final exerciseIds = <String>{
+      for (final event in events)
+        if (event case engine.SetCompleted(:final exerciseId)) exerciseId,
+    };
+    final exerciseQuery = _database.select(_database.exercises)
+      ..where((row) => row.id.isIn(exerciseIds));
+    final exercises = exerciseIds.isEmpty
+        ? const <ExerciseRow>[]
+        : await exerciseQuery.get();
+    return CompletedSession(
+      record: row,
+      document: document,
+      answers: answers,
+      events: events,
+      exerciseNames: {
+        for (final exercise in exercises) exercise.id: exercise.name,
+      },
+      exerciseLateralities: {
+        for (final exercise in exercises) exercise.id: exercise.laterality,
+      },
+    );
+  }
+
+  Future<bool> _hasOpenSessionToday(DateTime now) async {
+    final query = _database.select(_database.sessionRecords)
+      ..where((row) => row.completedAt.isNull() & row.abandonedAt.isNull())
+      ..orderBy([(row) => OrderingTerm.desc(row.startedAt)]);
+    return (await query.get()).any(
+      (row) => _isSameLocalDay(row.startedAt, now),
+    );
+  }
+
   Future<bool> _unitPromptSeen() async {
     final query = _database.select(_database.profiles)
       ..where((row) => row.id.equals('local'));
@@ -728,6 +958,24 @@ final class SessionLifecycleService {
 
   static String? _pendingSwapSource(engine.SessionState state) =>
       state.pendingSwapSuggestions.firstOrNull?.sourceExerciseId;
+
+  static Map<(String, int), engine.SetCompleted> _latestSets(
+    Iterable<engine.SessionEvent> events,
+  ) {
+    final latest = <(String, int), engine.SetCompleted>{};
+    for (final event in events) {
+      if (event is engine.SetCompleted) {
+        latest[(event.exerciseId, event.setIndex)] = event;
+      }
+    }
+    return latest;
+  }
+
+  static bool _isSameLocalDay(DateTime first, DateTime second) {
+    final a = first.toLocal();
+    final b = second.toLocal();
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
 
   static Map<String, Object?> _sessionRecordPayload(SessionRecordRow row) => {
     'id': row.id,
