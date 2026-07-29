@@ -6,6 +6,7 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'mockups/**'
+      - 'review_site/**'
       - '**.md'
       - '.impeccable.md'
   workflow_dispatch:
