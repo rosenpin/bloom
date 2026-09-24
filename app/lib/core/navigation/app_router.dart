@@ -29,6 +29,7 @@ GoRouter router(Ref ref) {
       if (location.startsWith('/onboarding')) return null;
 
       final completed = await onboardingRepository.hasCompletedProfile();
+      if (completed) await memberships.whenReady();
       if (location == '/paywall' && !completed) return '/onboarding';
       if (location == '/paywall' && memberships.currentStatus.isPremium) {
         return '/today';

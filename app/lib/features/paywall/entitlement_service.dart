@@ -46,6 +46,10 @@ class PurchaseCancelled implements Exception {}
 
 abstract class EntitlementService {
   MembershipStatus get currentStatus;
+
+  /// Completes once cached membership is known, so launch routing never flashes
+  /// the paywall at a member. Bounded: a slow store must not hold the app.
+  Future<void> whenReady();
   Stream<MembershipStatus> watchStatus();
   Future<List<MembershipPlan>> loadPlans();
   Future<MembershipStatus> purchase(MembershipPlan plan);
@@ -71,6 +75,10 @@ class RevenueCatEntitlementService implements EntitlementService {
       : _status;
 
   Future<void> start(String? appUserId) => _configuration ??= _start(appUserId);
+
+  @override
+  Future<void> whenReady() =>
+      start(null).timeout(const Duration(seconds: 3), onTimeout: () {});
 
   Future<void> _start(String? appUserId) async {
     if (revenueCatAppleApiKey.isEmpty) return;

@@ -147,6 +147,9 @@ class _FakeEntitlements implements EntitlementService {
   MembershipStatus get currentStatus => _status;
 
   @override
+  Future<void> whenReady() async {}
+
+  @override
   Stream<MembershipStatus> watchStatus() async* {
     yield _status;
     yield* _updates.stream;

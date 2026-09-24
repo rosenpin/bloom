@@ -793,8 +793,8 @@ class _PeriodDateChoices extends ConsumerWidget {
     final now = ref.read(clockProvider)();
     final choices = <(String, String?, DateTime)>[
       ('Today', null, now),
-      ('5 days ago', null, now.subtract(const Duration(days: 5))),
-      ('2 weeks ago', null, now.subtract(const Duration(days: 14))),
+      ('5 days', 'ago', now.subtract(const Duration(days: 5))),
+      ('2 weeks', 'ago', now.subtract(const Duration(days: 14))),
     ];
     return Row(
       children: [
@@ -822,7 +822,8 @@ class _PeriodDateChoices extends ConsumerWidget {
             child: SquareChoice(
               key: const ValueKey('menstrual-date-pick'),
               value: now,
-              label: 'Pick a date',
+              label: 'Pick',
+              caption: 'a date',
               compact: true,
               selected:
                   answers.lastPeriodStart != null &&

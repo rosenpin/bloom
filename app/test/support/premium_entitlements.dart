@@ -9,6 +9,9 @@ class PremiumEntitlements implements EntitlementService {
   MembershipStatus get currentStatus => _status;
 
   @override
+  Future<void> whenReady() async {}
+
+  @override
   Stream<MembershipStatus> watchStatus() => Stream.value(_status);
 
   @override

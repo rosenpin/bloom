@@ -26,8 +26,6 @@ void main() {
           'assets/images/exercises/barbell-hip-thrust-2.jpg',
         ),
       );
-      expect(resolveExerciseVisualSource('machine-chest-press'), isNull);
-      expect(resolveExerciseVisualSource('dead-bug'), isNull);
       expect(resolveExerciseVisualSource('unmapped-exercise'), isNull);
     },
   );

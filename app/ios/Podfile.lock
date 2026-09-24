@@ -6,6 +6,14 @@ PODS:
     - Flutter
   - package_info_plus (0.4.5):
     - Flutter
+  - purchases_flutter (10.13.2):
+    - Flutter
+    - PurchasesHybridCommon (= 19.3.1)
+  - PurchasesHybridCommon (19.3.1):
+    - RevenueCat (= 5.90.2)
+  - RevenueCat (5.90.2)
+  - share_plus (0.0.1):
+    - Flutter
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -20,9 +28,16 @@ DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
+  - purchases_flutter (from `.symlinks/plugins/purchases_flutter/ios`)
+  - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
   - video_player_avfoundation (from `.symlinks/plugins/video_player_avfoundation/darwin`)
+
+SPEC REPOS:
+  trunk:
+    - PurchasesHybridCommon
+    - RevenueCat
 
 EXTERNAL SOURCES:
   app_links:
@@ -33,6 +48,10 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_local_notifications/ios"
   package_info_plus:
     :path: ".symlinks/plugins/package_info_plus/ios"
+  purchases_flutter:
+    :path: ".symlinks/plugins/purchases_flutter/ios"
+  share_plus:
+    :path: ".symlinks/plugins/share_plus/ios"
   shared_preferences_foundation:
     :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
   url_launcher_ios:
@@ -42,13 +61,17 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   app_links: a754cbec3c255bd4bbb4d236ecc06f28cd9a7ce8
-  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
   flutter_local_notifications: 643a3eda1ce1c0599413ca31672536d423dee214
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
+  purchases_flutter: 92f7f2c4730b13452fcc4301df141cc4b06bbca5
+  PurchasesHybridCommon: c364d4198150bf4027b00fcada9b4ddc280df108
+  RevenueCat: c44e15b3ee88506da1fdf537c62a6c239cc41b21
+  share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
   video_player_avfoundation: 3453f792138786248960ca029747fcd9f318ef52
 
-PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
+PODFILE CHECKSUM: 3ba3a73b1b12adcf321a227a745625fe0888cc82
 
 COCOAPODS: 1.16.2

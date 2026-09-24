@@ -129,8 +129,6 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                                     const SizedBox(height: AppSpacing.xs),
                                     Text(
                                       PlanPresentation.profileSummary(answers),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodyLarge
