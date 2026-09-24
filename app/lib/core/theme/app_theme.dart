@@ -2,6 +2,43 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_radii.dart';
+import 'app_sizes.dart';
+
+abstract final class AppText {
+  static const title = TextStyle(
+    fontFamily: AppTheme.displayFontFamily,
+    fontSize: 30,
+    color: AppColors.ink,
+  );
+  static const hero = TextStyle(
+    fontFamily: AppTheme.displayFontFamily,
+    fontSize: 32,
+    color: AppColors.ink,
+  );
+  static const body = TextStyle(
+    fontFamily: AppTheme.bodyFontFamily,
+    fontSize: 16,
+    color: AppColors.ink,
+  );
+  static const bodyStrong = TextStyle(
+    fontFamily: AppTheme.bodyFontFamily,
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: AppColors.ink,
+  );
+  static const meta = TextStyle(
+    fontFamily: AppTheme.bodyFontFamily,
+    fontSize: 14,
+    color: AppColors.inkSoft,
+  );
+  static const label = TextStyle(
+    fontFamily: AppTheme.bodyFontFamily,
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 1.1,
+    color: AppColors.inkSoft,
+  );
+}
 
 abstract final class AppTheme {
   static const String displayFontFamily = 'YoungSerif';
@@ -105,11 +142,11 @@ abstract final class AppTheme {
         backgroundColor: AppColors.paper,
         elevation: 0,
         height: 76,
-        indicatorColor: AppColors.blushSoft,
+        indicatorColor: AppColors.rose,
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? AppColors.roseDeep
+                ? AppColors.paper
                 : AppColors.inkFaint,
           ),
         ),
@@ -127,7 +164,7 @@ abstract final class AppTheme {
           foregroundColor: AppColors.paper,
           disabledBackgroundColor: AppColors.blushSoft,
           disabledForegroundColor: AppColors.inkFaint,
-          minimumSize: const Size.fromHeight(52),
+          minimumSize: const Size.fromHeight(AppSizes.primaryButton),
           shape: const RoundedRectangleBorder(
             borderRadius: AppRadii.mediumBorder,
           ),
@@ -138,7 +175,7 @@ abstract final class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.inkSoft,
           side: const BorderSide(color: AppColors.line),
-          minimumSize: const Size.fromHeight(52),
+          minimumSize: const Size.fromHeight(AppSizes.tapTarget),
           shape: const RoundedRectangleBorder(
             borderRadius: AppRadii.mediumBorder,
           ),

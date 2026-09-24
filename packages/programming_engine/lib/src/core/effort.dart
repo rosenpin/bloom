@@ -12,16 +12,16 @@ library;
 /// away the difference between "a bit easy" and "way too easy" — which is the
 /// difference between progression and calibration.
 enum EffortLevel {
-  /// "Way too easy" — RPE ≤4, 6+ nominal RIR. Triggers the calibration regime.
+  /// "Very easy" — RPE ≤4, 6+ nominal RIR. Triggers the calibration regime.
   wayTooEasy(1),
 
-  /// "A bit easy" — RPE 5–6.
+  /// "Easy" — RPE 5–6.
   aBitEasy(2),
 
   /// "Just right" — RPE 7. The default target for beginners.
   justRight(3),
 
-  /// "Harder than I'd like" — RPE 8.
+  /// "Hard" — RPE 8.
   harderThanIdLike(4),
 
   /// "Too hard" — RPE 9–10. The only report that licenses a load decrease.

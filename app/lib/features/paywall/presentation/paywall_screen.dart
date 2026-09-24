@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../plan/domain/plan_presentation.dart';
 import '../entitlement_service.dart';
 
@@ -359,7 +360,11 @@ class _Benefit extends StatelessWidget {
       children: [
         CircleAvatar(
           backgroundColor: AppColors.blushSoft,
-          child: Icon(icon, color: AppColors.roseDeep, size: 20),
+          child: Icon(
+            icon,
+            color: AppColors.roseDeep,
+            size: AppSizes.iconMedium,
+          ),
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
@@ -409,7 +414,7 @@ class _PlanCard extends StatelessWidget {
       duration: AppMotion.duration(context, AppMotion.state),
       curve: AppMotion.standardCurve,
       decoration: BoxDecoration(
-        color: selected ? AppColors.blushSoft : AppColors.paper,
+        color: AppColors.paper,
         borderRadius: AppRadii.mediumBorder,
         border: Border.all(
           color: selected ? AppColors.rose : AppColors.line,

@@ -11,6 +11,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_sizes.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../history/domain/history_presentation.dart';
 import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../plan/domain/plan_presentation.dart';
@@ -211,10 +213,6 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
                   onLifeHappened: () => _openLifeSheet(runtime, entry),
                   onOverview: () => _openSessionOverview(runtime, entry),
                   onPain: () => _openPainPicker(entry),
-                  onSwitchUnits: () => _switchUnits(runtime),
-                  onDismissUnits: () => ref
-                      .read(sessionControllerProvider.notifier)
-                      .dismissUnitPrompt(),
                   adjustmentNotice: _adjustmentNotice,
                 ),
               };
@@ -266,6 +264,11 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
     final isFinalSet = setIndex + 1 >= dose.sets;
 
     try {
+      if (!runtime.unitPromptSeen &&
+          setIndex == 0 &&
+          SessionPresentation.exercisePosition(runtime.state, entry) == 1) {
+        await ref.read(sessionControllerProvider.notifier).dismissUnitPrompt();
+      }
       await ref
           .read(sessionControllerProvider.notifier)
           .advance(
@@ -896,6 +899,10 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
   Widget build(BuildContext context) {
     final minutes = _remainingSeconds ~/ 60;
     final seconds = _remainingSeconds % 60;
+    final compactRest = MediaQuery.sizeOf(context).height < 650;
+    final timerSize = compactRest
+        ? 120.0
+        : (MediaQuery.sizeOf(context).height * 0.24).clamp(120.0, 230.0);
     final progress = _totalSeconds == 0
         ? 0.0
         : _remainingSeconds / _totalSeconds;
@@ -920,10 +927,10 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
                     color: AppColors.paper.withValues(alpha: 0.75),
                     textColor: AppColors.roseDeep,
                   ),
-                  const SizedBox(height: AppSpacing.lg),
+                  SizedBox(height: compactRest ? AppSpacing.xs : AppSpacing.lg),
                   SizedBox(
-                    width: 230,
-                    height: 230,
+                    width: timerSize,
+                    height: timerSize,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
@@ -946,17 +953,13 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
                               key: const ValueKey('rest-countdown'),
                               style: Theme.of(context).textTheme.displaySmall,
                             ),
-                            Text(
-                              'breathe',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppColors.inkSoft),
-                            ),
+                            Text('breathe', style: AppText.meta),
                           ],
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.md),
+                  SizedBox(height: compactRest ? AppSpacing.xs : AppSpacing.md),
                   if (widget.phase.askForEffort) ...[
                     Text(
                       SessionPresentation.feelQuestion(
@@ -966,18 +969,15 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
                         ),
                       ),
                       textAlign: TextAlign.center,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelLarge?.copyWith(letterSpacing: 0.4),
+                      style: AppText.bodyStrong,
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     _EffortOptions(
                       selected: _selected,
-                      compact: true,
                       onSelected: _selectEffort,
                     ),
                   ],
-                  const SizedBox(height: AppSpacing.md),
+                  SizedBox(height: compactRest ? AppSpacing.xs : AppSpacing.md),
                   Wrap(
                     alignment: WrapAlignment.center,
                     spacing: AppSpacing.sm,
@@ -986,7 +986,10 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
                         key: const ValueKey('rest-plus-30'),
                         onPressed: _extend,
                         style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(96, 48),
+                          backgroundColor: AppColors.paper,
+                          side: const BorderSide(color: AppColors.line),
+                          minimumSize: const Size(96, AppSizes.tapTarget),
+                          textStyle: AppText.meta,
                         ),
                         child: const Text('+30s'),
                       ),
@@ -994,41 +997,43 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
                         key: const ValueKey('rest-skip'),
                         onPressed: _finish,
                         style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(112, 48),
+                          backgroundColor: AppColors.paper,
+                          side: const BorderSide(color: AppColors.line),
+                          minimumSize: const Size(112, AppSizes.tapTarget),
+                          textStyle: AppText.meta,
                         ),
                         child: const Text('Skip rest'),
                       ),
                     ],
                   ),
                   const Spacer(),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: AppColors.paper.withValues(alpha: 0.78),
-                      borderRadius: AppRadii.mediumBorder,
+                  if (!compactRest)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.paper.withValues(alpha: 0.78),
+                        borderRadius: AppRadii.mediumBorder,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'UP NEXT',
+                            style: AppText.label.copyWith(
+                              color: AppColors.coral,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            widget.phase.nextExerciseName == null
+                                ? 'Session recap'
+                                : 'Set ${widget.phase.nextSet} · ${widget.phase.nextExerciseName}',
+                            style: AppText.bodyStrong,
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'UP NEXT',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: AppColors.coral,
-                                letterSpacing: 1.1,
-                              ),
-                        ),
-                        const SizedBox(height: AppSpacing.xxs),
-                        Text(
-                          widget.phase.nextExerciseName == null
-                              ? 'Session recap'
-                              : 'Set ${widget.phase.nextSet} · ${widget.phase.nextExerciseName}',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -1102,17 +1107,37 @@ class _ExerciseTeachScreenState extends ConsumerState<ExerciseTeachScreen> {
                   children: [
                     AspectRatio(
                       key: const ValueKey('teach-visual'),
-                      aspectRatio: 4 / 3,
+                      aspectRatio: AppSizes.exerciseVisualAspect,
                       child: ExerciseVisual(
                         exerciseId: widget.entry.exerciseId,
                         exerciseName: widget.entry.planExercise.name,
                         blockRoleLabel: SessionPresentation.blockRole(
                           widget.entry.planExercise.blockRole,
                         ),
+                        aspectRatio: AppSizes.exerciseVisualAspect,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     SegmentedButton<int>(
+                      style: ButtonStyle(
+                        backgroundColor: WidgetStateProperty.resolveWith(
+                          (states) => states.contains(WidgetState.selected)
+                              ? AppColors.rose
+                              : AppColors.paper,
+                        ),
+                        foregroundColor: WidgetStateProperty.resolveWith(
+                          (states) => states.contains(WidgetState.selected)
+                              ? AppColors.paper
+                              : AppColors.inkSoft,
+                        ),
+                        side: WidgetStateProperty.resolveWith(
+                          (states) => BorderSide(
+                            color: states.contains(WidgetState.selected)
+                                ? AppColors.rose
+                                : AppColors.line,
+                          ),
+                        ),
+                      ),
                       segments: const [
                         ButtonSegment(value: 0, label: Text('Set up')),
                         ButtonSegment(value: 1, label: Text('How it feels')),
@@ -1265,17 +1290,10 @@ class _SessionOverviewSheet extends StatelessWidget {
                     children: [
                       Text(
                         '${currentIndex + 1} OF ${slots.length}',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.coral,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                        ),
+                        style: AppText.label.copyWith(color: AppColors.coral),
                       ),
                       const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        'Your session',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
+                      Text('Your session', style: AppText.title),
                     ],
                   ),
                 ),
@@ -1289,13 +1307,6 @@ class _SessionOverviewSheet extends StatelessWidget {
                   icon: const Icon(Icons.close_rounded),
                 ),
               ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'A little look back, and what is waiting for you.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
             ),
             const SizedBox(height: AppSpacing.md),
             Expanded(
@@ -1315,33 +1326,6 @@ class _SessionOverviewSheet extends StatelessWidget {
                             ? _currentRow(context)
                             : _upcomingRow(context, entry),
                       ),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Container(
-                    key: const ValueKey('session-overview-note'),
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    decoration: const BoxDecoration(
-                      color: AppColors.cream,
-                      borderRadius: AppRadii.smallBorder,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.favorite_outline_rounded,
-                          color: AppColors.roseDeep,
-                          size: 19,
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Expanded(
-                          child: Text(
-                            "You can look ahead. We'll keep you with the move you're on.",
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: AppColors.inkSoft),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -1382,7 +1366,7 @@ class _SessionOverviewSheet extends StatelessWidget {
       color: AppColors.paper,
       shape: RoundedRectangleBorder(
         borderRadius: AppRadii.mediumBorder,
-        side: const BorderSide(color: AppColors.line, width: 1.5),
+        side: const BorderSide(color: AppColors.line),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -1394,22 +1378,17 @@ class _SessionOverviewSheet extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.xs),
           child: Row(
             children: [
-              const _OverviewCheckTile(),
+              _OverviewExerciseTile(entry: entry),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      entry.planExercise.name,
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
+                    Text(entry.planExercise.name, style: AppText.bodyStrong),
                     const SizedBox(height: AppSpacing.xxs),
                     Text(
                       '$sets ${sets == 1 ? 'set' : 'sets'} done$load',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                      style: AppText.meta,
                     ),
                   ],
                 ),
@@ -1439,7 +1418,7 @@ class _SessionOverviewSheet extends StatelessWidget {
       key: const ValueKey('overview-current'),
       padding: const EdgeInsets.all(AppSpacing.xs),
       decoration: BoxDecoration(
-        color: AppColors.blushSoft,
+        color: AppColors.paper,
         borderRadius: AppRadii.mediumBorder,
         border: Border.all(color: AppColors.rose, width: 2),
       ),
@@ -1453,22 +1432,13 @@ class _SessionOverviewSheet extends StatelessWidget {
               children: [
                 Text(
                   'NOW',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.roseDeep,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
-                  ),
+                  style: AppText.label.copyWith(color: AppColors.roseDeep),
                 ),
-                Text(
-                  current.planExercise.name,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
+                Text(current.planExercise.name, style: AppText.bodyStrong),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
                   'set $setNumber of ${current.prescription.dose.sets}$loadText',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                  style: AppText.meta,
                 ),
               ],
             ),
@@ -1485,7 +1455,7 @@ class _SessionOverviewSheet extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.paper,
         borderRadius: AppRadii.mediumBorder,
-        border: Border.all(color: AppColors.line, width: 1.5),
+        border: Border.all(color: AppColors.line),
       ),
       child: Row(
         children: [
@@ -1495,16 +1465,11 @@ class _SessionOverviewSheet extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  entry.planExercise.name,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
+                Text(entry.planExercise.name, style: AppText.bodyStrong),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
                   SessionPresentation.upcomingDose(entry),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                  style: AppText.meta,
                 ),
               ],
             ),
@@ -1523,7 +1488,7 @@ class _OverviewExerciseTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox.square(
-      dimension: 46,
+      dimension: AppSizes.thumbnailMd,
       child: ExerciseVisual(
         exerciseId: entry.exerciseId,
         exerciseName: entry.planExercise.name,
@@ -1532,23 +1497,6 @@ class _OverviewExerciseTile extends StatelessWidget {
         ),
         compact: true,
       ),
-    );
-  }
-}
-
-class _OverviewCheckTile extends StatelessWidget {
-  const _OverviewCheckTile();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 46,
-      height: 46,
-      decoration: const BoxDecoration(
-        color: AppColors.sageSoft,
-        borderRadius: AppRadii.smallBorder,
-      ),
-      child: const Icon(Icons.check_rounded, color: AppColors.sage, size: 28),
     );
   }
 }
@@ -2226,7 +2174,7 @@ class _CompletionStatsState extends State<_CompletionStats>
                   const Icon(
                     Icons.local_florist_rounded,
                     color: AppColors.roseDeep,
-                    size: 16,
+                    size: AppSizes.iconSmall,
                   ),
                   const SizedBox(width: AppSpacing.xxs),
                   Text(
@@ -2442,30 +2390,93 @@ class _SetStepperSheetState extends State<_SetStepperSheet> {
 }
 
 class _EffortOptions extends StatelessWidget {
-  const _EffortOptions({
-    required this.onSelected,
-    this.selected,
-    this.compact = false,
-  });
+  const _EffortOptions({required this.onSelected, this.selected});
 
   final ValueChanged<engine.EffortLevel>? onSelected;
   final engine.EffortLevel? selected;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: compact ? AppSpacing.xs : AppSpacing.sm,
-      runSpacing: AppSpacing.xs,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final level in engine.EffortLevel.values)
-          ChoiceChip(
-            key: ValueKey('effort-${level.name}'),
-            label: Text(SessionPresentation.effortLabel(level)),
-            selected: selected == level,
-            onSelected: onSelected == null ? null : (_) => onSelected!(level),
+        Row(
+          children: [
+            const Spacer(flex: 2),
+            Expanded(
+              child: Text(
+                'JUST RIGHT',
+                textAlign: TextAlign.center,
+                style: AppText.label.copyWith(color: AppColors.roseDeep),
+              ),
+            ),
+            const Spacer(flex: 2),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Row(
+          children: [
+            for (final level in engine.EffortLevel.values)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Material(
+                    color: selected == level ? AppColors.rose : AppColors.paper,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: AppRadii.smallBorder,
+                      side: BorderSide(
+                        color: selected == level
+                            ? AppColors.rose
+                            : AppColors.line,
+                      ),
+                    ),
+                    child: InkWell(
+                      key: ValueKey('effort-${level.name}'),
+                      onTap: onSelected == null
+                          ? null
+                          : () => onSelected!(level),
+                      borderRadius: AppRadii.smallBorder,
+                      child: SizedBox(
+                        height: AppSizes.tapTarget,
+                        child: Center(
+                          child: Text(
+                            '${level.value}',
+                            style: AppText.bodyStrong.copyWith(
+                              color: selected == level
+                                  ? AppColors.paper
+                                  : AppColors.ink,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        const Row(
+          children: [
+            Expanded(child: Text('Very easy', style: AppText.meta)),
+            Expanded(
+              child: Text(
+                'Too hard',
+                style: AppText.meta,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ],
+        ),
+        if (selected case final level?) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            SessionPresentation.effortMeaning(level),
+            key: const ValueKey('effort-meaning'),
+            textAlign: TextAlign.center,
+            style: AppText.meta,
           ),
+        ],
       ],
     );
   }
@@ -2583,8 +2594,8 @@ class _SheetOption extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: AppSizes.secondaryButton,
+                height: AppSizes.secondaryButton,
                 decoration: const BoxDecoration(
                   color: AppColors.blushSoft,
                   borderRadius: AppRadii.smallBorder,
@@ -2691,7 +2702,7 @@ class _SoftConfirmationCard extends StatelessWidget {
           const Icon(
             Icons.favorite_outline_rounded,
             color: AppColors.lavender,
-            size: 20,
+            size: AppSizes.iconMedium,
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(

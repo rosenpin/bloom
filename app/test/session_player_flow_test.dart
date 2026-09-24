@@ -10,6 +10,8 @@ import 'package:womens_gym/core/version_gate.dart';
 import 'package:womens_gym/data/db/app_database.dart';
 import 'package:womens_gym/data/db/schema.dart';
 import 'package:womens_gym/features/session/application/rest_timer_foundation.dart';
+import 'package:womens_gym/features/session/application/session_controller.dart';
+import 'package:womens_gym/core/theme/app_colors.dart';
 import 'package:womens_gym/features/session/data/exercise_visual_source.dart';
 import 'package:womens_gym/features/session/data/session_event_codec.dart';
 import 'package:womens_gym/features/session/presentation/exercise_visual.dart';
@@ -18,6 +20,57 @@ import 'support/session_test_support.dart';
 import 'support/premium_entitlements.dart';
 
 void main() {
+  testWidgets('exercise actions stay visible on a small phone', (tester) async {
+    final harness = await _SessionHarness.create(tester);
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(320, 568);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await _tap(tester, const ValueKey('session-lets-go'));
+    _expectPinnedActions(tester, const ValueKey('calibration-done'));
+
+    await _tap(tester, const ValueKey('calibration-done'));
+    expect(
+      (await harness.database.select(harness.database.profiles).getSingle())
+          .unitPromptSeen,
+      isTrue,
+    );
+    await _tap(tester, const ValueKey('effort-justRight'));
+    await _tap(tester, const ValueKey('rest-skip'));
+    _expectPinnedActions(tester, const ValueKey('set-done'));
+  });
+
+  for (final level in engine.EffortLevel.values) {
+    testWidgets('feel step ${level.value} records ${level.name}', (
+      tester,
+    ) async {
+      final harness = await _SessionHarness.create(tester);
+      addTearDown(harness.dispose);
+
+      await _tap(tester, const ValueKey('start-workout'));
+      await _tap(tester, const ValueKey('session-lets-go'));
+      await _tap(tester, const ValueKey('calibration-done'));
+      await _tap(tester, ValueKey('effort-${level.name}'));
+      expect(find.textContaining('${level.value}'), findsWidgets);
+      final selectedMaterial = tester.widget<Material>(
+        find
+            .ancestor(
+              of: find.byKey(ValueKey('effort-${level.name}')),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      expect(selectedMaterial.color, AppColors.rose);
+      await _tap(tester, const ValueKey('rest-skip'));
+      final events = harness.container
+          .read(sessionControllerProvider)
+          .value!
+          .state
+          .events;
+      expect(events.whereType<engine.EffortReported>().last.level, level);
+    });
+  }
+
   testWidgets(
     'seen exercise uses the compact learn strip and opens the teach view',
     (tester) async {
@@ -74,7 +127,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('new-move-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('new-move-chip')), findsOneWidget);
-    expect(find.text('New move'), findsOneWidget);
+    expect(find.text('NEW MOVE'), findsOneWidget);
     expect(
       find.text('Show me how · movement, setup and where to find it'),
       findsOneWidget,
@@ -101,7 +154,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('calibration-heading')), findsOneWidget);
     expect(find.text("Last one · then you're done"), findsOneWidget);
-    expect(find.byKey(const ValueKey('ambient-session-strip')), findsOneWidget);
+    expect(find.byKey(const ValueKey('exercise-action-zone')), findsOneWidget);
   });
 
   testWidgets(
@@ -124,7 +177,7 @@ void main() {
       expect(find.text('Your session'), findsOneWidget);
       expect(
         find.text('A little look back, and what is waiting for you.'),
-        findsOneWidget,
+        findsNothing,
       );
       expect(find.byKey(const ValueKey('overview-current')), findsOneWidget);
       expect(find.text('NOW'), findsOneWidget);
@@ -134,12 +187,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('2 sets × '), findsOneWidget);
-      expect(
-        find.text(
-          "You can look ahead. We'll keep you with the move you're on.",
-        ),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('session-overview-note')), findsNothing);
 
       await _tap(
         tester,
@@ -217,7 +265,7 @@ void main() {
       expect(find.byIcon(Icons.emoji_events_rounded), findsWidgets);
       expect(find.textContaining('Tier '), findsNothing);
       await _tap(tester, const ValueKey('swap-candidate-dumbbell-curl'));
-      expect(find.text('First time · Dumbbell Curl'), findsOneWidget);
+      expect(find.text('Dumbbell Curl'), findsOneWidget);
 
       await _tap(tester, const ValueKey('life-happened-link'));
       await _tap(tester, const ValueKey('life-shorten'));
@@ -308,13 +356,11 @@ void main() {
 
       await _tap(tester, const ValueKey('start-workout'));
       await _tap(tester, const ValueKey('session-lets-go'));
-      expect(find.text('8 reps'), findsOneWidget);
-      expect(find.text('with 2 kg'), findsOneWidget);
+      expect(find.text('8 reps · 2 kg'), findsOneWidget);
       expect(find.byKey(const ValueKey('unit-prompt')), findsOneWidget);
 
-      await _tap(tester, const ValueKey('switch-units'));
-      expect(find.text('8 reps'), findsOneWidget);
-      expect(find.text('with 4.4 lb'), findsOneWidget);
+      await _tap(tester, const ValueKey('unit-lb'));
+      expect(find.text('8 reps · 4.4 lb'), findsOneWidget);
 
       await _tap(tester, const ValueKey('calibration-done'));
       await _tap(tester, const ValueKey('effort-justRight'));
@@ -517,6 +563,21 @@ void main() {
     expect(preference.excluded, isTrue);
     expect(preference.source, UserExercisePreferenceSource.pain);
   });
+}
+
+void _expectPinnedActions(WidgetTester tester, ValueKey<String> primaryKey) {
+  final primary = find.byKey(primaryKey);
+  expect(primary, findsOneWidget);
+  expect(tester.getRect(primary).bottom, lessThanOrEqualTo(568));
+  expect(
+    tester.getRect(find.byKey(const ValueKey('pain-affordance'))).bottom,
+    lessThanOrEqualTo(568),
+  );
+  expect(
+    find.ancestor(of: primary, matching: find.byType(SingleChildScrollView)),
+    findsNothing,
+  );
+  expect(tester.takeException(), equals(null));
 }
 
 Future<void> _tap(WidgetTester tester, ValueKey<String> key) async {

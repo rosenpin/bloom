@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../data/exercise_visual_source.dart';
 
 part 'exercise_visual.g.dart';
@@ -69,10 +70,13 @@ class ExerciseVisual extends ConsumerWidget {
           );
     final visual = aspectRatio != null
         ? AspectRatio(aspectRatio: aspectRatio!, child: playback)
-        : SizedBox(height: height ?? 220, child: playback);
+        : SizedBox(
+            height: height ?? (compact ? AppSizes.thumbnailLg : 220),
+            child: playback,
+          );
     return ClipRRect(
       key: const ValueKey('exercise-visual'),
-      borderRadius: AppRadii.largeBorder,
+      borderRadius: compact ? AppRadii.smallBorder : AppRadii.largeBorder,
       child: SizedBox(width: double.infinity, child: visual),
     );
   }
@@ -89,9 +93,9 @@ class ExerciseStillsPlayer extends StatefulWidget {
 
 class _ExerciseStillsPlayerState extends State<ExerciseStillsPlayer>
     with SingleTickerProviderStateMixin {
-  static const _hold = Duration(milliseconds: 1100);
-  static const _fade = Duration(milliseconds: 500);
-  static const _total = Duration(milliseconds: 3200);
+  static const _hold = AppMotion.visualHold;
+  static const _fade = AppMotion.visualFade;
+  static const _total = Duration(milliseconds: 2900);
 
   late final AnimationController _controller = AnimationController(
     vsync: this,
@@ -173,13 +177,13 @@ class _ExerciseStillsPlayerState extends State<ExerciseStillsPlayer>
         Image.asset(
           widget.source.pos1Asset,
           key: const ValueKey('exercise-still-1'),
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
         ),
         if (reduced && _showSecond)
           Image.asset(
             widget.source.pos2Asset,
             key: const ValueKey('exercise-still-2'),
-            fit: BoxFit.cover,
+            fit: BoxFit.contain,
           ),
         if (!reduced)
           AnimatedBuilder(
@@ -189,7 +193,7 @@ class _ExerciseStillsPlayerState extends State<ExerciseStillsPlayer>
             child: Image.asset(
               widget.source.pos2Asset,
               key: const ValueKey('exercise-still-2'),
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             ),
           ),
         if (reduced)
@@ -272,7 +276,7 @@ class _ExerciseVideoPlayerState extends State<ExerciseVideoPlayer> {
     if (size.width <= 0 || size.height <= 0) return widget.placeholder;
     return SizedBox.expand(
       child: FittedBox(
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         clipBehavior: Clip.hardEdge,
         child: SizedBox(
           width: size.width,

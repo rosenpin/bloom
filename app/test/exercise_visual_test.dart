@@ -1,9 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:womens_gym/core/theme/app_sizes.dart';
 import 'package:womens_gym/features/session/presentation/exercise_visual.dart';
 
 void main() {
+  testWidgets('exercise stills keep the portrait frame and whole image', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 240,
+                child: ExerciseVisual(
+                  exerciseId: 'barbell-hip-thrust',
+                  exerciseName: 'Barbell Hip Thrust',
+                  blockRoleLabel: 'Glute focus',
+                  aspectRatio: AppSizes.exerciseVisualAspect,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final rect = tester.getRect(find.byKey(const ValueKey('exercise-visual')));
+    expect(
+      rect.width / rect.height,
+      closeTo(AppSizes.exerciseVisualAspect, 0.01),
+    );
+    expect(
+      tester.widget<Image>(find.byKey(const ValueKey('exercise-still-1'))).fit,
+      BoxFit.contain,
+    );
+    expect(
+      tester.widget<Image>(find.byKey(const ValueKey('exercise-still-2'))).fit,
+      BoxFit.contain,
+    );
+  });
+
   testWidgets('an unmapped exercise renders the gradient placeholder', (
     tester,
   ) async {
@@ -48,11 +87,11 @@ void main() {
     expect(find.byKey(const ValueKey('exercise-still-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('exercise-still-2')), findsOneWidget);
     expect(_secondOpacity(tester), 0);
-    await tester.pump(const Duration(milliseconds: 1100));
+    await tester.pump(const Duration(milliseconds: 1200));
     expect(_secondOpacity(tester), 0);
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 125));
     expect(_secondOpacity(tester), closeTo(0.5, 0.1));
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 125));
     expect(_secondOpacity(tester), 1);
   });
 

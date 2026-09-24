@@ -4,6 +4,7 @@ import 'package:programming_engine/programming_engine.dart' as engine;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../onboarding/domain/onboarding_answers.dart';
 import '../domain/plan_presentation.dart';
 
@@ -93,10 +94,14 @@ class PlanDayCard extends StatelessWidget {
                     borderRadius: AppRadii.smallBorder,
                     child: Image.asset(
                       _imageFor(day.dayIndex),
-                      width: prominentImage ? 88 : AppSpacing.xxl,
-                      height: prominentImage ? 88 : AppSpacing.xxl,
+                      width: prominentImage
+                          ? AppSizes.thumbnailLg
+                          : AppSizes.thumbnailSm,
+                      height: prominentImage
+                          ? AppSizes.thumbnailLg
+                          : AppSizes.thumbnailSm,
                       fit: BoxFit.cover,
-                      alignment: Alignment.topCenter,
+                      alignment: const Alignment(0, -0.15),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
