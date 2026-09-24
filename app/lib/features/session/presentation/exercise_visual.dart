@@ -1,43 +1,38 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:video_player/video_player.dart';
 
-import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../data/exercise_video_source.dart';
+import '../data/exercise_visual_source.dart';
 
-typedef ExerciseVideoPlaybackBuilder =
+part 'exercise_visual.g.dart';
+
+typedef ExerciseVisualPlaybackBuilder =
     Widget Function({
       required Key key,
-      required String exerciseId,
-      required ExerciseVideoSource source,
+      required ExerciseVisualSource source,
       required Widget placeholder,
-      required bool showAngleToggle,
     });
 
-final exerciseVideoPlaybackBuilderProvider =
-    Provider<ExerciseVideoPlaybackBuilder>(
-      (ref) =>
-          ({
-            required key,
-            required exerciseId,
-            required source,
-            required placeholder,
-            required showAngleToggle,
-          }) => ExerciseVideoPlayer(
-            key: key,
-            exerciseId: exerciseId,
-            source: source,
-            placeholder: placeholder,
-            showAngleToggle: showAngleToggle,
-          ),
-    );
+@riverpod
+ExerciseVisualPlaybackBuilder exerciseVisualPlaybackBuilder(Ref ref) =>
+    ({required key, required source, required placeholder}) => switch (source) {
+      BundledExerciseVideoSource video => ExerciseVideoPlayer(
+        key: key,
+        source: video,
+        placeholder: placeholder,
+      ),
+      BundledStillsSource stills => ExerciseStillsPlayer(
+        key: key,
+        source: stills,
+      ),
+    };
 
 class ExerciseVisual extends ConsumerWidget {
   const ExerciseVisual({
@@ -47,7 +42,6 @@ class ExerciseVisual extends ConsumerWidget {
     this.height,
     this.aspectRatio,
     this.compact = false,
-    this.showAngleToggle = true,
     super.key,
   }) : assert(height == null || aspectRatio == null);
 
@@ -57,24 +51,21 @@ class ExerciseVisual extends ConsumerWidget {
   final double? height;
   final double? aspectRatio;
   final bool compact;
-  final bool showAngleToggle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final source = resolveExerciseVideoSource(exerciseId);
-    final placeholder = _ExerciseVideoPlaceholder(
+    final source = resolveExerciseVisualSource(exerciseId);
+    final placeholder = _ExerciseVisualPlaceholder(
       exerciseName: exerciseName,
       blockRoleLabel: blockRoleLabel,
       compact: compact,
     );
     final playback = source == null
         ? placeholder
-        : ref.watch(exerciseVideoPlaybackBuilderProvider)(
-            key: ValueKey('exercise-video-$exerciseId'),
-            exerciseId: exerciseId,
+        : ref.watch(exerciseVisualPlaybackBuilderProvider)(
+            key: ValueKey('exercise-visual-$exerciseId'),
             source: source,
             placeholder: placeholder,
-            showAngleToggle: showAngleToggle,
           );
     final visual = aspectRatio != null
         ? AspectRatio(aspectRatio: aspectRatio!, child: playback)
@@ -87,46 +78,179 @@ class ExerciseVisual extends ConsumerWidget {
   }
 }
 
-class ExerciseVideoPlayer extends ConsumerStatefulWidget {
+class ExerciseStillsPlayer extends StatefulWidget {
+  const ExerciseStillsPlayer({required this.source, super.key});
+
+  final BundledStillsSource source;
+
+  @override
+  State<ExerciseStillsPlayer> createState() => _ExerciseStillsPlayerState();
+}
+
+class _ExerciseStillsPlayerState extends State<ExerciseStillsPlayer>
+    with SingleTickerProviderStateMixin {
+  static const _hold = Duration(milliseconds: 1100);
+  static const _fade = Duration(milliseconds: 500);
+  static const _total = Duration(milliseconds: 3200);
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _total,
+  );
+  late final Animation<double> _secondOpacity = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: ConstantTween<double>(0),
+      weight: _hold.inMilliseconds.toDouble(),
+    ),
+    TweenSequenceItem(
+      tween: Tween<double>(
+        begin: 0,
+        end: 1,
+      ).chain(CurveTween(curve: Curves.easeInOut)),
+      weight: _fade.inMilliseconds.toDouble(),
+    ),
+    TweenSequenceItem(
+      tween: ConstantTween<double>(1),
+      weight: _hold.inMilliseconds.toDouble(),
+    ),
+    TweenSequenceItem(
+      tween: Tween<double>(
+        begin: 1,
+        end: 0,
+      ).chain(CurveTween(curve: Curves.easeInOut)),
+      weight: _fade.inMilliseconds.toDouble(),
+    ),
+  ]).animate(_controller);
+  bool _showSecond = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _precache();
+    _syncPlayback();
+  }
+
+  @override
+  void didUpdateWidget(covariant ExerciseStillsPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.source != widget.source) {
+      _controller.reset();
+      _showSecond = false;
+      _precache();
+      _syncPlayback();
+    }
+  }
+
+  void _precache() {
+    precacheImage(AssetImage(widget.source.pos1Asset), context);
+    precacheImage(AssetImage(widget.source.pos2Asset), context);
+  }
+
+  void _syncPlayback() {
+    final shouldPlay =
+        !AppMotion.isReduced(context) &&
+        (ModalRoute.isCurrentOf(context) ?? true) &&
+        TickerMode.valuesOf(context).enabled;
+    if (shouldPlay && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!shouldPlay && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = AppMotion.isReduced(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset(
+          widget.source.pos1Asset,
+          key: const ValueKey('exercise-still-1'),
+          fit: BoxFit.cover,
+        ),
+        if (reduced && _showSecond)
+          Image.asset(
+            widget.source.pos2Asset,
+            key: const ValueKey('exercise-still-2'),
+            fit: BoxFit.cover,
+          ),
+        if (!reduced)
+          AnimatedBuilder(
+            animation: _secondOpacity,
+            builder: (context, child) =>
+                Opacity(opacity: _secondOpacity.value, child: child),
+            child: Image.asset(
+              widget.source.pos2Asset,
+              key: const ValueKey('exercise-still-2'),
+              fit: BoxFit.cover,
+            ),
+          ),
+        if (reduced)
+          Positioned(
+            right: AppSpacing.xs,
+            bottom: AppSpacing.xs,
+            child: Material(
+              color: AppColors.ink.withValues(alpha: 0.72),
+              borderRadius: AppRadii.smallBorder,
+              child: InkWell(
+                key: const ValueKey('exercise-still-flip'),
+                borderRadius: AppRadii.smallBorder,
+                onTap: () => setState(() => _showSecond = !_showSecond),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
+                  child: Text(
+                    '1 · 2',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: AppColors.paper),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class ExerciseVideoPlayer extends StatefulWidget {
   const ExerciseVideoPlayer({
-    required this.exerciseId,
     required this.source,
     required this.placeholder,
-    required this.showAngleToggle,
     super.key,
   });
 
-  final String exerciseId;
-  final ExerciseVideoSource source;
+  final BundledExerciseVideoSource source;
   final Widget placeholder;
-  final bool showAngleToggle;
 
   @override
-  ConsumerState<ExerciseVideoPlayer> createState() =>
-      _ExerciseVideoPlayerState();
+  State<ExerciseVideoPlayer> createState() => _ExerciseVideoPlayerState();
 }
 
-class _ExerciseVideoPlayerState extends ConsumerState<ExerciseVideoPlayer> {
-  ExerciseVideoAngle _angle = ExerciseVideoAngle.side;
+class _ExerciseVideoPlayerState extends State<ExerciseVideoPlayer> {
   VideoPlayerController? _controller;
-  bool _failed = false;
   int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _beginLoad(rebuild: false);
+    _beginLoad();
   }
 
   @override
   void didUpdateWidget(covariant ExerciseVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.exerciseId == widget.exerciseId &&
-        oldWidget.source == widget.source) {
-      return;
-    }
-    _angle = ExerciseVideoAngle.side;
-    _beginLoad();
+    if (oldWidget.source != widget.source) _beginLoad();
   }
 
   @override
@@ -138,86 +262,37 @@ class _ExerciseVideoPlayerState extends ConsumerState<ExerciseVideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    final source = widget.source;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        _videoOrLoading(source),
-        if (widget.showAngleToggle && source is StreamedExerciseVideoSource)
-          Positioned(
-            right: AppSpacing.xs,
-            bottom: AppSpacing.xs,
-            child: _AngleToggle(selected: _angle, onSelected: _selectAngle),
-          ),
-      ],
+    final controller = _controller;
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        controller.value.hasError) {
+      return widget.placeholder;
+    }
+    final size = controller.value.size;
+    if (size.width <= 0 || size.height <= 0) return widget.placeholder;
+    return SizedBox.expand(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        clipBehavior: Clip.hardEdge,
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: VideoPlayer(controller),
+        ),
+      ),
     );
   }
 
-  Widget _videoOrLoading(ExerciseVideoSource source) {
-    final controller = _controller;
-    if (!_failed && controller != null && controller.value.isInitialized) {
-      final size = controller.value.size;
-      if (size.width > 0 && size.height > 0) {
-        return SizedBox.expand(
-          child: FittedBox(
-            fit: BoxFit.cover,
-            clipBehavior: Clip.hardEdge,
-            child: SizedBox(
-              width: size.width,
-              height: size.height,
-              child: VideoPlayer(controller),
-            ),
-          ),
-        );
-      }
-    }
-    if (!_failed && source is StreamedExerciseVideoSource) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          widget.placeholder,
-          Image.network(
-            source.thumbnailUrl(_angle),
-            key: ValueKey(
-              'exercise-video-thumbnail-${widget.exerciseId}-${_angle.name}',
-            ),
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
-            gaplessPlayback: true,
-            errorBuilder: (context, error, stackTrace) => widget.placeholder,
-          ),
-        ],
-      );
-    }
-    return widget.placeholder;
-  }
-
-  void _selectAngle(ExerciseVideoAngle angle) {
-    if (angle == _angle) return;
-    setState(() => _angle = angle);
-    _beginLoad();
-  }
-
-  void _beginLoad({bool rebuild = true}) {
+  void _beginLoad() {
     final generation = ++_loadGeneration;
-    final previousController = _controller;
+    _disposeController(_controller);
     _controller = null;
-    _failed = false;
-    _disposeController(previousController);
-    if (rebuild && mounted) setState(() {});
     unawaited(_initialize(generation));
   }
 
   Future<void> _initialize(int generation) async {
-    VideoPlayerController? controller;
+    final controller = VideoPlayerController.asset(widget.source.assetPath);
     try {
-      controller = switch (widget.source) {
-        BundledExerciseVideoSource(:final assetPath) =>
-          VideoPlayerController.asset(assetPath),
-        StreamedExerciseVideoSource source => VideoPlayerController.file(
-          await _cachedFile(source.videoUrl(_angle)),
-        ),
-      };
       await controller.initialize();
       await controller.setVolume(0);
       await controller.setLooping(true);
@@ -229,26 +304,12 @@ class _ExerciseVideoPlayerState extends ConsumerState<ExerciseVideoPlayer> {
       controller.addListener(_handlePlaybackValue);
       setState(() => _controller = controller);
     } on Object {
-      if (controller != null) await controller.dispose();
-      if (!mounted || generation != _loadGeneration) return;
-      setState(() => _failed = true);
+      await controller.dispose();
     }
-  }
-
-  Future<File> _cachedFile(String remoteUrl) async {
-    final cache = await ref.read(exerciseVideoCacheProvider.future);
-    return cache.getFile(remoteUrl);
   }
 
   void _handlePlaybackValue() {
-    final controller = _controller;
-    if (controller == null ||
-        !controller.value.hasError ||
-        _failed ||
-        !mounted) {
-      return;
-    }
-    setState(() => _failed = true);
+    if (_controller?.value.hasError == true && mounted) setState(() {});
   }
 
   void _disposeController(VideoPlayerController? controller) {
@@ -258,8 +319,8 @@ class _ExerciseVideoPlayerState extends ConsumerState<ExerciseVideoPlayer> {
   }
 }
 
-class _ExerciseVideoPlaceholder extends StatelessWidget {
-  const _ExerciseVideoPlaceholder({
+class _ExerciseVisualPlaceholder extends StatelessWidget {
+  const _ExerciseVisualPlaceholder({
     required this.exerciseName,
     required this.blockRoleLabel,
     required this.compact,
@@ -272,7 +333,7 @@ class _ExerciseVideoPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      key: const ValueKey('exercise-video-placeholder'),
+      key: const ValueKey('exercise-visual-placeholder'),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -317,80 +378,6 @@ class _ExerciseVideoPlaceholder extends StatelessWidget {
                 ],
               ),
             ),
-    );
-  }
-}
-
-class _AngleToggle extends StatelessWidget {
-  const _AngleToggle({required this.selected, required this.onSelected});
-
-  final ExerciseVideoAngle selected;
-  final ValueChanged<ExerciseVideoAngle> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.ink.withValues(alpha: 0.72),
-      borderRadius: AppRadii.smallBorder,
-      clipBehavior: Clip.antiAlias,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _AngleButton(
-            label: 'Front',
-            angle: ExerciseVideoAngle.front,
-            selected: selected == ExerciseVideoAngle.front,
-            onSelected: onSelected,
-          ),
-          _AngleButton(
-            label: 'Side',
-            angle: ExerciseVideoAngle.side,
-            selected: selected == ExerciseVideoAngle.side,
-            onSelected: onSelected,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AngleButton extends StatelessWidget {
-  const _AngleButton({
-    required this.label,
-    required this.angle,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final String label;
-  final ExerciseVideoAngle angle;
-  final bool selected;
-  final ValueChanged<ExerciseVideoAngle> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: InkWell(
-        key: ValueKey('exercise-video-angle-${angle.name}'),
-        onTap: () => onSelected(angle),
-        child: AnimatedContainer(
-          duration: AppMotion.duration(context, AppMotion.feedback),
-          curve: AppMotion.standardCurve,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xs,
-          ),
-          color: selected ? AppColors.paper : Colors.transparent,
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: selected ? AppColors.ink : AppColors.paper,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

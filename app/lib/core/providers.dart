@@ -1,13 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'
     show FutureProvider, StreamProvider;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:programming_engine/programming_engine.dart' as programming;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,7 +24,6 @@ import '../features/plan/domain/stored_plan_document.dart';
 import '../features/session/application/rest_timer_foundation.dart';
 import '../features/session/application/session_lifecycle_service.dart';
 import '../features/session/data/exercise_content_repository.dart';
-import '../features/session/data/exercise_video_cache.dart';
 import 'programming_engine_facade.dart';
 import 'ulid.dart';
 import 'version_gate.dart';
@@ -92,28 +88,6 @@ PlanRepository planRepository(Ref ref) => PlanRepository(
 @Riverpod(keepAlive: true)
 ExerciseContentRepository exerciseContentRepository(Ref ref) =>
     ExerciseContentRepository(ref.watch(databaseProvider));
-
-@Riverpod(keepAlive: true)
-Dio exerciseVideoHttpClient(Ref ref) {
-  final client = Dio();
-  ref.onDispose(() => client.close(force: true));
-  return client;
-}
-
-@Riverpod(keepAlive: true)
-ExerciseVideoDownloader exerciseVideoDownloader(Ref ref) =>
-    DioExerciseVideoDownloader(ref.watch(exerciseVideoHttpClientProvider));
-
-@Riverpod(keepAlive: true)
-Future<ExerciseVideoCache> exerciseVideoCache(Ref ref) async {
-  final supportDirectory = await getApplicationSupportDirectory();
-  return LocalExerciseVideoCache(
-    Directory(
-      '${supportDirectory.path}${Platform.pathSeparator}exercise_videos',
-    ),
-    ref.watch(exerciseVideoDownloaderProvider),
-  );
-}
 
 @Riverpod(keepAlive: true)
 ExerciseContentSeeder exerciseContentSeeder(Ref ref) => ExerciseContentSeeder(
@@ -265,7 +239,9 @@ Future<String> appVersion(Ref ref) async =>
 Future<VersionGateDecision> startupVersionGate(Ref ref) async {
   try {
     final currentVersion = await ref.watch(appVersionProvider.future);
-    return ref.watch(versionGateProvider).check(currentVersion: currentVersion);
+    return await ref
+        .watch(versionGateProvider)
+        .check(currentVersion: currentVersion);
   } on Object {
     return const VersionGateDecision.allowed();
   }

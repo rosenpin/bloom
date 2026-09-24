@@ -13,6 +13,7 @@ import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../plan/domain/plan_presentation.dart';
 import '../../session/application/session_controller.dart';
 import '../../session/application/session_lifecycle_service.dart';
+import '../../session/domain/session_presentation.dart';
 import 'week_strip.dart';
 
 class TodayScreen extends ConsumerStatefulWidget {
@@ -172,7 +173,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 ),
                 if (completed case final session?) ...[
                   const SizedBox(height: AppSpacing.sm),
-                  _NextSessionLine(session: session),
+                  _NextSessionLine(session: session, today: today),
                 ],
                 SizedBox(
                   height: completed == null ? AppSpacing.lg : AppSpacing.xs,
@@ -379,9 +380,10 @@ class _TodayHeroCard extends StatelessWidget {
 }
 
 class _NextSessionLine extends StatelessWidget {
-  const _NextSessionLine({required this.session});
+  const _NextSessionLine({required this.session, required this.today});
 
   final CompletedSession session;
+  final DateTime today;
 
   @override
   Widget build(BuildContext context) {
@@ -391,12 +393,18 @@ class _NextSessionLine extends StatelessWidget {
     );
     final next = days[currentIndex < 0 ? 0 : (currentIndex + 1) % days.length];
     final daysPerWeek = session.answers.daysPerWeek?.value ?? days.length;
-    final uppercaseWeekday = PlanPresentation.weekdayLabel(
-      next.dayIndex,
-      daysPerWeek,
+    final plannedWeekday = SessionPresentation.plannedWeekdayLabel(
+      dayIndex: next.dayIndex,
+      daysPerWeek: daysPerWeek,
+      date: today,
     );
-    final weekday =
-        '${uppercaseWeekday[0]}${uppercaseWeekday.substring(1).toLowerCase()}';
+    final weekday = plannedWeekday == null
+        ? null
+        : '${plannedWeekday[0]}${plannedWeekday.substring(1).toLowerCase()}';
+    final nextLabel = [
+      ?weekday,
+      PlanPresentation.dayName(next, session.answers),
+    ].join(' · ');
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -415,7 +423,7 @@ class _NextSessionLine extends StatelessWidget {
           const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Text(
-              'Next up · $weekday · ${PlanPresentation.dayName(next, session.answers)}',
+              'Next up · $nextLabel',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
