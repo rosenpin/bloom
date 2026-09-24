@@ -133,7 +133,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
     final headerLine = completed != null
         ? 'Done for today. Nice and steady.'
         : preview?.hasOpenSessionToday ?? false
-        ? 'Pick up where you left off.'
+        ? 'Your workout is waiting. No rush.'
         : !isTrainingDay
         ? 'Rest day. ${_weekdayName(nextWeekday)} is ${PlanPresentation.shortDayName(nextDay).toLowerCase()}.'
         : '${PlanPresentation.shortDayName(day)} today. About ${answers.sessionMinutes?.value ?? 45} minutes.';

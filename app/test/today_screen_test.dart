@@ -28,7 +28,7 @@ void main() {
     await harness.insertSession(completed: false);
     harness.container.invalidate(sessionPreviewProvider);
     await tester.pumpAndSettle();
-    expect(find.text('Pick up where you left off.'), findsWidgets);
+    expect(find.text('Your workout is waiting. No rush.'), findsOneWidget);
     expect(find.byKey(const ValueKey('resume-workout')), findsOneWidget);
   });
 
