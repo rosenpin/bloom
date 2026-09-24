@@ -31,4 +31,21 @@ void main() {
     expect(decoded.emphasis, engine.Emphasis.balanced);
     expect(decoded.toJson(), contains('"emphasis":"balanced"'));
   });
+
+  test('resume separates lifting experience from gym comfort', () {
+    const starting = OnboardingAnswers(
+      unitSystem: engine.UnitSystem.metric,
+      ageBand: engine.AgeBand.age30To39,
+      goal: engine.Goal.stronger,
+      daysPerWeek: engine.TrainingDaysPerWeek.three,
+      sessionMinutes: engine.SessionMinutes.fortyFive,
+    );
+    expect(starting.resumePath, '/onboarding/experience');
+    expect(
+      starting
+          .copyWith(experienceTier: engine.ProfileExperienceTier.newToIt)
+          .resumePath,
+      '/onboarding/comfort',
+    );
+  });
 }

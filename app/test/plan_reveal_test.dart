@@ -102,8 +102,10 @@ void main() {
       ),
       findsWidgets,
     );
-    expect(find.text('Start my first workout'), findsOneWidget);
-    expect(find.text('Create new plan'), findsOneWidget);
+    expect(find.text('Start my plan'), findsOneWidget);
+    expect(find.text('Change my answers'), findsOneWidget);
+    expect(find.text('Your six weeks'), findsOneWidget);
+    expect(find.text('Easier week'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('plan-day-card-1')));
     await tester.pumpAndSettle();

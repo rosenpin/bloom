@@ -47,47 +47,52 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: '/onboarding',
         pageBuilder: (context, state) =>
-            _softPage(context, state, const WelcomeScreen()),
+            _onboardingPage(context, state, const WelcomeScreen()),
       ),
       GoRoute(
         path: '/onboarding/age',
         pageBuilder: (context, state) =>
-            _softPage(context, state, const AgeScreen()),
+            _onboardingPage(context, state, const AgeScreen()),
       ),
       GoRoute(
         path: '/onboarding/goal',
         pageBuilder: (context, state) =>
-            _softPage(context, state, const GoalScreen()),
+            _onboardingPage(context, state, const GoalScreen()),
       ),
       GoRoute(
         path: '/onboarding/days',
         pageBuilder: (context, state) =>
-            _softPage(context, state, const DaysScreen()),
+            _onboardingPage(context, state, const DaysScreen()),
       ),
       GoRoute(
         path: '/onboarding/session-length',
         pageBuilder: (context, state) =>
-            _softPage(context, state, const SessionLengthScreen()),
+            _onboardingPage(context, state, const SessionLengthScreen()),
       ),
       GoRoute(
         path: '/onboarding/experience',
         pageBuilder: (context, state) =>
-            _softPage(context, state, const ExperienceScreen()),
+            _onboardingPage(context, state, const ExperienceScreen()),
+      ),
+      GoRoute(
+        path: '/onboarding/comfort',
+        pageBuilder: (context, state) =>
+            _onboardingPage(context, state, const ComfortScreen()),
       ),
       GoRoute(
         path: '/onboarding/emphasis',
         pageBuilder: (context, state) =>
-            _softPage(context, state, const EmphasisScreen()),
+            _onboardingPage(context, state, const EmphasisScreen()),
       ),
       GoRoute(
         path: '/onboarding/activities',
         pageBuilder: (context, state) =>
-            _softPage(context, state, const ActivitiesScreen()),
+            _onboardingPage(context, state, const ActivitiesScreen()),
       ),
       GoRoute(
         path: '/onboarding/menstrual',
         pageBuilder: (context, state) =>
-            _softPage(context, state, const MenstrualScreen()),
+            _onboardingPage(context, state, const MenstrualScreen()),
       ),
       GoRoute(
         path: '/onboarding/generating',
@@ -160,6 +165,61 @@ GoRouter router(Ref ref) {
   );
   ref.onDispose(router.dispose);
   return router;
+}
+
+const _onboardingPaths = [
+  '/onboarding',
+  '/onboarding/age',
+  '/onboarding/goal',
+  '/onboarding/days',
+  '/onboarding/session-length',
+  '/onboarding/experience',
+  '/onboarding/comfort',
+  '/onboarding/emphasis',
+  '/onboarding/activities',
+  '/onboarding/menstrual',
+];
+int _lastOnboardingIndex = 0;
+double _onboardingDirection = 1;
+
+CustomTransitionPage<void> _onboardingPage(
+  BuildContext context,
+  GoRouterState state,
+  Widget child,
+) {
+  final index = _onboardingPaths.indexOf(state.matchedLocation);
+  final direction = index < _lastOnboardingIndex ? -1.0 : 1.0;
+  _onboardingDirection = direction;
+  if (index >= 0) _lastOnboardingIndex = index;
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: AppMotion.duration(context, AppMotion.routeEntrance),
+    reverseTransitionDuration: AppMotion.duration(context, AppMotion.routeExit),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return AnimatedBuilder(
+        animation: Listenable.merge([animation, secondaryAnimation]),
+        child: child,
+        builder: (context, child) {
+          final entering = AppMotion.entranceCurve.transform(animation.value);
+          final leaving = AppMotion.standardCurve.transform(
+            secondaryAnimation.value,
+          );
+          return Opacity(
+            opacity: (entering * (1 - leaving)).clamp(0, 1),
+            child: FractionalTranslation(
+              translation: Offset(
+                direction * (1 - entering) * 0.06 -
+                    _onboardingDirection * leaving * 0.06,
+                0,
+              ),
+              child: child,
+            ),
+          );
+        },
+      );
+    },
+  );
 }
 
 CustomTransitionPage<void> _softPage(

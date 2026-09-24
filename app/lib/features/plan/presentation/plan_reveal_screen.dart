@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -128,6 +129,8 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                                     const SizedBox(height: AppSpacing.xs),
                                     Text(
                                       PlanPresentation.profileSummary(answers),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodyLarge
@@ -153,6 +156,17 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                           constraints: const BoxConstraints(maxWidth: 440),
                           child: Column(
                             children: [
+                              _RevealItem(
+                                animation: _entrance,
+                                interval: _motionInterval(
+                                  start: 250,
+                                  end: 700,
+                                  total: totalMilliseconds,
+                                ),
+                                child: _SixWeekArc(
+                                  weeks: document.plan.mesocycleCalendar,
+                                ),
+                              ),
                               for (
                                 var index = 0;
                                 index < document.plan.days.length;
@@ -168,6 +182,7 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                                   child: PlanDayCard(
                                     day: document.plan.days[index],
                                     answers: answers,
+                                    prominentImage: true,
                                     onTap: () => context.push(
                                       '/plan/day/${document.plan.days[index].dayIndex}',
                                     ),
@@ -205,12 +220,12 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                         FilledButton(
                           key: const ValueKey('reveal-start'),
                           onPressed: () => context.go('/today'),
-                          child: const Text('Start my first workout'),
+                          child: const Text('Start my plan'),
                         ),
                         TextButton(
                           key: const ValueKey('reveal-tweak'),
                           onPressed: () => context.go('/onboarding/age'),
-                          child: const Text('Create new plan'),
+                          child: const Text('Change my answers'),
                         ),
                       ],
                     ),
@@ -220,6 +235,84 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SixWeekArc extends StatelessWidget {
+  const _SixWeekArc({required this.weeks});
+
+  final List<engine.PlanWeek> weeks;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Your six weeks',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              for (final week in weeks) ...[
+                if (week != weeks.first) const SizedBox(width: AppSpacing.xxs),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: AppSpacing.sm,
+                        decoration: BoxDecoration(
+                          color: switch (week.kind) {
+                            engine.MesocycleWeekKind.easier => AppColors.sage,
+                            engine.MesocycleWeekKind.deload =>
+                              AppColors.lavender,
+                            _ => AppColors.rose,
+                          },
+                          borderRadius: AppRadii.smallBorder,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        'W${week.weekIndex}',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppColors.inkSoft,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Row(
+            children: [
+              for (final (index, label) in const [
+                'Find your feet',
+                'Easier week',
+                'Lighter finish',
+              ].indexed)
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    textAlign: index == 0
+                        ? TextAlign.left
+                        : index == 2
+                        ? TextAlign.right
+                        : TextAlign.center,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

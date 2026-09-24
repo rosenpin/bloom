@@ -265,7 +265,9 @@ Future<String> appVersion(Ref ref) async =>
 Future<VersionGateDecision> startupVersionGate(Ref ref) async {
   try {
     final currentVersion = await ref.watch(appVersionProvider.future);
-    return ref.watch(versionGateProvider).check(currentVersion: currentVersion);
+    return await ref
+        .watch(versionGateProvider)
+        .check(currentVersion: currentVersion);
   } on Object {
     return const VersionGateDecision.allowed();
   }

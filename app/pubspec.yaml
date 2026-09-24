@@ -85,6 +85,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/emphasis/
     - assets/videos/
 
   fonts:
