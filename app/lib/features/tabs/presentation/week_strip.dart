@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
+import '../../../core/theme/app_sizes.dart';
 
-class WeekStrip extends StatefulWidget {
+final class WeekStripPlanDay {
+  const WeekStripPlanDay({required this.dayIndex, required this.label});
+
+  final int dayIndex;
+  final String label;
+}
+
+class WeekStrip extends StatelessWidget {
   const WeekStrip({
     required this.today,
     required this.completedAt,
-    required this.plannedWeekdays,
+    required this.plannedDays,
+    required this.onOpenDay,
     super.key,
   });
 
   final DateTime today;
   final Iterable<DateTime> completedAt;
-  final Set<int> plannedWeekdays;
+  final Map<int, WeekStripPlanDay> plannedDays;
+  final ValueChanged<int> onOpenDay;
 
   static const _dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   static const _dayNames = [
@@ -28,35 +37,11 @@ class WeekStrip extends StatefulWidget {
   ];
 
   @override
-  State<WeekStrip> createState() => _WeekStripState();
-}
-
-class _WeekStripState extends State<WeekStrip>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _entrance = AnimationController(vsync: this);
-  bool _started = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_started) return;
-    _started = true;
-    _entrance.duration = AppMotion.duration(context, AppMotion.entrance);
-    _entrance.forward();
-  }
-
-  @override
-  void dispose() {
-    _entrance.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final completedWeekdays = {
-      for (final completedDate in widget.completedAt) completedDate.weekday,
+      for (final completedDate in completedAt)
+        if (_sameWeek(completedDate, today)) completedDate.weekday,
     };
-
     return Row(
       key: const ValueKey('week-strip'),
       children: [
@@ -64,31 +49,28 @@ class _WeekStripState extends State<WeekStrip>
           var weekday = DateTime.monday;
           weekday <= DateTime.sunday;
           weekday++
-        ) ...[
-          if (weekday > DateTime.monday) const SizedBox(width: 6),
+        )
           Expanded(
             child: _WeekDay(
               weekday: weekday,
-              letter: WeekStrip._dayLetters[weekday - 1],
-              name: WeekStrip._dayNames[weekday - 1],
-              isToday: weekday == widget.today.weekday,
+              letter: _dayLetters[weekday - 1],
+              name: _dayNames[weekday - 1],
+              isToday: weekday == today.weekday,
               isDone: completedWeekdays.contains(weekday),
-              isPlanned: widget.plannedWeekdays.contains(weekday),
-              isFuture: weekday > widget.today.weekday,
-              entrance: CurvedAnimation(
-                parent: _entrance,
-                curve: Interval(
-                  (weekday - 1) * 0.07,
-                  0.4 + ((weekday - 1) * 0.07),
-                  curve: AppMotion.entranceCurve,
-                ),
-              ),
+              planDay: plannedDays[weekday],
+              onOpenDay: onOpenDay,
             ),
           ),
-        ],
       ],
     );
   }
+}
+
+bool _sameWeek(DateTime a, DateTime b) {
+  final aDate = DateTime.utc(a.year, a.month, a.day);
+  final bDate = DateTime.utc(b.year, b.month, b.day);
+  return aDate.subtract(Duration(days: a.weekday - 1)) ==
+      bDate.subtract(Duration(days: b.weekday - 1));
 }
 
 class _WeekDay extends StatelessWidget {
@@ -98,9 +80,8 @@ class _WeekDay extends StatelessWidget {
     required this.name,
     required this.isToday,
     required this.isDone,
-    required this.isPlanned,
-    required this.isFuture,
-    required this.entrance,
+    required this.planDay,
+    required this.onOpenDay,
   });
 
   final int weekday;
@@ -108,78 +89,67 @@ class _WeekDay extends StatelessWidget {
   final String name;
   final bool isToday;
   final bool isDone;
-  final bool isPlanned;
-  final bool isFuture;
-  final Animation<double> entrance;
+  final WeekStripPlanDay? planDay;
+  final ValueChanged<int> onOpenDay;
 
   @override
   Widget build(BuildContext context) {
-    final isFuturePlanned = isFuture && isPlanned;
-    final backgroundColor = isToday
-        ? isDone
-              ? AppColors.sageSoft
-              : AppColors.blushSoft
-        : Colors.transparent;
-    final dotColor = isDone
-        ? AppColors.sage
-        : isToday && isPlanned
-        ? AppColors.rose
-        : isFuturePlanned
-        ? AppColors.blush
-        : AppColors.line;
-    final semanticsLabel = switch ((
-      isDone,
-      isToday,
-      isPlanned,
-      isFuturePlanned,
-    )) {
-      (true, _, _, _) => '$name, done',
-      (false, true, true, _) => '$name, today, planned',
-      (false, true, false, _) => '$name, today, rest',
-      (false, false, _, true) => '$name, planned',
-      _ => '$name, rest',
-    };
-
+    final theme = Theme.of(context).textTheme;
+    final semanticsLabel =
+        '$name, ${isToday ? 'today, ' : ''}'
+        '${isDone
+            ? 'done'
+            : planDay == null
+            ? 'rest'
+            : '${planDay!.label} planned'}';
     return Semantics(
-      container: true,
+      button: planDay != null,
       label: semanticsLabel,
-      child: ExcludeSemantics(
-        child: Container(
-          key: ValueKey('week-strip-day-$weekday'),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: AppRadii.smallBorder,
-          ),
+      child: InkWell(
+        key: ValueKey('week-strip-day-$weekday'),
+        onTap: planDay == null ? null : () => onOpenDay(planDay!.dayIndex),
+        borderRadius: AppRadii.smallBorder,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppSizes.tapTarget),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 letter,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: isToday ? AppColors.ink : AppColors.inkFaint,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+                style: theme.labelMedium?.copyWith(
+                  color: isToday ? AppColors.roseDeep : AppColors.inkSoft,
+                  letterSpacing: 1,
                 ),
               ),
               const SizedBox(height: 6),
-              AnimatedBuilder(
-                animation: entrance,
-                builder: (context, child) => Opacity(
-                  opacity: entrance.value,
-                  child: Transform.scale(
-                    scale: 0.7 + (entrance.value * 0.3),
-                    child: child,
+              Container(
+                width: 29,
+                height: 29,
+                decoration: BoxDecoration(
+                  color: AppColors.paper,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isToday ? AppColors.rose : AppColors.line,
+                    width: isToday ? 2 : 1,
                   ),
                 ),
-                child: Container(
-                  key: ValueKey('week-strip-dot-$weekday'),
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: dotColor,
-                    shape: BoxShape.circle,
-                  ),
+                child: isDone
+                    ? const Icon(
+                        Icons.check_rounded,
+                        color: AppColors.sage,
+                        size: AppSizes.iconSmall,
+                      )
+                    : null,
+              ),
+              const SizedBox(height: 5),
+              Text(
+                planDay?.label ?? ' ',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.labelMedium?.copyWith(
+                  color: planDay == null
+                      ? AppColors.inkFaint
+                      : AppColors.inkSoft,
                 ),
               ),
             ],
