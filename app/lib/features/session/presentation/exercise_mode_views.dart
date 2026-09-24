@@ -474,9 +474,9 @@ class _ExerciseVisualCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visualHeight = (MediaQuery.sizeOf(context).height * 0.31).clamp(
-      180.0,
-      270.0,
+    final visualHeight = (MediaQuery.sizeOf(context).height * 0.26).clamp(
+      160.0,
+      240.0,
     );
     return Stack(
       alignment: Alignment.topCenter,

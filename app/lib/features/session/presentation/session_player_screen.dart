@@ -2400,18 +2400,11 @@ class _EffortOptions extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            const Spacer(flex: 2),
-            Expanded(
-              child: Text(
-                'JUST RIGHT',
-                textAlign: TextAlign.center,
-                style: AppText.label.copyWith(color: AppColors.roseDeep),
-              ),
-            ),
-            const Spacer(flex: 2),
-          ],
+        Text(
+          'JUST RIGHT',
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          style: AppText.label.copyWith(color: AppColors.roseDeep),
         ),
         const SizedBox(height: AppSpacing.xxs),
         Row(
