@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../features/history/presentation/session_summary_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screens.dart';
+import '../../features/paywall/presentation/paywall_screen.dart';
 import '../../features/plan/presentation/plan_day_detail_screen.dart';
 import '../../features/plan/presentation/plan_reveal_screen.dart';
 import '../../features/session/presentation/session_player_screen.dart';
@@ -18,6 +21,7 @@ part 'app_router.g.dart';
 @Riverpod(keepAlive: true)
 GoRouter router(Ref ref) {
   final onboardingRepository = ref.watch(onboardingRepositoryProvider);
+  final memberships = ref.watch(entitlementServiceProvider);
   final router = GoRouter(
     initialLocation: '/',
     redirect: (context, state) async {
@@ -25,16 +29,33 @@ GoRouter router(Ref ref) {
       if (location.startsWith('/onboarding')) return null;
 
       final completed = await onboardingRepository.hasCompletedProfile();
+      if (location == '/paywall' && !completed) return '/onboarding';
+      if (location == '/paywall' && memberships.currentStatus.isPremium) {
+        return '/today';
+      }
       if (location == '/') {
-        return completed ? '/today' : '/onboarding';
+        return completed
+            ? (memberships.currentStatus.isPremium ? '/today' : '/paywall')
+            : '/onboarding';
       }
       if (!completed &&
           (location == '/today' ||
               location == '/plan' ||
               location == '/me' ||
               location == '/session' ||
-              location.startsWith('/history/'))) {
+              location.startsWith('/history/') ||
+              location.startsWith('/plan/day/'))) {
         return '/onboarding';
+      }
+      if (completed &&
+          !memberships.currentStatus.isPremium &&
+          (location == '/today' ||
+              location == '/plan' ||
+              location == '/me' ||
+              location == '/session' ||
+              location.startsWith('/history/') ||
+              location.startsWith('/plan/day/'))) {
+        return '/paywall';
       }
       return null;
     },
@@ -100,6 +121,11 @@ GoRouter router(Ref ref) {
             _softPage(context, state, const PlanRevealScreen()),
       ),
       GoRoute(
+        path: '/paywall',
+        pageBuilder: (context, state) =>
+            _softPage(context, state, const PaywallScreen()),
+      ),
+      GoRoute(
         path: '/session',
         pageBuilder: (context, state) =>
             _takeoverPage(context, state, const SessionPlayerScreen()),
@@ -158,6 +184,10 @@ GoRouter router(Ref ref) {
       ),
     ],
   );
+  final subscription = memberships.watchStatus().listen(
+    (_) => router.refresh(),
+  );
+  ref.onDispose(() => unawaited(subscription.cancel()));
   ref.onDispose(router.dispose);
   return router;
 }

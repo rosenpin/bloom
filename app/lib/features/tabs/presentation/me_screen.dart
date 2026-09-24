@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -70,12 +72,235 @@ class MeScreen extends ConsumerWidget {
                           ],
                         ),
                 ),
+                const SizedBox(height: AppSpacing.xl),
+                const _MembershipSection(),
+                const SizedBox(height: AppSpacing.xl),
+                const _AboutSection(),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+class _MembershipSection extends ConsumerWidget {
+  const _MembershipSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status =
+        ref.watch(premiumStatusProvider).value ??
+        ref.read(entitlementServiceProvider).currentStatus;
+    final date = status.expirationDate == null
+        ? null
+        : MaterialLocalizations.of(
+            context,
+          ).formatMediumDate(status.expirationDate!.toLocal());
+    final statusText = !status.isPremium
+        ? 'Not active'
+        : status.isTrial
+        ? 'Free trial until ${date ?? 'soon'}'
+        : date == null
+        ? 'Premium'
+        : 'Premium · ${status.willRenew ? 'renews' : 'until'} $date';
+
+    Future<void> restore() async {
+      ref.read(appEventsLoggerProvider).restoreTapped();
+      try {
+        final restored = await ref.read(entitlementServiceProvider).restore();
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              restored.isPremium
+                  ? 'Membership restored.'
+                  : 'No active membership found yet.',
+            ),
+          ),
+        );
+      } on Object {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not restore right now. Try again.'),
+            ),
+          );
+        }
+      }
+    }
+
+    Future<void> redeem() async {
+      ref.read(appEventsLoggerProvider).redeemCodeTapped();
+      try {
+        await ref.read(entitlementServiceProvider).redeemCode();
+        await ref.read(entitlementServiceProvider).refresh();
+      } on Object {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open codes right now. Try again.'),
+            ),
+          );
+        }
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Membership', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: AppSpacing.md),
+        _QuietGroup(
+          children: [
+            _QuietRow(title: statusText, icon: Icons.favorite_rounded),
+            if (status.managementUrl != null)
+              _QuietRow(
+                title: 'Manage subscription',
+                icon: Icons.open_in_new_rounded,
+                onTap: () => _open(status.managementUrl!),
+              ),
+            _QuietRow(
+              title: 'Restore purchases',
+              icon: Icons.refresh_rounded,
+              onTap: restore,
+            ),
+            _QuietRow(
+              title: 'Redeem a code',
+              icon: Icons.card_giftcard_rounded,
+              onTap: redeem,
+            ),
+            _QuietRow(
+              title: 'Support ID',
+              subtitle: status.appUserId ?? 'Unavailable',
+              icon: Icons.copy_rounded,
+              onTap: status.appUserId == null
+                  ? null
+                  : () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: status.appUserId!),
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Support ID copied.')),
+                        );
+                      }
+                    },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AboutSection extends StatelessWidget {
+  const _AboutSection();
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text('About', style: Theme.of(context).textTheme.headlineMedium),
+      const SizedBox(height: AppSpacing.md),
+      _QuietGroup(
+        children: [
+          _QuietRow(
+            title: 'Privacy policy',
+            icon: Icons.open_in_new_rounded,
+            onTap: () =>
+                _open('https://womensgym.github.io/bloom-site/privacy.html'),
+          ),
+          _QuietRow(
+            title: 'Terms of use',
+            icon: Icons.open_in_new_rounded,
+            onTap: () => _open(
+              'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      Text(
+        'Bloom gives general fitness guidance, not medical advice. Check with a doctor first if you are pregnant, injured, or managing a health condition.',
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+      ),
+    ],
+  );
+}
+
+class _QuietGroup extends StatelessWidget {
+  const _QuietGroup({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: const BoxDecoration(
+      color: AppColors.paper,
+      borderRadius: AppRadii.mediumBorder,
+    ),
+    child: Column(children: children),
+  );
+}
+
+class _QuietRow extends StatelessWidget {
+  const _QuietRow({
+    required this.title,
+    required this.icon,
+    this.subtitle,
+    this.onTap,
+  });
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: AppRadii.mediumBorder,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.roseDeep, size: 20),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.bodyMedium),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                  ),
+              ],
+            ),
+          ),
+          if (onTap != null)
+            const Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<void> _open(String url) async {
+  try {
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  } on Object {
+    // External links can fail while offline.
   }
 }
 

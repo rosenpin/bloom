@@ -20,6 +20,12 @@ final class AppEventsLogger {
     'session_completed': {'duration_min', 'exercises'},
     'session_abandoned': {},
     'comeback_shown': {'tier'},
+    'paywall_viewed': {},
+    'purchase_started': {'product'},
+    'purchase_completed': {'product', 'trial'},
+    'purchase_cancelled': {},
+    'restore_tapped': {},
+    'redeem_code_tapped': {},
   };
 
   final OutboxSink _outbox;
@@ -62,6 +68,20 @@ final class AppEventsLogger {
   void sessionAbandoned() => _log('session_abandoned');
 
   void comebackShown(int tier) => _log('comeback_shown', {'tier': tier});
+
+  void paywallViewed() => _log('paywall_viewed');
+
+  void purchaseStarted(String product) =>
+      _log('purchase_started', {'product': product});
+
+  void purchaseCompleted(String product, {required bool trial}) =>
+      _log('purchase_completed', {'product': product, 'trial': trial});
+
+  void purchaseCancelled() => _log('purchase_cancelled');
+
+  void restoreTapped() => _log('restore_tapped');
+
+  void redeemCodeTapped() => _log('redeem_code_tapped');
 
   void _log(String name, [Map<String, Object?> props = const {}]) {
     _validate(name, props);

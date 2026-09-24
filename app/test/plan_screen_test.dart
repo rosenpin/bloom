@@ -11,6 +11,8 @@ import 'package:womens_gym/features/onboarding/domain/onboarding_answers.dart';
 import 'package:womens_gym/features/plan/domain/plan_presentation.dart';
 import 'package:womens_gym/features/session/data/session_event_codec.dart';
 
+import 'support/premium_entitlements.dart';
+
 void main() {
   testWidgets('plan tab shows week states and opens read-only days', (
     tester,
@@ -25,6 +27,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         databaseProvider.overrideWithValue(database),
+        entitlementServiceProvider.overrideWithValue(
+          const PremiumEntitlements(),
+        ),
         clockProvider.overrideWithValue(() => now),
         startupVersionGateProvider.overrideWith(
           (ref) async => const VersionGateDecision.allowed(),

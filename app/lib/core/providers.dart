@@ -21,6 +21,7 @@ import '../data/sync/sync_remote.dart';
 import '../data/sync/sync_service.dart';
 import '../features/onboarding/data/onboarding_repository.dart';
 import '../features/onboarding/domain/onboarding_answers.dart';
+import '../features/paywall/entitlement_service.dart';
 import '../features/plan/application/plan_generation_service.dart';
 import '../features/plan/data/plan_repository.dart';
 import '../features/plan/domain/stored_plan_document.dart';
@@ -33,6 +34,14 @@ import 'ulid.dart';
 import 'version_gate.dart';
 
 part 'providers.g.dart';
+
+@Riverpod(keepAlive: true)
+EntitlementService entitlementService(Ref ref) =>
+    RevenueCatEntitlementService.instance;
+
+@Riverpod(keepAlive: true)
+Stream<MembershipStatus> premiumStatus(Ref ref) =>
+    ref.watch(entitlementServiceProvider).watchStatus();
 
 @Riverpod(keepAlive: true)
 DateTime Function() clock(Ref ref) => DateTime.now;
@@ -265,7 +274,9 @@ Future<String> appVersion(Ref ref) async =>
 Future<VersionGateDecision> startupVersionGate(Ref ref) async {
   try {
     final currentVersion = await ref.watch(appVersionProvider.future);
-    return ref.watch(versionGateProvider).check(currentVersion: currentVersion);
+    return await ref
+        .watch(versionGateProvider)
+        .check(currentVersion: currentVersion);
   } on Object {
     return const VersionGateDecision.allowed();
   }

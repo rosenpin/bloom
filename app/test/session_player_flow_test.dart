@@ -18,6 +18,7 @@ import 'package:womens_gym/features/session/data/session_event_codec.dart';
 import 'package:womens_gym/features/session/presentation/exercise_visual.dart';
 
 import 'support/session_test_support.dart';
+import 'support/premium_entitlements.dart';
 
 void main() {
   testWidgets(
@@ -553,6 +554,9 @@ final class _SessionHarness {
     final container = ProviderContainer(
       overrides: [
         databaseProvider.overrideWithValue(database),
+        entitlementServiceProvider.overrideWithValue(
+          const PremiumEntitlements(),
+        ),
         clockProvider.overrideWithValue(() => now),
         startupVersionGateProvider.overrideWith(
           (ref) async => const VersionGateDecision.allowed(),

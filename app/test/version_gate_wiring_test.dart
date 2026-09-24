@@ -8,6 +8,7 @@ import 'package:womens_gym/core/version_gate.dart';
 import 'package:womens_gym/data/db/app_database.dart';
 
 import 'support/session_test_support.dart';
+import 'support/premium_entitlements.dart';
 
 void main() {
   testWidgets('a fake hard-block decision replaces the routed app', (
@@ -47,6 +48,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         databaseProvider.overrideWithValue(database),
+        entitlementServiceProvider.overrideWithValue(
+          const PremiumEntitlements(),
+        ),
         versionGateProvider.overrideWithValue(
           const FakeVersionGate(
             VersionGateDecision(

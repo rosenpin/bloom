@@ -11,6 +11,8 @@ import 'package:womens_gym/data/db/app_database.dart';
 import 'package:womens_gym/features/onboarding/domain/onboarding_answers.dart';
 import 'package:womens_gym/features/plan/domain/plan_presentation.dart';
 
+import 'support/premium_entitlements.dart';
+
 void main() {
   test('plan dose labels use ranges and timed seconds', () {
     expect(
@@ -52,6 +54,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         databaseProvider.overrideWithValue(database),
+        entitlementServiceProvider.overrideWithValue(
+          const PremiumEntitlements(),
+        ),
         clockProvider.overrideWithValue(() => DateTime.utc(2026, 7, 26, 10)),
         startupVersionGateProvider.overrideWith(
           (ref) async => const VersionGateDecision.allowed(),
