@@ -41,7 +41,9 @@ MonthEstimate estimateMonth({
   return MonthEstimate(
     day: (elapsed < 0 ? 0 : elapsed) % gapDays + 1,
     gapDays: gapDays,
+    // Past one full gap the day is a projection, not a known date.
     about:
+        elapsed >= gapDays ||
         gap == null ||
         gap == MenstrualGap.notSure ||
         gap == MenstrualGap.days30Plus,

@@ -32,6 +32,7 @@ void main() {
         gap: MenstrualGap.days28,
       );
       expect(estimate.day, (388 % 28) + 1);
+      expect(estimate.about, isTrue);
       final premenstrual = estimateMonth(
         today: DateTime(2026, 9, 24),
         lastPeriodStart: DateTime(2026, 9, 1),
