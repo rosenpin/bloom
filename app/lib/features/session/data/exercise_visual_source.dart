@@ -42,6 +42,7 @@ const bundledExerciseVideoSources = <String, BundledExerciseVideoSource>{
 
 const exercisesWithStills = <String>{
   'assisted-dip',
+  'barbell-bench-press',
   'barbell-deadlift',
   'barbell-hip-thrust',
   'barbell-romanian-deadlift',
