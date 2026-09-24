@@ -1,6 +1,40 @@
 import 'package:programming_engine/programming_engine.dart' as engine;
 
+import '../../plan/domain/plan_presentation.dart';
+
 abstract final class SessionPresentation {
+  static String? plannedWeekdayLabel({
+    required int dayIndex,
+    required int daysPerWeek,
+    required DateTime date,
+  }) {
+    final planned = PlanPresentation.weekdayLabel(dayIndex, daysPerWeek);
+    final actual = switch (date.weekday) {
+      DateTime.monday => 'MONDAY',
+      DateTime.tuesday => 'TUESDAY',
+      DateTime.wednesday => 'WEDNESDAY',
+      DateTime.thursday => 'THURSDAY',
+      DateTime.friday => 'FRIDAY',
+      DateTime.saturday => 'SATURDAY',
+      _ => 'SUNDAY',
+    };
+    return planned == actual ? planned : null;
+  }
+
+  static String workoutLabel({
+    required String dayName,
+    required int dayIndex,
+    required int daysPerWeek,
+    required DateTime date,
+  }) {
+    final weekday = plannedWeekdayLabel(
+      dayIndex: dayIndex,
+      daysPerWeek: daysPerWeek,
+      date: date,
+    );
+    return [?weekday, dayName.toUpperCase()].join(' · ');
+  }
+
   static String formatLoad(
     engine.Kg load,
     engine.UnitSystem unitSystem, {

@@ -584,13 +584,13 @@ class _ExerciseVisualCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(
-                      Icons.play_arrow_rounded,
+                      Icons.visibility_outlined,
                       color: AppColors.roseDeep,
                       size: 18,
                     ),
                     const SizedBox(width: AppSpacing.xxs),
                     Text(
-                      'Watch the movement',
+                      'See the movement',
                       style: Theme.of(context).textTheme.labelMedium,
                     ),
                   ],
@@ -656,7 +656,7 @@ class _LearnEntry extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
-                  'Video, setup and where to find it',
+                  'Movement, setup and where to find it',
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
@@ -691,11 +691,6 @@ class _LearnEntry extends StatelessWidget {
                   entry.planExercise.blockRole,
                 ),
                 compact: true,
-                showAngleToggle: false,
-              ),
-              const Align(
-                alignment: Alignment.center,
-                child: _PlayGlyph(size: 42),
               ),
               Positioned(
                 left: AppSpacing.sm,
@@ -742,7 +737,7 @@ class _LearnEntry extends StatelessWidget {
                         ),
                       ),
                       TextSpan(
-                        text: ' · video, setup and where to find it',
+                        text: ' · movement, setup and where to find it',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.inkSoft,
                         ),
@@ -772,50 +767,13 @@ class _LearnVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ExerciseVisual(
-          exerciseId: entry.exerciseId,
-          exerciseName: entry.planExercise.name,
-          blockRoleLabel: SessionPresentation.blockRole(
-            entry.planExercise.blockRole,
-          ),
-          compact: true,
-          showAngleToggle: false,
-        ),
-        const Align(alignment: Alignment.center, child: _PlayGlyph(size: 31)),
-      ],
-    );
-  }
-}
-
-class _PlayGlyph extends StatelessWidget {
-  const _PlayGlyph({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: AppColors.paper.withValues(alpha: 0.94),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.ink.withValues(alpha: 0.16),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+    return ExerciseVisual(
+      exerciseId: entry.exerciseId,
+      exerciseName: entry.planExercise.name,
+      blockRoleLabel: SessionPresentation.blockRole(
+        entry.planExercise.blockRole,
       ),
-      child: Icon(
-        Icons.play_arrow_rounded,
-        color: AppColors.roseDeep,
-        size: size * 0.66,
-      ),
+      compact: true,
     );
   }
 }

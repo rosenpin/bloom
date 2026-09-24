@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -12,8 +10,7 @@ import 'package:womens_gym/core/version_gate.dart';
 import 'package:womens_gym/data/db/app_database.dart';
 import 'package:womens_gym/data/db/schema.dart';
 import 'package:womens_gym/features/session/application/rest_timer_foundation.dart';
-import 'package:womens_gym/features/session/data/exercise_video_cache.dart';
-import 'package:womens_gym/features/session/data/exercise_video_source.dart';
+import 'package:womens_gym/features/session/data/exercise_visual_source.dart';
 import 'package:womens_gym/features/session/data/session_event_codec.dart';
 import 'package:womens_gym/features/session/presentation/exercise_visual.dart';
 
@@ -36,7 +33,7 @@ void main() {
       expect(find.byKey(const ValueKey('learn-strip')), findsOneWidget);
       expect(find.byKey(const ValueKey('new-move-card')), findsNothing);
       expect(find.text('Show me how'), findsOneWidget);
-      expect(find.text('Video, setup and where to find it'), findsOneWidget);
+      expect(find.text('Movement, setup and where to find it'), findsOneWidget);
       expect(find.byKey(const ValueKey('watch-movement')), findsNothing);
       expect(find.text('How do I set up?'), findsNothing);
       expect(find.text('Up next · Dumbbell Lateral Raise'), findsOneWidget);
@@ -53,7 +50,7 @@ void main() {
         find.byKey(const ValueKey('exercise-teach-screen')),
         findsOneWidget,
       );
-      expect(find.byKey(const ValueKey('teach-video')), findsOneWidget);
+      expect(find.byKey(const ValueKey('teach-visual')), findsOneWidget);
       expect(find.text('Beginner friendly'), findsOneWidget);
       expect(find.text('Set up'), findsOneWidget);
       expect(find.text('How it feels'), findsOneWidget);
@@ -79,7 +76,7 @@ void main() {
     expect(find.byKey(const ValueKey('new-move-chip')), findsOneWidget);
     expect(find.text('New move'), findsOneWidget);
     expect(
-      find.text('Show me how · video, setup and where to find it'),
+      find.text('Show me how · movement, setup and where to find it'),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('learn-strip')), findsNothing);
@@ -220,7 +217,7 @@ void main() {
       expect(find.byIcon(Icons.emoji_events_rounded), findsWidgets);
       expect(find.textContaining('Tier '), findsNothing);
       await _tap(tester, const ValueKey('swap-candidate-dumbbell-curl'));
-      expect(find.textContaining('Dumbbell Curl'), findsOneWidget);
+      expect(find.text('First time · Dumbbell Curl'), findsOneWidget);
 
       await _tap(tester, const ValueKey('life-happened-link'));
       await _tap(tester, const ValueKey('life-shorten'));
@@ -431,7 +428,7 @@ void main() {
     await _tap(tester, const ValueKey('session-lets-go'));
     await _tap(tester, const ValueKey('watch-movement'));
     expect(find.byKey(const ValueKey('exercise-teach-screen')), findsOneWidget);
-    expect(find.byKey(const ValueKey('teach-video')), findsOneWidget);
+    expect(find.byKey(const ValueKey('teach-visual')), findsOneWidget);
     expect(find.text('Beginner friendly'), findsOneWidget);
     await tester.tap(find.text('Swaps'));
     await tester.pumpAndSettle();
@@ -562,11 +559,8 @@ final class _SessionHarness {
           (ref) async => const VersionGateDecision.allowed(),
         ),
         restNotificationSchedulerProvider.overrideWithValue(_SilentScheduler()),
-        exerciseVideoCacheProvider.overrideWith(
-          (ref) async => _SilentVideoCache(),
-        ),
-        exerciseVideoPlaybackBuilderProvider.overrideWithValue(
-          _silentVideoPlaybackBuilder,
+        exerciseVisualPlaybackBuilderProvider.overrideWith(
+          (ref) => _silentVisualPlaybackBuilder,
         ),
       ],
     );
@@ -659,19 +653,8 @@ final class _SilentScheduler implements RestNotificationScheduler {
   }) async {}
 }
 
-Widget _silentVideoPlaybackBuilder({
+Widget _silentVisualPlaybackBuilder({
   required Key key,
-  required String exerciseId,
-  required ExerciseVideoSource source,
+  required ExerciseVisualSource source,
   required Widget placeholder,
-  required bool showAngleToggle,
 }) => ColoredBox(key: key, color: Colors.transparent);
-
-final class _SilentVideoCache implements ExerciseVideoCache {
-  @override
-  Future<File> getFile(String remoteUrl) =>
-      throw UnsupportedError('Video files are not loaded in widget tests.');
-
-  @override
-  Future<void> prefetch(Iterable<String> remoteUrls) async {}
-}

@@ -9,7 +9,7 @@ import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../session/application/session_controller.dart';
-import '../../session/data/exercise_media_catalog.dart';
+import '../../session/data/exercise_visual_source.dart';
 import '../domain/plan_presentation.dart';
 
 class PlanDayDetailScreen extends ConsumerWidget {
@@ -248,23 +248,19 @@ class _ExerciseThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final thumbnailUrl = exerciseMediaCatalog[exerciseId]?.sideThumbnailUrl;
+    final hasStills = exercisesWithStills.contains(exerciseId);
     return ClipRRect(
       borderRadius: AppRadii.smallBorder,
       child: SizedBox(
         width: 64,
         height: 64,
-        child: thumbnailUrl == null
+        child: !hasStills
             ? const _ExerciseThumbnailFallback()
-            : Image.network(
-                thumbnailUrl,
+            : Image.asset(
+                'assets/images/exercises/$exerciseId-1.jpg',
                 fit: BoxFit.cover,
                 alignment: Alignment.center,
                 excludeFromSemantics: true,
-                loadingBuilder: (context, child, loadingProgress) =>
-                    loadingProgress == null
-                    ? child
-                    : const _ExerciseThumbnailFallback(),
                 errorBuilder: (context, error, stackTrace) =>
                     const _ExerciseThumbnailFallback(),
               ),

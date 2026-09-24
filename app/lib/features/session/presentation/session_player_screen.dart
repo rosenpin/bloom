@@ -14,7 +14,6 @@ import '../../../core/theme/app_spacing.dart';
 import '../../history/domain/history_presentation.dart';
 import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../plan/domain/plan_presentation.dart';
-import '../application/exercise_video_prefetch.dart';
 import '../application/rest_timer_foundation.dart';
 import '../application/session_controller.dart';
 import '../application/session_lifecycle_service.dart';
@@ -46,7 +45,6 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
   bool _begun = false;
   bool _showComplete = false;
   bool _keepSwapShown = false;
-  String? _prefetchedSessionId;
   _RestPhase? _rest;
   final Map<String, int> _repOverrides = <String, int>{};
   bool _loggingSet = false;
@@ -104,7 +102,6 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
                   child: _SessionError(onBack: () => context.go('/today')),
                 );
               }
-              _queueExerciseVideoPrefetch(runtime);
               if (_rest case final rest?) {
                 return KeyedSubtree(
                   key: ValueKey(
@@ -247,24 +244,6 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
   void _finishCompletion() {
     ref.read(sessionControllerProvider.notifier).clear();
     context.go('/today');
-  }
-
-  void _queueExerciseVideoPrefetch(SessionRuntime runtime) {
-    if (_prefetchedSessionId == runtime.sessionId) return;
-    _prefetchedSessionId = runtime.sessionId;
-    final exerciseIds = [
-      for (final entry in runtime.state.exercises) entry.exerciseId,
-    ];
-    unawaited(_prefetchExerciseVideos(exerciseIds));
-  }
-
-  Future<void> _prefetchExerciseVideos(List<String> exerciseIds) async {
-    try {
-      final cache = await ref.read(exerciseVideoCacheProvider.future);
-      await prefetchExerciseVideos(cache, exerciseIds);
-    } on Object {
-      // Prefetch is best effort. Each visual keeps its placeholder on failure.
-    }
   }
 
   Future<void> _completeSet(
@@ -671,8 +650,14 @@ class _SessionStart extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
-                      '${PlanPresentation.weekdayLabel(runtime.day.dayIndex, runtime.document.plan.days.length)} · $dayName'
-                          .toUpperCase(),
+                      SessionPresentation.workoutLabel(
+                        dayName: dayName,
+                        dayIndex: runtime.day.dayIndex,
+                        daysPerWeek:
+                            runtime.answers.daysPerWeek?.value ??
+                            runtime.document.plan.days.length,
+                        date: runtime.startedAt,
+                      ),
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: AppColors.coral,
                         letterSpacing: 1.2,
@@ -1116,7 +1101,7 @@ class _ExerciseTeachScreenState extends ConsumerState<ExerciseTeachScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     AspectRatio(
-                      key: const ValueKey('teach-video'),
+                      key: const ValueKey('teach-visual'),
                       aspectRatio: 4 / 3,
                       child: ExerciseVisual(
                         exerciseId: widget.entry.exerciseId,
@@ -1546,7 +1531,6 @@ class _OverviewExerciseTile extends StatelessWidget {
           entry.planExercise.blockRole,
         ),
         compact: true,
-        showAngleToggle: false,
       ),
     );
   }

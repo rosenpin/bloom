@@ -1,0 +1,57 @@
+sealed class ExerciseVisualSource {
+  const ExerciseVisualSource();
+}
+
+final class BundledExerciseVideoSource extends ExerciseVisualSource {
+  const BundledExerciseVideoSource(this.assetPath);
+
+  final String assetPath;
+
+  @override
+  bool operator ==(Object other) =>
+      other is BundledExerciseVideoSource && other.assetPath == assetPath;
+
+  @override
+  int get hashCode => assetPath.hashCode;
+}
+
+final class BundledStillsSource extends ExerciseVisualSource {
+  const BundledStillsSource(this.pos1Asset, this.pos2Asset);
+
+  final String pos1Asset;
+  final String pos2Asset;
+
+  @override
+  bool operator ==(Object other) =>
+      other is BundledStillsSource &&
+      other.pos1Asset == pos1Asset &&
+      other.pos2Asset == pos2Asset;
+
+  @override
+  int get hashCode => Object.hash(pos1Asset, pos2Asset);
+}
+
+const bundledExerciseVideoSources = <String, BundledExerciseVideoSource>{
+  'dumbbell-goblet-squat': BundledExerciseVideoSource(
+    'assets/videos/goblet-squat-loop.mp4',
+  ),
+  'dumbbell-lateral-raise': BundledExerciseVideoSource(
+    'assets/videos/lateral-raise-loop.mp4',
+  ),
+};
+
+const exercisesWithStills = <String>{
+  'dumbbell-goblet-squat',
+  'dumbbell-lateral-raise',
+  'barbell-hip-thrust',
+};
+
+ExerciseVisualSource? resolveExerciseVisualSource(String exerciseId) {
+  final bundled = bundledExerciseVideoSources[exerciseId];
+  if (bundled != null) return bundled;
+  if (!exercisesWithStills.contains(exerciseId)) return null;
+  return BundledStillsSource(
+    'assets/images/exercises/$exerciseId-1.jpg',
+    'assets/images/exercises/$exerciseId-2.jpg',
+  );
+}
