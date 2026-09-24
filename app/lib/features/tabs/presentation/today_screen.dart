@@ -31,8 +31,16 @@ class TodayScreen extends ConsumerStatefulWidget {
 class _TodayScreenState extends ConsumerState<TodayScreen>
     with SingleTickerProviderStateMixin {
   bool _updateNudgeDismissed = false;
-  late final AnimationController _entrance = AnimationController(vsync: this);
+  // Created eagerly: a lazy controller first built in dispose() looks up
+  // TickerMode on a deactivated element.
+  late final AnimationController _entrance;
   bool _entranceQueued = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _entrance = AnimationController(vsync: this);
+  }
 
   void _queueEntrance() {
     if (_entranceQueued) return;
