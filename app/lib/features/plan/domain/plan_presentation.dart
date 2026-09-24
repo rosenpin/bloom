@@ -57,6 +57,13 @@ abstract final class PlanPresentation {
     };
   }
 
+  static String shortDayName(engine.PlanDay day) => switch (day.kind) {
+    engine.PlanDayKind.fullBodyA || engine.PlanDayKind.fullBodyB => 'Full body',
+    engine.PlanDayKind.lowerGluteLed ||
+    engine.PlanDayKind.lower => 'Lower body',
+    engine.PlanDayKind.upper => 'Upper body',
+  };
+
   static String weekdayLabel(int dayIndex, int daysPerWeek) {
     final labels = switch (daysPerWeek) {
       2 => const ['MONDAY', 'THURSDAY'],
@@ -75,11 +82,13 @@ abstract final class PlanPresentation {
 
   static String? weekKindExplanation(engine.MesocycleWeekKind kind) =>
       switch (kind) {
+        engine.MesocycleWeekKind.build => 'A steady week to build your rhythm.',
+        engine.MesocycleWeekKind.push =>
+          'A little more work, at your own pace.',
         engine.MesocycleWeekKind.easier =>
           'A little less work on purpose. Your weights stay familiar.',
         engine.MesocycleWeekKind.deload =>
           'This week is lighter on purpose. It sets up the next six weeks.',
-        _ => null,
       };
 
   static String doseLabel(engine.Dose dose) => switch (dose) {
