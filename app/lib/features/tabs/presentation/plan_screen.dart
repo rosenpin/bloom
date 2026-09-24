@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../plan/domain/plan_presentation.dart';
 import '../../plan/presentation/plan_widgets.dart';
@@ -213,10 +214,13 @@ class _PlanViewToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.blushSoft,
-      borderRadius: AppRadii.mediumBorder,
+      color: AppColors.paper,
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadii.mediumBorder,
+        side: const BorderSide(color: AppColors.line),
+      ),
       child: SizedBox(
-        height: 44,
+        height: AppSizes.secondaryButton,
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xxs),
           child: LayoutBuilder(
@@ -234,15 +238,8 @@ class _PlanViewToggle extends StatelessWidget {
                       width: constraints.maxWidth / 2,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: AppColors.paper,
+                          color: AppColors.rose,
                           borderRadius: AppRadii.smallBorder,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.ink.withValues(alpha: 0.1),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
                         ),
                       ),
                     ),
@@ -301,7 +298,7 @@ class _PlanViewToggleItem extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: selected ? AppColors.roseDeep : AppColors.inkSoft,
+              color: selected ? AppColors.paper : AppColors.inkSoft,
               fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
             ),
           ),

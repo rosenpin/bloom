@@ -284,7 +284,7 @@ class OptionCard extends StatelessWidget {
           duration: AppMotion.duration(context, AppMotion.state),
           curve: AppMotion.standardCurve,
           decoration: BoxDecoration(
-            color: selected ? AppColors.blushSoft : AppColors.paper,
+            color: AppColors.paper,
             borderRadius: AppRadii.mediumBorder,
             border: Border.all(
               color: selected ? AppColors.rose : AppColors.line,
@@ -434,7 +434,7 @@ class SquareChoice<T> extends StatelessWidget {
         duration: AppMotion.duration(context, AppMotion.state),
         curve: AppMotion.standardCurve,
         decoration: BoxDecoration(
-          color: selected ? AppColors.blushSoft : AppColors.paper,
+          color: AppColors.paper,
           borderRadius: AppRadii.mediumBorder,
           border: Border.all(
             color: selected ? AppColors.rose : AppColors.line,

@@ -8,6 +8,7 @@ import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../history/domain/history_presentation.dart';
 import '../../onboarding/domain/onboarding_answers.dart';
 import '../../plan/domain/plan_presentation.dart';
@@ -269,7 +270,7 @@ class _QuietRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.roseDeep, size: 20),
+          Icon(icon, color: AppColors.roseDeep, size: AppSizes.iconMedium),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(

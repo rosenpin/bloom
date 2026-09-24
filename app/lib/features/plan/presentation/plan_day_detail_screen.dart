@@ -7,6 +7,7 @@ import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_sizes.dart';
 import '../../onboarding/presentation/onboarding_widgets.dart';
 import '../../session/application/session_controller.dart';
 import '../../session/data/exercise_visual_source.dart';
@@ -252,14 +253,14 @@ class _ExerciseThumbnail extends StatelessWidget {
     return ClipRRect(
       borderRadius: AppRadii.smallBorder,
       child: SizedBox(
-        width: 64,
-        height: 64,
+        width: AppSizes.thumbnailMd,
+        height: AppSizes.thumbnailMd,
         child: !hasStills
             ? const _ExerciseThumbnailFallback()
             : Image.asset(
                 'assets/images/exercises/$exerciseId-1.jpg',
                 fit: BoxFit.cover,
-                alignment: Alignment.center,
+                alignment: const Alignment(0, -0.15),
                 excludeFromSemantics: true,
                 errorBuilder: (context, error, stackTrace) =>
                     const _ExerciseThumbnailFallback(),

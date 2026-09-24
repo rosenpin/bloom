@@ -50,11 +50,19 @@ abstract final class SessionPresentation {
   }
 
   static String effortLabel(engine.EffortLevel level) => switch (level) {
-    engine.EffortLevel.wayTooEasy => 'Way too easy',
-    engine.EffortLevel.aBitEasy => 'A bit easy',
+    engine.EffortLevel.wayTooEasy => 'Very easy',
+    engine.EffortLevel.aBitEasy => 'Easy',
     engine.EffortLevel.justRight => 'Just right',
-    engine.EffortLevel.harderThanIdLike => "Harder than I'd like",
+    engine.EffortLevel.harderThanIdLike => 'Hard',
     engine.EffortLevel.tooHard => 'Too hard',
+  };
+
+  static String effortMeaning(engine.EffortLevel level) => switch (level) {
+    engine.EffortLevel.wayTooEasy => 'Very easy · I could have done lots more',
+    engine.EffortLevel.aBitEasy => 'Easy · a few more in the tank',
+    engine.EffortLevel.justRight => 'Just right · about 3 more left',
+    engine.EffortLevel.harderThanIdLike => 'Hard · maybe 2 more',
+    engine.EffortLevel.tooHard => 'Too hard · nothing left, or my form slipped',
   };
 
   static String blockRole(engine.BlockRole role) => switch (role) {
@@ -111,17 +119,6 @@ abstract final class SessionPresentation {
           engine.TimedDose() => 1,
         },
       };
-
-  static String prescriptionNote(engine.SessionExerciseEntry entry) {
-    if (entry.calibration.phase == engine.CalibrationPhase.settled &&
-        entry.calibration.probeSetsCompleted > 0) {
-      return 'ready for you · found together';
-    }
-    if (entry.setLogs.isNotEmpty) {
-      return 'ready for you · based on your last set';
-    }
-    return 'ready for you · same as last time';
-  }
 
   static int exercisePosition(
     engine.SessionState state,

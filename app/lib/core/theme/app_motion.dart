@@ -13,6 +13,8 @@ abstract final class AppMotion {
   static const Duration tab = Duration(milliseconds: 200);
   static const Duration setPop = Duration(milliseconds: 250);
   static const Duration completion = Duration(milliseconds: 500);
+  static const Duration visualHold = Duration(milliseconds: 1200);
+  static const Duration visualFade = Duration(milliseconds: 250);
 
   static const Curve standardCurve = Curves.easeOutQuart;
   static const Curve entranceCurve = Curves.easeOutQuint;
