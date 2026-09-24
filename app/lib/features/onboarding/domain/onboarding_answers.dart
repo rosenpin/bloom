@@ -66,16 +66,15 @@ final class OnboardingAnswers {
     if (goal == null) return '/onboarding/goal';
     if (daysPerWeek == null) return '/onboarding/days';
     if (sessionMinutes == null) return '/onboarding/session-length';
-    if (experienceTier == null || gymComfort == null) {
-      return '/onboarding/experience';
-    }
+    if (experienceTier == null) return '/onboarding/experience';
+    if (gymComfort == null) return '/onboarding/comfort';
     if (emphasis == null) return '/onboarding/emphasis';
     return '/onboarding/activities';
   }
 
   engine.Profile toEngineProfile() {
     if (!hasAllQuizAnswers) {
-      throw StateError('The seven onboarding questions are not complete.');
+      throw StateError('The onboarding questions are not complete.');
     }
 
     return engine.Profile(

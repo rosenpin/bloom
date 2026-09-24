@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:programming_engine/programming_engine.dart' as engine;
@@ -21,6 +22,29 @@ void _completeStep(
 ) {
   ref.read(appEventsLoggerProvider).onboardingStepCompleted(step);
   context.go(nextPath);
+}
+
+final _advancingSteps = <int>{};
+
+Future<void> _selectAndAdvance(
+  WidgetRef ref,
+  BuildContext context,
+  int step,
+  String nextPath,
+  OnboardingAnswers Function(OnboardingAnswers) selection,
+) async {
+  if (!_advancingSteps.add(step)) return;
+  try {
+    HapticFeedback.selectionClick();
+    await ref.read(onboardingRepositoryProvider).update(selection);
+    if (!context.mounted) return;
+    await Future<void>.delayed(
+      AppMotion.duration(context, const Duration(milliseconds: 280)),
+    );
+    if (context.mounted) _completeStep(ref, context, step, nextPath);
+  } finally {
+    _advancingSteps.remove(step);
+  }
 }
 
 class WelcomeScreen extends ConsumerStatefulWidget {
@@ -87,7 +111,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        'Seven quick questions, then a week of workouts built around you. Every move shown, every weight decided.',
+                        'A few quick questions. Then a six-week plan built around you.',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: AppColors.inkSoft,
                           height: 1.45,
@@ -132,42 +156,22 @@ class AgeScreen extends ConsumerWidget {
         step: 1,
         onBack: () => context.go('/onboarding'),
         title: 'How old are you?',
-        subtitle:
-            "Every decade starts differently. We'll pace your plan to yours.",
-        onContinue: answers.ageBand == null
-            ? null
-            : () => _completeStep(ref, context, 1, '/onboarding/goal'),
+        subtitle: '',
         child: Column(
           children: [
-            GridView.count(
-              crossAxisCount: 3,
-              crossAxisSpacing: AppSpacing.sm,
-              mainAxisSpacing: AppSpacing.sm,
-              childAspectRatio: 1.15,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                for (final choice in choices.entries)
-                  SquareChoice(
-                    key: ValueKey('age-${choice.key.name}'),
-                    value: choice.key,
-                    label: choice.value,
-                    selected: answers.ageBand == choice.key,
-                    onSelected: (value) => ref
-                        .read(onboardingRepositoryProvider)
-                        .update((current) => current.copyWith(ageBand: value)),
-                  ),
-              ],
-            ),
-            if (answers.ageBand == engine.AgeBand.age60Plus) ...[
-              const SizedBox(height: AppSpacing.md),
-              const SoftNote(
-                color: AppColors.sageSoft,
-                iconColor: AppColors.sage,
-                text:
-                    'Machine-first moves, longer warm-ups, joint-friendly swaps. Strength is the best thing you can do for your bones.',
+            for (final choice in choices.entries)
+              OptionCard(
+                key: ValueKey('age-${choice.key.name}'),
+                title: choice.value,
+                selected: answers.ageBand == choice.key,
+                onTap: () => _selectAndAdvance(
+                  ref,
+                  context,
+                  1,
+                  '/onboarding/goal',
+                  (current) => current.copyWith(ageBand: choice.key),
+                ),
               ),
-            ],
           ],
         ),
       );
@@ -183,17 +187,11 @@ class GoalScreen extends ConsumerWidget {
     const choices = <engine.Goal, (String, String)>{
       engine.Goal.tonedAndDefined: (
         'Toned & defined',
-        'Firm up, build lean shape.',
+        'Build a strong, lean shape.',
       ),
-      engine.Goal.stronger: ('Stronger', 'Lift more, carry more, ache less.'),
-      engine.Goal.buildCurves: (
-        'Build curves',
-        'Grow specific areas, usually glutes.',
-      ),
-      engine.Goal.feelHealthier: (
-        'Feel healthier',
-        'Energy, mood, stronger bones.',
-      ),
+      engine.Goal.stronger: ('Stronger', 'Feel stronger every day.'),
+      engine.Goal.buildCurves: ('Build curves', 'Grow the areas you choose.'),
+      engine.Goal.feelHealthier: ('Feel healthier', 'Move well and feel good.'),
     };
     return _withAnswers(
       ref,
@@ -202,9 +200,6 @@ class GoalScreen extends ConsumerWidget {
         onBack: () => context.go('/onboarding/age'),
         title: 'What are we working toward?',
         subtitle: 'You can change this anytime.',
-        onContinue: answers.goal == null
-            ? null
-            : () => _completeStep(ref, context, 2, '/onboarding/days'),
         child: Column(
           children: [
             for (final choice in choices.entries)
@@ -213,9 +208,20 @@ class GoalScreen extends ConsumerWidget {
                 title: choice.value.$1,
                 description: choice.value.$2,
                 selected: answers.goal == choice.key,
-                onTap: () => ref
-                    .read(onboardingRepositoryProvider)
-                    .update((current) => current.copyWith(goal: choice.key)),
+                onTap: () => _selectAndAdvance(
+                  ref,
+                  context,
+                  2,
+                  '/onboarding/days',
+                  (current) => current.copyWith(goal: choice.key),
+                ),
+              ),
+            if (answers.ageBand == engine.AgeBand.age60Plus)
+              const SoftNote(
+                color: AppColors.sageSoft,
+                iconColor: AppColors.sage,
+                text:
+                    'We will start with comfortable setups and give you more warm-up time.',
               ),
           ],
         ),
@@ -235,11 +241,7 @@ class DaysScreen extends ConsumerWidget {
         step: 3,
         onBack: () => context.go('/onboarding/goal'),
         title: 'How often can you get to the gym?',
-        subtitle: 'Be honest, not ambitious.',
-        onContinue: answers.daysPerWeek == null
-            ? null
-            : () =>
-                  _completeStep(ref, context, 3, '/onboarding/session-length'),
+        subtitle: '',
         child: Column(
           children: [
             Row(
@@ -254,27 +256,17 @@ class DaysScreen extends ConsumerWidget {
                       label: '${value.value}',
                       caption: 'days',
                       selected: answers.daysPerWeek == value,
-                      onSelected: (selection) => ref
-                          .read(onboardingRepositoryProvider)
-                          .update(
-                            (current) =>
-                                current.copyWith(daysPerWeek: selection),
-                          ),
+                      onSelected: (selection) => _selectAndAdvance(
+                        ref,
+                        context,
+                        3,
+                        '/onboarding/session-length',
+                        (current) => current.copyWith(daysPerWeek: selection),
+                      ),
                     ),
                   ),
                 ],
               ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            SoftNote(
-              icon: Icons.schedule_rounded,
-              text: switch (answers.daysPerWeek) {
-                engine.TrainingDaysPerWeek.two =>
-                  'Two steady days can build real strength without taking over your week.',
-                engine.TrainingDaysPerWeek.four =>
-                  'Four gym days gives each session a little more breathing room.',
-                _ => 'Three days is the sweet spot on a busy schedule.',
-              },
             ),
           ],
         ),
@@ -294,10 +286,7 @@ class SessionLengthScreen extends ConsumerWidget {
         step: 4,
         onBack: () => context.go('/onboarding/days'),
         title: 'How long have you got?',
-        subtitle: 'Workouts should fit your life, not the other way around.',
-        onContinue: answers.sessionMinutes == null
-            ? null
-            : () => _completeStep(ref, context, 4, '/onboarding/experience'),
+        subtitle: '',
         child: Column(
           children: [
             Row(
@@ -312,21 +301,18 @@ class SessionLengthScreen extends ConsumerWidget {
                       label: '${value.value}',
                       caption: 'minutes',
                       selected: answers.sessionMinutes == value,
-                      onSelected: (selection) => ref
-                          .read(onboardingRepositoryProvider)
-                          .update(
-                            (current) =>
-                                current.copyWith(sessionMinutes: selection),
-                          ),
+                      onSelected: (selection) => _selectAndAdvance(
+                        ref,
+                        context,
+                        4,
+                        '/onboarding/experience',
+                        (current) =>
+                            current.copyWith(sessionMinutes: selection),
+                      ),
                     ),
                   ),
                 ],
               ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            const SoftNote(
-              text:
-                  "30 focused minutes is genuinely enough. On loud days we'll shrink any workout to its core moves.",
             ),
           ],
         ),
@@ -345,72 +331,26 @@ class ExperienceScreen extends ConsumerWidget {
       engine.ProfileExperienceTier.beenAWhile: 'Been a while',
       engine.ProfileExperienceTier.trainsRegularly: 'I train regularly',
     };
-    const comfortChoices = <engine.GymComfort, (String, String)>{
-      engine.GymComfort.low: (
-        'Still finding my feet',
-        'Machine setups, quiet corners, busy-gym swaps.',
-      ),
-      engine.GymComfort.mostlyFine: (
-        'Mostly fine',
-        'Guidance one tap away when you want it.',
-      ),
-      engine.GymComfort.totallyAtHome: (
-        'Totally at home',
-        "We'll keep the tips out of your way.",
-      ),
-    };
     return _withAnswers(
       ref,
       (answers) => QuizPage(
         step: 5,
         onBack: () => context.go('/onboarding/session-length'),
-        title: 'Where are you starting from?',
-        subtitle: 'This shapes how much guidance we build in.',
-        onContinue: answers.experienceTier == null || answers.gymComfort == null
-            ? null
-            : () => _completeStep(ref, context, 5, '/onboarding/emphasis'),
+        title: 'Lifting experience',
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SectionLabel('Lifting experience'),
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.xxs),
-              decoration: const BoxDecoration(
-                color: AppColors.blushSoft,
-                borderRadius: AppRadii.smallBorder,
-              ),
-              child: Row(
-                children: [
-                  for (final choice in experienceLabels.entries)
-                    Expanded(
-                      child: _SegmentChoice(
-                        key: ValueKey('experience-${choice.key.name}'),
-                        label: choice.value,
-                        selected: answers.experienceTier == choice.key,
-                        onTap: () => ref
-                            .read(onboardingRepositoryProvider)
-                            .update(
-                              (current) =>
-                                  current.copyWith(experienceTier: choice.key),
-                            ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            const SectionLabel('On the gym floor, I feel…'),
-            for (final choice in comfortChoices.entries)
+            for (final choice in experienceLabels.entries)
               OptionCard(
-                key: ValueKey('comfort-${choice.key.name}'),
-                title: choice.value.$1,
-                description: choice.value.$2,
-                selected: answers.gymComfort == choice.key,
-                onTap: () => ref
-                    .read(onboardingRepositoryProvider)
-                    .update(
-                      (current) => current.copyWith(gymComfort: choice.key),
-                    ),
+                key: ValueKey('experience-${choice.key.name}'),
+                title: choice.value,
+                selected: answers.experienceTier == choice.key,
+                onTap: () => _selectAndAdvance(
+                  ref,
+                  context,
+                  5,
+                  '/onboarding/comfort',
+                  (current) => current.copyWith(experienceTier: choice.key),
+                ),
               ),
           ],
         ),
@@ -419,47 +359,38 @@ class ExperienceScreen extends ConsumerWidget {
   }
 }
 
-class _SegmentChoice extends StatelessWidget {
-  const _SegmentChoice({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    super.key,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+class ComfortScreen extends ConsumerWidget {
+  const ComfortScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: AppMotion.duration(context, AppMotion.state),
-      curve: AppMotion.standardCurve,
-      decoration: BoxDecoration(
-        color: selected ? AppColors.paper : AppColors.blushSoft,
-        borderRadius: AppRadii.smallBorder,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: AppRadii.smallBorder,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.xxs,
-              vertical: AppSpacing.sm,
-            ),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: selected ? AppColors.ink : AppColors.inkSoft,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+  Widget build(BuildContext context, WidgetRef ref) {
+    const choices = <engine.GymComfort, String>{
+      engine.GymComfort.low: 'Still finding my feet',
+      engine.GymComfort.mostlyFine: 'Mostly fine',
+      engine.GymComfort.totallyAtHome: 'Totally at home',
+    };
+    return _withAnswers(
+      ref,
+      (answers) => QuizPage(
+        step: 6,
+        onBack: () => context.go('/onboarding/experience'),
+        title: 'On the gym floor, I feel…',
+        child: Column(
+          children: [
+            for (final choice in choices.entries)
+              OptionCard(
+                key: ValueKey('comfort-${choice.key.name}'),
+                title: choice.value,
+                selected: answers.gymComfort == choice.key,
+                onTap: () => _selectAndAdvance(
+                  ref,
+                  context,
+                  6,
+                  '/onboarding/emphasis',
+                  (current) => current.copyWith(gymComfort: choice.key),
+                ),
               ),
-            ),
-          ),
+          ],
         ),
       ),
     );
@@ -482,36 +413,32 @@ class EmphasisScreen extends ConsumerWidget {
     return _withAnswers(
       ref,
       (answers) => QuizPage(
-        step: 6,
-        onBack: () => context.go('/onboarding/experience'),
+        step: 7,
+        onBack: () => context.go('/onboarding/comfort'),
         title: 'Anywhere you want extra focus?',
-        subtitle: "You'll train everything. This just tilts the balance.",
-        onContinue: answers.emphasis == null
-            ? null
-            : () => _completeStep(ref, context, 6, '/onboarding/activities'),
-        child: Column(
+        subtitle: "You'll train everything.",
+        child: GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: AppSpacing.sm,
+          mainAxisSpacing: AppSpacing.sm,
+          childAspectRatio: 1.12,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
           children: [
-            _BodyMap(emphasis: answers.emphasis),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xs,
-              children: [
-                for (final choice in choices.entries)
-                  PillChoice(
-                    key: ValueKey('emphasis-${choice.key.name}'),
-                    value: choice.key,
-                    label: choice.value,
-                    selected: answers.emphasis == choice.key,
-                    onSelected: (selection) => ref
-                        .read(onboardingRepositoryProvider)
-                        .update(
-                          (current) => current.copyWith(emphasis: selection),
-                        ),
-                  ),
-              ],
-            ),
+            for (final choice in choices.entries)
+              _EmphasisTile(
+                key: ValueKey('emphasis-${choice.key.name}'),
+                label: choice.value,
+                image: 'assets/images/emphasis/${choice.key.name}.jpg',
+                selected: answers.emphasis == choice.key,
+                onTap: () => _selectAndAdvance(
+                  ref,
+                  context,
+                  7,
+                  '/onboarding/activities',
+                  (current) => current.copyWith(emphasis: choice.key),
+                ),
+              ),
           ],
         ),
       ),
@@ -519,69 +446,83 @@ class EmphasisScreen extends ConsumerWidget {
   }
 }
 
-class _BodyMap extends StatelessWidget {
-  const _BodyMap({required this.emphasis});
+class _EmphasisTile extends StatelessWidget {
+  const _EmphasisTile({
+    required this.label,
+    required this.image,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
 
-  final engine.Emphasis? emphasis;
+  final String label;
+  final String image;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final accentAlignment = switch (emphasis) {
-      engine.Emphasis.back => Alignment.topCenter,
-      engine.Emphasis.arms => Alignment.centerLeft,
-      engine.Emphasis.core => Alignment.center,
-      engine.Emphasis.legs => Alignment.bottomCenter,
-      _ => const Alignment(0, 0.35),
-    };
-    return Center(
-      child: SizedBox(
-        width: AppSpacing.xxl * 3,
-        height: AppSpacing.xxl * 4,
-        child: Stack(
-          alignment: Alignment.topCenter,
-          children: [
-            Positioned(
-              top: 0,
-              child: Container(
-                width: AppSpacing.xl,
-                height: AppSpacing.xl,
-                decoration: const BoxDecoration(
-                  color: AppColors.line,
-                  shape: BoxShape.circle,
-                ),
+    return AppPressScale(
+      child: AnimatedScale(
+        scale: selected ? 1.02 : 1,
+        duration: AppMotion.duration(context, AppMotion.state),
+        curve: AppMotion.standardCurve,
+        child: AnimatedContainer(
+          duration: AppMotion.duration(context, AppMotion.state),
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.rose : AppColors.paper,
+            borderRadius: AppRadii.mediumBorder,
+          ),
+          child: Material(
+            borderRadius: AppRadii.mediumBorder,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(image, fit: BoxFit.cover),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Color(0xAA2B2028)],
+                        stops: [0.48, 1],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: AppSpacing.sm,
+                    right: AppSpacing.sm,
+                    bottom: AppSpacing.sm,
+                    child: Text(
+                      label,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.paper,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (selected)
+                    const Positioned(
+                      top: AppSpacing.sm,
+                      right: AppSpacing.sm,
+                      child: CircleAvatar(
+                        radius: 13,
+                        backgroundColor: AppColors.rose,
+                        child: Icon(
+                          Icons.check_rounded,
+                          size: 18,
+                          color: AppColors.paper,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-            Positioned(
-              top: AppSpacing.xl,
-              bottom: AppSpacing.sm,
-              child: Container(
-                width: AppSpacing.xxl,
-                decoration: const BoxDecoration(
-                  color: AppColors.line,
-                  borderRadius: AppRadii.largeBorder,
-                ),
-              ),
-            ),
-            AnimatedAlign(
-              alignment: accentAlignment,
-              duration: AppMotion.duration(context, AppMotion.state),
-              curve: AppMotion.standardCurve,
-              child: AnimatedContainer(
-                duration: AppMotion.duration(context, AppMotion.state),
-                curve: AppMotion.standardCurve,
-                width: AppSpacing.xxl,
-                height: AppSpacing.lg,
-                decoration: BoxDecoration(
-                  color:
-                      emphasis == null || emphasis == engine.Emphasis.balanced
-                      ? AppColors.blush
-                      : AppColors.coral,
-                  borderRadius: AppRadii.largeBorder,
-                  border: Border.all(color: AppColors.rose),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -594,25 +535,25 @@ class ActivitiesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     const choices = <engine.ActivityKind, (String, String)>{
-      engine.ActivityKind.running: ('Cardio', 'Runs, spin, incline walks.'),
+      engine.ActivityKind.running: ('Cardio', 'Runs, spin, walks.'),
       engine.ActivityKind.yogaPilates: (
         'Yoga or pilates',
-        'Studio or at home.',
+        'At home or in class.',
       ),
       engine.ActivityKind.groupClasses: (
         'Classes or sport',
-        'Netball, spin, climbing, dance.',
+        'Dance, climbing, team sports.',
       ),
     };
     return _withAnswers(
       ref,
       (answers) => QuizPage(
-        step: 7,
+        step: 8,
         onBack: () => context.go('/onboarding/emphasis'),
         title: 'What else do you do?',
-        subtitle: "So your gym days land where you've got the energy for them.",
+        subtitle: '',
         onContinue: () =>
-            _completeStep(ref, context, 7, '/onboarding/menstrual'),
+            _completeStep(ref, context, 8, '/onboarding/menstrual'),
         child: Column(
           children: [
             for (final choice in choices.entries)
@@ -622,11 +563,6 @@ class ActivitiesScreen extends ConsumerWidget {
                 description: choice.value.$2,
                 frequency: answers.otherActivities[choice.key] ?? 0,
               ),
-            const SoftNote(
-              icon: Icons.arrow_upward_rounded,
-              text:
-                  "Three sessions a week already? We'll keep your whole week in view so nothing feels like a slog.",
-            ),
           ],
         ),
       ),
@@ -666,17 +602,17 @@ class _ActivityCard extends ConsumerWidget {
               child: Wrap(
                 spacing: AppSpacing.xs,
                 runSpacing: AppSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   for (final value in const [1, 2, 3])
                     PillChoice(
                       key: ValueKey('activity-${kind.name}-$value'),
                       value: value,
-                      label: value == 3
-                          ? '3×+'
-                          : '$value×${value == 2 ? ' a week' : ''}',
+                      label: value == 3 ? '3×+' : '$value×',
                       selected: frequency == value,
                       onSelected: (selection) => _setFrequency(ref, selection),
                     ),
+                  Text('a week', style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),
             )
@@ -705,12 +641,8 @@ class MenstrualScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return _withAnswers(ref, (answers) {
-      final enabled =
-          answers.menstrualPreference != MenstrualPreference.declined &&
-          answers.menstrualPreference != MenstrualPreference.notApplicable;
       final ready =
-          !enabled ||
-          (answers.lastPeriodStart != null && answers.menstrualGap != null);
+          answers.lastPeriodStart != null && answers.menstrualGap != null;
       void goBack() => context.go('/onboarding/activities');
       return OnboardingBackScope(
         onBack: goBack,
@@ -719,12 +651,12 @@ class MenstrualScreen extends ConsumerWidget {
           body: SafeArea(
             child: Column(
               children: [
-                OnboardingProgress(optional: true, onBack: goBack),
+                OnboardingProgress(step: 9, onBack: goBack),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.lg,
-                      AppSpacing.md,
+                      AppSpacing.lg,
                       AppSpacing.lg,
                       AppSpacing.sm,
                     ),
@@ -734,121 +666,34 @@ class MenstrualScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(AppSpacing.md),
-                              decoration: const BoxDecoration(
-                                color: AppColors.lavenderSoft,
-                                borderRadius: AppRadii.mediumBorder,
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.nightlight_round,
-                                    color: AppColors.lavender,
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Work with your menstrual cycle',
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.titleMedium,
-                                        ),
-                                        Text(
-                                          'Two questions. No tracking, ever.',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: AppColors.inkSoft,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  BloomToggle(
-                                    key: const ValueKey('menstrual-toggle'),
-                                    value: enabled,
-                                    onChanged: (value) => ref
-                                        .read(onboardingRepositoryProvider)
-                                        .update(
-                                          (current) => current.copyWith(
-                                            menstrualPreference: value
-                                                ? MenstrualPreference.undecided
-                                                : MenstrualPreference.declined,
-                                            lastPeriodStart: value
-                                                ? current.lastPeriodStart
-                                                : null,
-                                            menstrualGap: value
-                                                ? current.menstrualGap
-                                                : null,
-                                          ),
-                                        ),
-                                  ),
-                                ],
-                              ),
+                            Text(
+                              'When did your last period start?',
+                              style: Theme.of(context).textTheme.headlineMedium,
                             ),
-                            if (enabled) ...[
-                              const SizedBox(height: AppSpacing.lg),
-                              const SectionLabel(
-                                'When did your last period start?',
-                              ),
-                              _PeriodDateChoices(answers: answers),
-                              const SizedBox(height: AppSpacing.lg),
-                              const SectionLabel('Usual gap between periods'),
-                              SlidingSegmentedPicker<MenstrualGap>(
-                                options: const {
-                                  MenstrualGap.days26: '26 days',
-                                  MenstrualGap.days28: '28 days',
-                                  MenstrualGap.days30Plus: '30+',
-                                  MenstrualGap.notSure: 'Not sure',
-                                },
-                                value: answers.menstrualGap,
-                                segmentKeyBuilder: (gap) =>
-                                    ValueKey('menstrual-gap-${gap.name}'),
-                                onChanged: (value) => ref
-                                    .read(onboardingRepositoryProvider)
-                                    .update(
-                                      (current) => current.copyWith(
-                                        menstrualPreference:
-                                            MenstrualPreference.optedIn,
-                                        menstrualGap: value,
-                                      ),
+                            const SizedBox(height: AppSpacing.lg),
+                            _PeriodDateChoices(answers: answers),
+                            const SizedBox(height: AppSpacing.xl),
+                            const SectionLabel('Usual gap'),
+                            SlidingSegmentedPicker<MenstrualGap>(
+                              options: const {
+                                MenstrualGap.days26: '26 days',
+                                MenstrualGap.days28: '28 days',
+                                MenstrualGap.days30Plus: '30+',
+                                MenstrualGap.notSure: 'Not sure',
+                              },
+                              value: answers.menstrualGap,
+                              segmentKeyBuilder: (gap) =>
+                                  ValueKey('menstrual-gap-${gap.name}'),
+                              onChanged: (value) => ref
+                                  .read(onboardingRepositoryProvider)
+                                  .update(
+                                    (current) => current.copyWith(
+                                      menstrualPreference:
+                                          MenstrualPreference.optedIn,
+                                      menstrualGap: value,
                                     ),
-                              ),
-                              const SizedBox(height: AppSpacing.lg),
-                              OptionCard(
-                                key: const ValueKey('menstrual-not-applicable'),
-                                title: 'None of this fits me',
-                                description:
-                                    "On the pill, irregular, or no periods? We'll just ask how you feel instead.",
-                                selected:
-                                    answers.menstrualPreference ==
-                                    MenstrualPreference.notApplicable,
-                                trailing: const Icon(
-                                  Icons.chevron_right_rounded,
-                                  color: AppColors.inkFaint,
-                                ),
-                                onTap: () => _finishWithoutMenstrualData(
-                                  context,
-                                  ref,
-                                  MenstrualPreference.notApplicable,
-                                ),
-                              ),
-                            ] else ...[
-                              const SizedBox(height: AppSpacing.lg),
-                              const SoftNote(
-                                color: AppColors.lavenderSoft,
-                                iconColor: AppColors.lavender,
-                                icon: Icons.favorite_border_rounded,
-                                text:
-                                    "That's completely fine. This will never change the plan we build today.",
-                              ),
-                            ],
+                                  ),
+                            ),
                           ],
                         ),
                       ),
@@ -862,30 +707,51 @@ class MenstrualScreen extends ConsumerWidget {
                     AppSpacing.lg,
                     AppSpacing.lg,
                   ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 440),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          FilledButton(
-                            key: const ValueKey('menstrual-finish'),
-                            onPressed: ready
-                                ? () => context.go('/onboarding/generating')
-                                : null,
-                            child: const Text("That's everything"),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Private to you. Never used for ads.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.inkSoft),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        FilledButton(
+                          key: const ValueKey('menstrual-finish'),
+                          onPressed: ready
+                              ? () {
+                                  _completeStep(
+                                    ref,
+                                    context,
+                                    9,
+                                    '/onboarding/generating',
+                                  );
+                                }
+                              : null,
+                          child: const Text('Build my plan'),
+                        ),
+                        TextButton(
+                          key: const ValueKey('menstrual-not-applicable'),
+                          onPressed: () => _finishWithoutMenstrualData(
+                            context,
+                            ref,
+                            MenstrualPreference.notApplicable,
                           ),
-                          TextButton(
-                            key: const ValueKey('menstrual-skip'),
-                            onPressed: () => _finishWithoutMenstrualData(
-                              context,
-                              ref,
-                              MenstrualPreference.declined,
-                            ),
-                            child: const Text("Skip this for now"),
+                          child: const Text("This doesn't fit me"),
+                        ),
+                        TextButton(
+                          key: const ValueKey('menstrual-skip'),
+                          onPressed: () => _finishWithoutMenstrualData(
+                            context,
+                            ref,
+                            MenstrualPreference.declined,
                           ),
-                        ],
-                      ),
+                          child: const Text('Skip'),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -911,7 +777,9 @@ class MenstrualScreen extends ConsumerWidget {
             menstrualGap: null,
           ),
         );
-    if (context.mounted) context.go('/onboarding/generating');
+    if (context.mounted) {
+      _completeStep(ref, context, 9, '/onboarding/generating');
+    }
   }
 }
 
@@ -925,8 +793,8 @@ class _PeriodDateChoices extends ConsumerWidget {
     final now = ref.read(clockProvider)();
     final choices = <(String, String?, DateTime)>[
       ('Today', null, now),
-      ('5 days', 'ago', now.subtract(const Duration(days: 5))),
-      ('2 wks', 'ago', now.subtract(const Duration(days: 14))),
+      ('5 days ago', null, now.subtract(const Duration(days: 5))),
+      ('2 weeks ago', null, now.subtract(const Duration(days: 14))),
     ];
     return Row(
       children: [
@@ -954,8 +822,7 @@ class _PeriodDateChoices extends ConsumerWidget {
             child: SquareChoice(
               key: const ValueKey('menstrual-date-pick'),
               value: now,
-              label: 'Pick',
-              caption: 'a date',
+              label: 'Pick a date',
               compact: true,
               selected:
                   answers.lastPeriodStart != null &&
@@ -1022,6 +889,10 @@ class GeneratingScreen extends ConsumerStatefulWidget {
 class _GeneratingScreenState extends ConsumerState<GeneratingScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  final _lineTimers = <Timer>[];
+  int _visibleLines = 0;
+  int _completedLines = 0;
+  bool _linesScheduled = false;
   Object? _error;
 
   @override
@@ -1034,6 +905,27 @@ class _GeneratingScreenState extends ConsumerState<GeneratingScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!_linesScheduled) {
+      _linesScheduled = true;
+      final minimum = ref.read(minimumGenerationDelayProvider);
+      if (AppMotion.isReduced(context) || minimum == Duration.zero) {
+        _visibleLines = 3;
+        _completedLines = 3;
+      } else {
+        for (var index = 0; index < 3; index++) {
+          _lineTimers.add(
+            Timer(minimum * (index * 2 + 1) ~/ 7, () {
+              if (mounted) setState(() => _visibleLines = index + 1);
+            }),
+          );
+          _lineTimers.add(
+            Timer(minimum * (index * 2 + 2) ~/ 7, () {
+              if (mounted) setState(() => _completedLines = index + 1);
+            }),
+          );
+        }
+      }
+    }
     if (_controller.isAnimating || _controller.isCompleted) return;
     _controller.duration = AppMotion.duration(context, AppMotion.entrance);
     _controller.forward();
@@ -1055,6 +947,9 @@ class _GeneratingScreenState extends ConsumerState<GeneratingScreen>
 
   @override
   void dispose() {
+    for (final timer in _lineTimers) {
+      timer.cancel();
+    }
     _controller.dispose();
     super.dispose();
   }
@@ -1117,7 +1012,7 @@ class _GeneratingScreenState extends ConsumerState<GeneratingScreen>
                             ),
                             const SizedBox(height: AppSpacing.xl),
                             Text(
-                              'Designing your week…',
+                              'Building your plan…',
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.headlineMedium,
                             ),
@@ -1131,16 +1026,25 @@ class _GeneratingScreenState extends ConsumerState<GeneratingScreen>
                             const SizedBox(height: AppSpacing.xl),
                             _GenerationLine(
                               text:
-                                  'Balancing your ${_emphasisLabel(answers?.emphasis)} focus',
-                              done: true,
+                                  answers?.emphasis == engine.Emphasis.balanced
+                                  ? 'Planning strength for your whole body'
+                                  : 'Balancing your ${_emphasisLabel(answers?.emphasis)} focus',
+                              visible: _visibleLines >= 1,
+                              done: _completedLines >= 1,
                             ),
-                            const _GenerationLine(
-                              text: 'Choosing beginner-friendly setups',
-                              done: true,
+                            _GenerationLine(
+                              text:
+                                  answers?.experienceTier ==
+                                      engine.ProfileExperienceTier.newToIt
+                                  ? 'Choosing a comfortable start'
+                                  : 'Matching your lifting experience',
+                              visible: _visibleLines >= 2,
+                              done: _completedLines >= 2,
                             ),
                             _GenerationLine(
                               text: _activityGenerationLine(answers),
-                              done: false,
+                              visible: _visibleLines >= 3,
+                              done: _completedLines >= 3,
                             ),
                           ],
                         )
@@ -1182,41 +1086,62 @@ class _GeneratingScreenState extends ConsumerState<GeneratingScreen>
 }
 
 class _GenerationLine extends StatelessWidget {
-  const _GenerationLine({required this.text, required this.done});
+  const _GenerationLine({
+    required this.text,
+    required this.visible,
+    required this.done,
+  });
 
   final String text;
+  final bool visible;
   final bool done;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        children: [
-          done
-              ? const Icon(
-                  Icons.check_rounded,
-                  color: AppColors.sage,
-                  size: AppSpacing.lg,
-                )
-              : const SizedBox.square(
-                  dimension: AppSpacing.lg,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.rose,
-                    backgroundColor: AppColors.blush,
+    return AnimatedSlide(
+      offset: visible ? Offset.zero : const Offset(0, 0.25),
+      duration: AppMotion.duration(context, AppMotion.state),
+      curve: AppMotion.standardCurve,
+      child: AnimatedOpacity(
+        opacity: visible ? 1 : 0,
+        duration: AppMotion.duration(context, AppMotion.state),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: Row(
+            children: [
+              AnimatedSwitcher(
+                duration: AppMotion.duration(context, AppMotion.state),
+                transitionBuilder: (child, animation) =>
+                    ScaleTransition(scale: animation, child: child),
+                child: done
+                    ? const Icon(
+                        key: ValueKey('generation-check'),
+                        Icons.check_rounded,
+                        color: AppColors.sage,
+                        size: AppSpacing.lg,
+                      )
+                    : const SizedBox.square(
+                        key: ValueKey('generation-spinner'),
+                        dimension: AppSpacing.lg,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.rose,
+                          backgroundColor: AppColors.blush,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  text,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: done ? AppColors.ink : AppColors.inkSoft,
                   ),
                 ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              text,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: done ? AppColors.ink : AppColors.inkSoft,
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1245,7 +1170,7 @@ String _emphasisLabel(engine.Emphasis? emphasis) => switch (emphasis) {
 };
 
 String _generationSummary(OnboardingAnswers? answers) {
-  if (answers == null) return 'A week built around you.';
+  if (answers == null) return 'Six weeks built around you.';
   final days = answers.daysPerWeek?.value;
   return '${days ?? 'Your'} gym days, ${_emphasisLabel(answers.emphasis)} focus, built around real life.';
 }

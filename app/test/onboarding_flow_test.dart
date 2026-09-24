@@ -50,29 +50,23 @@ void main() {
         (await container.read(onboardingRepositoryProvider).load())?.ageBand,
         engine.AgeBand.age30To39,
       );
-      await _continue(tester);
-
       await tester.tap(find.byKey(const ValueKey('goal-tonedAndDefined')));
       await tester.pumpAndSettle();
-      await _continue(tester);
 
       await tester.tap(find.byKey(const ValueKey('days-3')));
       await tester.pumpAndSettle();
-      await _continue(tester);
 
       await tester.tap(find.byKey(const ValueKey('minutes-45')));
       await tester.pumpAndSettle();
-      await _continue(tester);
 
       await tester.tap(find.byKey(const ValueKey('experience-newToIt')));
       await tester.pumpAndSettle();
+      expect(find.text('On the gym floor, I feel…'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('comfort-low')));
       await tester.pumpAndSettle();
-      await _continue(tester);
 
       await tester.tap(find.byKey(const ValueKey('emphasis-glutes')));
       await tester.pumpAndSettle();
-      await _continue(tester);
 
       await tester.tap(find.byKey(const ValueKey('activity-yogaPilates')));
       await tester.pumpAndSettle();
@@ -85,7 +79,7 @@ void main() {
 
       expect(find.byKey(const ValueKey('plan-reveal-screen')), findsOneWidget);
       expect(find.textContaining('Strong & Toned'), findsOneWidget);
-      expect(find.text('Start my first workout'), findsOneWidget);
+      expect(find.text('Start my plan'), findsOneWidget);
 
       final answers = await container.read(onboardingRepositoryProvider).load();
       expect(answers?.unitSystem, engine.UnitSystem.imperial);

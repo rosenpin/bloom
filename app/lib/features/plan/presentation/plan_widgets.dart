@@ -15,6 +15,7 @@ class PlanDayCard extends StatelessWidget {
     required this.answers,
     super.key,
     this.showImage = true,
+    this.prominentImage = false,
     this.state = PlanDayCardState.upcoming,
     this.onTap,
   });
@@ -22,6 +23,7 @@ class PlanDayCard extends StatelessWidget {
   final engine.PlanDay day;
   final OnboardingAnswers? answers;
   final bool showImage;
+  final bool prominentImage;
   final PlanDayCardState state;
   final VoidCallback? onTap;
 
@@ -91,8 +93,8 @@ class PlanDayCard extends StatelessWidget {
                     borderRadius: AppRadii.smallBorder,
                     child: Image.asset(
                       _imageFor(day.dayIndex),
-                      width: AppSpacing.xxl,
-                      height: AppSpacing.xxl,
+                      width: prominentImage ? 88 : AppSpacing.xxl,
+                      height: prominentImage ? 88 : AppSpacing.xxl,
                       fit: BoxFit.cover,
                       alignment: Alignment.topCenter,
                     ),
