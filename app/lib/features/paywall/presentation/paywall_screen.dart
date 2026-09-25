@@ -227,67 +227,108 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  if (selected?.trialEligible == true)
-                    _appear(2, const _TrialTimeline())
-                  else if (plans != null)
-                    _appear(
-                      2,
-                      const _Benefit(
-                        icon: Icons.lock_open_rounded,
-                        text: 'Your full plan unlocks today',
+                  // Plans arrive from the store after the entrance. The block
+                  // crossfades from its skeleton and resizes smoothly, so the
+                  // links below glide instead of jumping when prices land.
+                  _appear(
+                    2,
+                    AnimatedSize(
+                      duration: AppMotion.duration(context, AppMotion.layout),
+                      curve: AppMotion.standardCurve,
+                      alignment: Alignment.topCenter,
+                      child: AnimatedSwitcher(
+                        duration: AppMotion.duration(context, AppMotion.state),
+                        layoutBuilder: _topAlignedLayout,
+                        transitionBuilder: _fadeThrough,
+                        child: plans == null
+                            ? KeyedSubtree(
+                                key: ValueKey(
+                                  _storeUnavailable
+                                      ? 'paywall-unavailable'
+                                      : 'paywall-skeleton',
+                                ),
+                                child: _storeUnavailable
+                                    ? _StoreUnavailable(onRetry: _load)
+                                    : const _PlanSkeleton(),
+                              )
+                            : Column(
+                                key: const ValueKey('paywall-plans'),
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  AnimatedSwitcher(
+                                    duration: AppMotion.duration(
+                                      context,
+                                      AppMotion.state,
+                                    ),
+                                    layoutBuilder: _topAlignedLayout,
+                                    transitionBuilder: _fadeThrough,
+                                    child: selected?.trialEligible == true
+                                        ? const _TrialTimeline(
+                                            key: ValueKey('paywall-trial'),
+                                          )
+                                        : const _Benefit(
+                                            key: ValueKey('paywall-unlock'),
+                                            icon: Icons.lock_open_rounded,
+                                            text:
+                                                'Your full plan unlocks today',
+                                          ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.lg),
+                                  for (final plan in plans)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: AppSpacing.sm,
+                                      ),
+                                      child: _PlanCard(
+                                        plan: plan,
+                                        selected: _selected == plan.packageId,
+                                        onTap: () => setState(
+                                          () => _selected = plan.packageId,
+                                        ),
+                                      ),
+                                    ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  AppPressScale(
+                                    enabled: !_busy,
+                                    child: FilledButton(
+                                      key: const ValueKey('paywall-purchase'),
+                                      onPressed: _busy ? null : _purchase,
+                                      child: Text(
+                                        _busy
+                                            ? 'One moment...'
+                                            : selected?.trialEligible == true
+                                            ? 'Start my free week'
+                                            : 'Continue',
+                                      ),
+                                    ),
+                                  ),
+                                  if (_message != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        top: AppSpacing.sm,
+                                      ),
+                                      child: Text(
+                                        _message!,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: AppColors.inkSoft,
+                                        ),
+                                      ),
+                                    ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Text(
+                                    selected?.trialEligible == true
+                                        ? '7 days free, then ${selected!.price} per year. Auto-renews until cancelled. Cancel anytime in Settings at least 24 hours before renewal.'
+                                        : '${selected?.price ?? ''} per ${_selected == r'$rc_annual' ? 'year' : 'month'}. Auto-renews until cancelled. Cancel anytime in Settings at least 24 hours before renewal.',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: AppColors.inkSoft),
+                                  ),
+                                ],
+                              ),
                       ),
                     ),
-                  const SizedBox(height: AppSpacing.lg),
-                  if (plans == null && !_storeUnavailable)
-                    const _PlanSkeleton()
-                  else if (_storeUnavailable)
-                    _StoreUnavailable(onRetry: _load)
-                  else ...[
-                    for (final plan in plans!)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: _PlanCard(
-                          plan: plan,
-                          selected: _selected == plan.packageId,
-                          onTap: () =>
-                              setState(() => _selected = plan.packageId),
-                        ),
-                      ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppPressScale(
-                      enabled: !_busy,
-                      child: FilledButton(
-                        key: const ValueKey('paywall-purchase'),
-                        onPressed: _busy ? null : _purchase,
-                        child: Text(
-                          _busy
-                              ? 'One moment...'
-                              : selected?.trialEligible == true
-                              ? 'Start my free week'
-                              : 'Continue',
-                        ),
-                      ),
-                    ),
-                    if (_message != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.sm),
-                        child: Text(
-                          _message!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppColors.inkSoft),
-                        ),
-                      ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      selected?.trialEligible == true
-                          ? '7 days free, then ${selected!.price} per year. Auto-renews until cancelled. Cancel anytime in Settings at least 24 hours before renewal.'
-                          : '${selected?.price ?? ''} per ${_selected == r'$rc_annual' ? 'year' : 'month'}. Auto-renews until cancelled. Cancel anytime in Settings at least 24 hours before renewal.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
-                    ),
-                  ],
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   Wrap(
                     alignment: WrapAlignment.center,
@@ -334,7 +375,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
     animation: _entrance,
     child: child,
     builder: (context, child) {
-      final value = Curves.easeOut.transform(
+      final value = AppMotion.entranceCurve.transform(
         ((_entrance.value - index * 0.13) / 0.74).clamp(0.0, 1.0),
       );
       return Opacity(
@@ -348,8 +389,14 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
   );
 }
 
+Widget _fadeThrough(Widget child, Animation<double> animation) =>
+    AppFadeThrough(animation: animation, child: child);
+
+Widget _topAlignedLayout(Widget? current, List<Widget> previous) =>
+    Stack(alignment: Alignment.topCenter, children: [...previous, ?current]);
+
 class _Benefit extends StatelessWidget {
-  const _Benefit({required this.icon, required this.text});
+  const _Benefit({required this.icon, required this.text, super.key});
   final IconData icon;
   final String text;
 
@@ -376,7 +423,7 @@ class _Benefit extends StatelessWidget {
 }
 
 class _TrialTimeline extends StatelessWidget {
-  const _TrialTimeline();
+  const _TrialTimeline({super.key});
 
   @override
   Widget build(BuildContext context) => Container(
