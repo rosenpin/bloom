@@ -48,10 +48,31 @@ class _WomensGymAppState extends ConsumerState<WomensGymApp>
     if (mounted) _syncService.startForeground();
   }
 
+  /// Sign-in ran once at launch. If it came back empty (no signal, or
+  /// sign-ins switched off), try again on each return to the app, or the
+  /// outbox never syncs until the next cold start. The provider shares one
+  /// attempt in flight, and a failure stays silent.
+  Future<void> _resume() async {
+    final auth = ref.read(ensureAnonymousAuthProvider);
+    if (!auth.isLoading && auth.hasValue && auth.value == null) {
+      ref.invalidate(ensureAnonymousAuthProvider);
+    }
+    try {
+      await ref.read(ensureAnonymousAuthProvider.future);
+    } on Object {
+      // Fail open: the app stays local until a later resume.
+    }
+    // She may have left again while sign-in was in flight.
+    if (mounted &&
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      _syncService.startForeground();
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _syncService.startForeground();
+      unawaited(_resume());
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached ||
