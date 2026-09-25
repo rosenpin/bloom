@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:womens_gym/core/theme/app_motion.dart';
 import 'package:womens_gym/features/onboarding/presentation/onboarding_widgets.dart';
 
 void main() {
@@ -61,5 +62,23 @@ void main() {
     await tester.dragFrom(const Offset(160, 300), const Offset(320, 0));
     await tester.pumpAndSettle();
     expect(backs, 1);
+  });
+
+  testWidgets('iOS Reduce Motion counts as reduced motion', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(reduceMotion: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    late bool reduced;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            reduced = AppMotion.isReduced(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(reduced, isTrue);
   });
 }

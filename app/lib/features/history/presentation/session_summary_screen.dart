@@ -5,6 +5,7 @@ import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../plan/domain/plan_presentation.dart';
@@ -23,7 +24,7 @@ class SessionSummaryScreen extends ConsumerWidget {
     return Scaffold(
       key: const ValueKey('session-summary-screen'),
       body: session.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const AppDelayedSpinner(),
         error: (error, stackTrace) =>
             _MissingSession(onBack: () => _back(context)),
         data: (value) => value == null

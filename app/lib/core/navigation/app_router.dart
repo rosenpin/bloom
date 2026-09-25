@@ -386,6 +386,7 @@ class _AppShellState extends State<_AppShell>
     value: 1,
   );
   bool _switching = false;
+  int? _target;
 
   @override
   void didUpdateWidget(covariant _AppShell oldWidget) {
@@ -414,7 +415,11 @@ class _AppShellState extends State<_AppShell>
       return;
     }
 
-    _switching = true;
+    // The tab bar answers the tap at once, while the page fades through.
+    setState(() {
+      _switching = true;
+      _target = index;
+    });
     await _tabFade.animateTo(
       0,
       duration: AppMotion.duration(context, const Duration(milliseconds: 75)),
@@ -428,6 +433,7 @@ class _AppShellState extends State<_AppShell>
       curve: AppMotion.entranceCurve,
     );
     _switching = false;
+    _target = null;
   }
 
   @override
@@ -441,7 +447,8 @@ class _AppShellState extends State<_AppShell>
     return Scaffold(
       body: FadeTransition(opacity: _tabFade, child: widget.navigationShell),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: widget.navigationShell.currentIndex,
+        selectedIndex: _target ?? widget.navigationShell.currentIndex,
+        animationDuration: AppMotion.duration(context, AppMotion.layout),
         onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(

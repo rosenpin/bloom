@@ -207,6 +207,8 @@ class _OnboardingBackScopeState extends State<OnboardingBackScope> {
       },
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
+        // VoiceOver users go back with the back button or the escape gesture.
+        excludeFromSemantics: true,
         // Report where the finger landed, not where the drag was recognized.
         dragStartBehavior: DragStartBehavior.down,
         onHorizontalDragStart: (details) {
@@ -828,23 +830,9 @@ class LoadingBloom extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return const Scaffold(
       backgroundColor: AppColors.paper,
-      body: Center(
-        // Most loads finish within a frame or two. The spinner only fades in
-        // once a wait is long enough to notice, so quick loads never flash it.
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: 1),
-          duration: const Duration(milliseconds: 600),
-          curve: const Interval(0.6, 1),
-          builder: (context, opacity, child) =>
-              Opacity(opacity: opacity, child: child),
-          child: const CircularProgressIndicator(
-            color: AppColors.rose,
-            backgroundColor: AppColors.blushSoft,
-          ),
-        ),
-      ),
+      body: AppDelayedSpinner(),
     );
   }
 }

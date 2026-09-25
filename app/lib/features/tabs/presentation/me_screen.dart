@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_sizes.dart';
@@ -56,7 +57,7 @@ class MeScreen extends ConsumerWidget {
                 sessions.when(
                   loading: () => const Padding(
                     padding: EdgeInsets.all(AppSpacing.lg),
-                    child: Center(child: CircularProgressIndicator()),
+                    child: AppDelayedSpinner(),
                   ),
                   error: (error, stackTrace) => const _EmptySessions(),
                   data: (values) => values.isEmpty

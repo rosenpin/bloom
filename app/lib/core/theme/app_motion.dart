@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_colors.dart';
+
 /// Shared timing and easing for motion across the app.
 abstract final class AppMotion {
   static const Duration instant = Duration.zero;
@@ -20,8 +22,15 @@ abstract final class AppMotion {
   static const Curve entranceCurve = Curves.easeOutQuint;
   static const Curve decisiveCurve = Curves.easeOutExpo;
 
+  /// Android's "Remove animations" arrives as [MediaQueryData.disableAnimations];
+  /// iOS Reduce Motion only as the platform's `reduceMotion` feature.
   static bool isReduced(BuildContext context) =>
-      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      (MediaQuery.maybeOf(context)?.disableAnimations ?? false) ||
+      WidgetsBinding
+          .instance
+          .platformDispatcher
+          .accessibilityFeatures
+          .reduceMotion;
 
   /// Returns [duration], or no time when the platform requests reduced motion.
   static Duration duration(BuildContext context, Duration duration) =>
@@ -33,6 +42,22 @@ abstract final class AppMotion {
         context,
         Duration(microseconds: (entrance.inMicroseconds * 0.75).round()),
       );
+
+  /// An [Image.frameBuilder]: an image that decodes after its first frame
+  /// fades in instead of popping into place.
+  static Widget fadeInImage(
+    BuildContext context,
+    Widget child,
+    int? frame,
+    bool wasSynchronouslyLoaded,
+  ) => wasSynchronouslyLoaded
+      ? child
+      : AnimatedOpacity(
+          opacity: frame == null ? 0 : 1,
+          duration: duration(context, visualFade),
+          curve: Curves.easeOut,
+          child: child,
+        );
 
   /// Timing for every modal bottom sheet, so they all rise and settle alike.
   static AnimationStyle sheet(BuildContext context) => AnimationStyle(
@@ -132,6 +157,30 @@ class _AppPressScaleState extends State<AppPressScale> {
         duration: AppMotion.duration(context, AppMotion.feedback),
         curve: AppMotion.standardCurve,
         child: widget.child,
+      ),
+    );
+  }
+}
+
+/// A loading spinner that only shows once a wait is long enough to notice.
+/// Most local loads finish in a frame or two, and a spinner that flashes for
+/// that long reads as a glitch.
+class AppDelayedSpinner extends StatelessWidget {
+  const AppDelayedSpinner({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 600),
+        curve: const Interval(0.6, 1),
+        builder: (context, opacity, child) =>
+            Opacity(opacity: opacity, child: child),
+        child: const CircularProgressIndicator(
+          color: AppColors.rose,
+          backgroundColor: AppColors.blushSoft,
+        ),
       ),
     );
   }
