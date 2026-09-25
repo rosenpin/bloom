@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -63,7 +64,10 @@ class TodayMonthCard extends StatelessWidget {
                 key: const ValueKey('month-research'),
                 onPressed: () => showModalBottomSheet<void>(
                   context: context,
+                  // Over the tab bar, not tucked beneath it.
+                  useRootNavigator: true,
                   isScrollControlled: true,
+                  sheetAnimationStyle: AppMotion.sheet(context),
                   backgroundColor: AppColors.paper,
                   shape: const RoundedRectangleBorder(
                     borderRadius: BorderRadius.vertical(

@@ -55,12 +55,25 @@ class ExerciseVisual extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final source = resolveExerciseVisualSource(exerciseId);
-    final placeholder = _ExerciseVisualPlaceholder(
-      exerciseName: exerciseName,
-      blockRoleLabel: blockRoleLabel,
-      compact: compact,
-    );
+    final resolved = resolveExerciseVisualSource(exerciseId);
+    final stills = exerciseStills(exerciseId);
+    // Thumbnails never spin up a video player; the stills say enough small.
+    final source = compact && resolved is BundledExerciseVideoSource
+        ? stills ?? resolved
+        : resolved;
+    // A loop's first frame is its first still, so the still stands in while
+    // the video loads and the handover is invisible.
+    final placeholder = stills != null && source is BundledExerciseVideoSource
+        ? Image.asset(
+            stills.pos1Asset,
+            key: const ValueKey('exercise-video-poster'),
+            fit: BoxFit.contain,
+          )
+        : _ExerciseVisualPlaceholder(
+            exerciseName: exerciseName,
+            blockRoleLabel: blockRoleLabel,
+            compact: compact,
+          );
     final playback = source == null
         ? placeholder
         : ref.watch(exerciseVisualPlaybackBuilderProvider)(
@@ -267,23 +280,36 @@ class _ExerciseVideoPlayerState extends State<ExerciseVideoPlayer> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    if (controller == null ||
-        !controller.value.isInitialized ||
-        controller.value.hasError) {
-      return widget.placeholder;
-    }
-    final size = controller.value.size;
-    if (size.width <= 0 || size.height <= 0) return widget.placeholder;
-    return SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.contain,
-        clipBehavior: Clip.hardEdge,
-        child: SizedBox(
-          width: size.width,
-          height: size.height,
-          child: VideoPlayer(controller),
-        ),
-      ),
+    final size = controller?.value.size ?? Size.zero;
+    final ready =
+        controller != null &&
+        controller.value.isInitialized &&
+        !controller.value.hasError &&
+        size.width > 0 &&
+        size.height > 0;
+    // The placeholder stays underneath: a fresh video texture is transparent
+    // until its first frame lands, and the fade covers that gap.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        widget.placeholder,
+        if (ready)
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: AppMotion.duration(context, AppMotion.visualFade),
+            builder: (context, opacity, child) =>
+                Opacity(opacity: opacity, child: child),
+            child: FittedBox(
+              fit: BoxFit.contain,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(
+                width: size.width,
+                height: size.height,
+                child: VideoPlayer(controller),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

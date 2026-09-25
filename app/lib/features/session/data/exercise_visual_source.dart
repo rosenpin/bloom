@@ -83,12 +83,13 @@ const exercisesWithStills = <String>{
   'plank',
 };
 
-ExerciseVisualSource? resolveExerciseVisualSource(String exerciseId) {
-  final bundled = bundledExerciseVideoSources[exerciseId];
-  if (bundled != null) return bundled;
-  if (!exercisesWithStills.contains(exerciseId)) return null;
-  return BundledStillsSource(
-    'assets/images/exercises/$exerciseId-1.jpg',
-    'assets/images/exercises/$exerciseId-2.jpg',
-  );
-}
+ExerciseVisualSource? resolveExerciseVisualSource(String exerciseId) =>
+    bundledExerciseVideoSources[exerciseId] ?? exerciseStills(exerciseId);
+
+BundledStillsSource? exerciseStills(String exerciseId) =>
+    exercisesWithStills.contains(exerciseId)
+    ? BundledStillsSource(
+        'assets/images/exercises/$exerciseId-1.jpg',
+        'assets/images/exercises/$exerciseId-2.jpg',
+      )
+    : null;

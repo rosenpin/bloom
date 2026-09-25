@@ -30,11 +30,6 @@ const _swapSilver = Color(0xFF8F98A5);
 const _swapBronze = Color(0xFFA8754E);
 const _swapMedalSize = 19.0;
 
-AnimationStyle _sheetAnimationStyle(BuildContext context) => AnimationStyle(
-  duration: AppMotion.duration(context, AppMotion.layout),
-  reverseDuration: AppMotion.exitDuration(context, AppMotion.layout),
-);
-
 class SessionPlayerScreen extends ConsumerStatefulWidget {
   const SessionPlayerScreen({super.key});
 
@@ -54,6 +49,8 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
   String? _recapSessionId;
   Future<SessionRecap?>? _recapFuture;
   SessionRecap? _shareRecap;
+  bool _leaving = false;
+  SessionRuntime? _lastRuntime;
 
   @override
   Widget build(BuildContext context) {
@@ -65,8 +62,6 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
         body: AnimatedSwitcher(
           duration: AppMotion.duration(context, AppMotion.layout),
           reverseDuration: AppMotion.exitDuration(context, AppMotion.layout),
-          switchInCurve: AppMotion.entranceCurve,
-          switchOutCurve: AppMotion.standardCurve,
           layoutBuilder: (currentChild, previousChildren) => Stack(
             fit: StackFit.expand,
             children: [...previousChildren, ?currentChild],
@@ -77,15 +72,10 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
               _ => '',
             };
             final isRest = keyValue.startsWith('rest-stage-');
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: Offset(0, isRest ? 0.12 : 0.03),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              ),
+            return AppFadeThrough(
+              animation: animation,
+              enterFrom: Offset(0, isRest ? 0.08 : 0.03),
+              child: child,
             );
           },
           child: runtimeValue.when(
@@ -97,7 +87,11 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
               key: const ValueKey('session-error-stage'),
               child: _SessionError(onBack: () => context.go('/today')),
             ),
-            data: (runtime) {
+            data: (value) {
+              // While the player drops away after a finish or a stop, keep
+              // showing the last session. The cleared one would otherwise
+              // flash the "not ready" error on the way out.
+              final runtime = _leaving ? _lastRuntime : _lastRuntime = value;
               if (runtime == null) {
                 return KeyedSubtree(
                   key: const ValueKey('session-empty-stage'),
@@ -122,7 +116,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
                   child: ShareRecapScreen(
                     runtime: runtime,
                     recap: recap,
-                    onFinished: _finishCompletion,
+                    onFinished: _leave,
                   ),
                 );
               }
@@ -135,7 +129,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
                     recap: _completionRecap(runtime),
                     adjustmentNotice: _adjustmentNotice,
                     onRecap: (recap) => setState(() => _shareRecap = recap),
-                    onDone: _finishCompletion,
+                    onDone: _leave,
                   ),
                 );
               }
@@ -239,7 +233,8 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
     return _recapFuture!;
   }
 
-  void _finishCompletion() {
+  void _leave() {
+    _leaving = true;
     ref.read(sessionControllerProvider.notifier).clear();
     context.go('/today');
   }
@@ -351,7 +346,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
-      sheetAnimationStyle: _sheetAnimationStyle(context),
+      sheetAnimationStyle: AppMotion.sheet(context),
       builder: (context) => _SetStepperSheet(
         entry: entry,
         unitSystem: runtime.displayUnitSystem,
@@ -380,7 +375,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
-      sheetAnimationStyle: _sheetAnimationStyle(context),
+      sheetAnimationStyle: AppMotion.sheet(context),
       builder: (context) => _SetStepperSheet(
         entry: entry,
         unitSystem: runtime.displayUnitSystem,
@@ -414,7 +409,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       useSafeArea: true,
       backgroundColor: AppColors.paper,
       showDragHandle: false,
-      sheetAnimationStyle: _sheetAnimationStyle(context),
+      sheetAnimationStyle: AppMotion.sheet(context),
       builder: (context) =>
           _SessionOverviewSheet(runtime: runtime, current: current),
     );
@@ -439,7 +434,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
           isScrollControlled: true,
           useSafeArea: true,
           backgroundColor: AppColors.paper,
-          sheetAnimationStyle: _sheetAnimationStyle(context),
+          sheetAnimationStyle: AppMotion.sheet(context),
           builder: (context) => _CompletedExerciseReviewSheet(
             entries: entries,
             unitSystem: runtime.displayUnitSystem,
@@ -455,33 +450,18 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
   }
 
   Future<void> _openTeachView(engine.SessionExerciseEntry entry) async {
+    // A step deeper, so it uses the platform push and its iOS edge swipe.
     await Navigator.of(context).push<void>(
-      PageRouteBuilder<void>(
-        transitionDuration: AppMotion.duration(context, AppMotion.layout),
-        reverseTransitionDuration: AppMotion.exitDuration(
-          context,
-          AppMotion.layout,
-        ),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            ExerciseTeachScreen(entry: entry),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: AppMotion.entranceCurve,
-            reverseCurve: AppMotion.standardCurve,
-          );
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.08),
-                end: Offset.zero,
-              ).animate(curved),
-              child: child,
+      AppMotion.isReduced(context)
+          ? PageRouteBuilder<void>(
+              transitionDuration: Duration.zero,
+              reverseTransitionDuration: Duration.zero,
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  ExerciseTeachScreen(entry: entry),
+            )
+          : MaterialPageRoute<void>(
+              builder: (context) => ExerciseTeachScreen(entry: entry),
             ),
-          );
-        },
-      ),
     );
   }
 
@@ -493,7 +473,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
-      sheetAnimationStyle: _sheetAnimationStyle(context),
+      sheetAnimationStyle: AppMotion.sheet(context),
       builder: (context) => const _LifeHappenedSheet(),
     );
     if (!mounted || action == null) return;
@@ -528,10 +508,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
         await ref
             .read(sessionControllerProvider.notifier)
             .advance(const engine.SessionAbandoned());
-        if (mounted) {
-          ref.read(sessionControllerProvider.notifier).clear();
-          context.go('/today');
-        }
+        if (mounted) _leave();
     }
   }
 
@@ -544,7 +521,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
-      sheetAnimationStyle: _sheetAnimationStyle(context),
+      sheetAnimationStyle: AppMotion.sheet(context),
       builder: (context) => _SwapSheet(entry: entry, recommended: recommended),
     );
     if (candidate == null || !mounted) return;
@@ -558,7 +535,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
-      sheetAnimationStyle: _sheetAnimationStyle(context),
+      sheetAnimationStyle: AppMotion.sheet(context),
       builder: (context) => const _PainSitePicker(),
     );
     if (site == null || !mounted) return;
@@ -599,7 +576,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
         isDismissible: false,
         enableDrag: false,
         backgroundColor: AppColors.paper,
-        sheetAnimationStyle: _sheetAnimationStyle(context),
+        sheetAnimationStyle: AppMotion.sheet(context),
         builder: (context) =>
             _KeepSwapSheet(runtime: runtime, suggestion: suggestion),
       );
@@ -935,14 +912,23 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
                       alignment: Alignment.center,
                       children: [
                         SizedBox.expand(
-                          child: CircularProgressIndicator(
-                            value: progress,
-                            strokeWidth: 11,
-                            strokeCap: StrokeCap.round,
-                            color: AppColors.rose,
-                            backgroundColor: AppColors.paper.withValues(
-                              alpha: 0.55,
+                          // Glide across each second instead of ticking.
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(end: progress),
+                            duration: AppMotion.duration(
+                              context,
+                              const Duration(seconds: 1),
                             ),
+                            builder: (context, value, _) =>
+                                CircularProgressIndicator(
+                                  value: value,
+                                  strokeWidth: 11,
+                                  strokeCap: StrokeCap.round,
+                                  color: AppColors.rose,
+                                  backgroundColor: AppColors.paper.withValues(
+                                    alpha: 0.55,
+                                  ),
+                                ),
                           ),
                         ),
                         Column(
@@ -2461,15 +2447,27 @@ class _EffortOptions extends StatelessWidget {
             ),
           ],
         ),
-        if (selected case final level?) ...[
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            SessionPresentation.effortMeaning(level),
-            key: const ValueKey('effort-meaning'),
-            textAlign: TextAlign.center,
-            style: AppText.meta,
+        const SizedBox(height: AppSpacing.sm),
+        // The meaning line keeps its slot before a pick, so the rest buttons
+        // below never move under a thumb that is already heading for them.
+        AnimatedSize(
+          duration: AppMotion.duration(context, AppMotion.state),
+          curve: AppMotion.standardCurve,
+          alignment: Alignment.topCenter,
+          child: AnimatedSwitcher(
+            duration: AppMotion.duration(context, AppMotion.feedback),
+            child: Text(
+              selected == null
+                  ? ' '
+                  : SessionPresentation.effortMeaning(selected!),
+              key: selected == null
+                  ? const ValueKey('effort-meaning-empty')
+                  : const ValueKey('effort-meaning'),
+              textAlign: TextAlign.center,
+              style: AppText.meta,
+            ),
           ),
-        ],
+        ),
       ],
     );
   }

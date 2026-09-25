@@ -16,11 +16,21 @@ final class SessionController extends AsyncNotifier<SessionRuntime?> {
   @override
   Future<SessionRuntime?> build() async => null;
 
+  bool _starting = false;
+
+  /// Returns null for a start requested while one is already underway, so a
+  /// double tap on "Start workout" opens the player once.
   Future<SessionRuntime?> start() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(_service.startOrResume);
-    if (state.value != null) _invalidateSessionViews();
-    return state.value;
+    if (_starting) return null;
+    _starting = true;
+    try {
+      state = const AsyncLoading();
+      state = await AsyncValue.guard(_service.startOrResume);
+      if (state.value != null) _invalidateSessionViews();
+      return state.value;
+    } finally {
+      _starting = false;
+    }
   }
 
   Future<void> advance(engine.SessionEvent event) async {

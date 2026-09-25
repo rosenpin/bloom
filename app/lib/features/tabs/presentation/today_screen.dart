@@ -67,9 +67,13 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
     final answersState = ref.watch(onboardingAnswersProvider);
     final previewState = ref.watch(sessionPreviewProvider);
     final gateDecision = ref.watch(startupVersionGateProvider).value;
-    if (documentState.isLoading ||
-        answersState.isLoading ||
-        previewState.isLoading) {
+    // Refreshes (starting or ending a workout) keep showing the last values;
+    // only a first load with nothing to show gets the loading screen.
+    if ([
+      documentState,
+      answersState,
+      previewState,
+    ].any((state) => state.isLoading && !state.hasValue)) {
       return const LoadingBloom();
     }
     final document = documentState.value;

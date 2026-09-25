@@ -376,6 +376,40 @@ void main() {
     },
   );
 
+  testWidgets('a double tap on Start workout opens one player', (tester) async {
+    final harness = await _SessionHarness.create(tester);
+    addTearDown(harness.dispose);
+
+    final start = find.byKey(const ValueKey('start-workout'));
+    await tester.tap(start);
+    await tester.tap(start);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('session-player'), skipOffstage: false),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('stopping for today leaves without flashing an error', (
+    tester,
+  ) async {
+    final harness = await _SessionHarness.create(tester);
+    addTearDown(harness.dispose);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await _tap(tester, const ValueKey('session-lets-go'));
+    await _tap(tester, const ValueKey('life-happened-link'));
+    await tester.tap(find.byKey(const ValueKey('life-abandon')));
+    for (var frame = 0; frame < 30; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(find.text('This session is not ready yet.'), findsNothing);
+    }
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('session-player')), findsNothing);
+    expect(find.byKey(const ValueKey('today-screen')), findsOneWidget);
+  });
+
   testWidgets('a same-day unfinished session gets the warm resume path', (
     tester,
   ) async {
