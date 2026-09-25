@@ -109,9 +109,23 @@ void main() {
     expect(find.text('All weeks'), findsOneWidget);
     expect(find.text('MONDAY · DONE'), findsOneWidget);
     expect(find.text('TODAY'), findsOneWidget);
+    // The rose indicator must paint behind the selected, paper-colored label.
+    final indicator = find.byKey(const ValueKey('plan-view-indicator'));
+    final week = find.byKey(const ValueKey('plan-week-view'));
+    expect(tester.getSize(indicator).height, greaterThan(0));
+    expect(tester.getRect(indicator).overlaps(tester.getRect(week)), isTrue);
 
     await tester.tap(find.byKey(const ValueKey('plan-all-weeks-view')));
     await tester.pumpAndSettle();
+    expect(tester.getSize(indicator).height, greaterThan(0));
+    expect(
+      tester
+          .getRect(indicator)
+          .overlaps(
+            tester.getRect(find.byKey(const ValueKey('plan-all-weeks-view'))),
+          ),
+      isTrue,
+    );
     expect(find.byKey(const ValueKey('plan-week-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('plan-week-6')), findsOneWidget);
     expect(find.text('Lighter week'), findsOneWidget);

@@ -234,8 +234,12 @@ class _PlanViewToggle extends StatelessWidget {
                         : Alignment.centerLeft,
                     duration: AppMotion.duration(context, AppMotion.state),
                     curve: AppMotion.standardCurve,
+                    // Align loosens constraints, so a childless box needs
+                    // an explicit height or it paints at zero.
                     child: SizedBox(
+                      key: const ValueKey('plan-view-indicator'),
                       width: constraints.maxWidth / 2,
+                      height: constraints.maxHeight,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: AppColors.rose,
