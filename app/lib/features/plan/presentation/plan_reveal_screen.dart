@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -89,7 +91,7 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                                 animation: _entrance,
                                 interval: _motionInterval(
                                   start: 0,
-                                  end: 400,
+                                  end: 350,
                                   total: totalMilliseconds,
                                 ),
                                 child: Column(
@@ -157,8 +159,8 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                               _RevealItem(
                                 animation: _entrance,
                                 interval: _motionInterval(
-                                  start: 250,
-                                  end: 700,
+                                  start: 150,
+                                  end: 550,
                                   total: totalMilliseconds,
                                 ),
                                 child: _SixWeekArc(
@@ -173,8 +175,8 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                                 _RevealItem(
                                   animation: _entrance,
                                   interval: _motionInterval(
-                                    start: 420 + (index * 110),
-                                    end: 870 + (index * 110),
+                                    start: 250 + (index * 80),
+                                    end: 650 + (index * 80),
                                     total: totalMilliseconds,
                                   ),
                                   child: PlanDayCard(
@@ -207,9 +209,10 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                   constraints: const BoxConstraints(maxWidth: 440),
                   child: _RevealItem(
                     animation: _entrance,
+                    // The way on arrives with the first cards, not after all.
                     interval: _motionInterval(
-                      start: 900 + ((dayCount - 1) * 110),
-                      end: 1300 + ((dayCount - 1) * 110),
+                      start: 450,
+                      end: 850,
                       total: totalMilliseconds,
                     ),
                     child: Column(
@@ -316,8 +319,9 @@ class _SixWeekArc extends StatelessWidget {
   }
 }
 
-Duration _totalEntranceDuration(int dayCount) =>
-    Duration(milliseconds: 1300 + ((dayCount - 1).clamp(0, dayCount) * 110));
+Duration _totalEntranceDuration(int dayCount) => Duration(
+  milliseconds: math.max(850, 650 + (dayCount - 1).clamp(0, dayCount) * 80),
+);
 
 Interval _motionInterval({
   required int start,
@@ -346,11 +350,15 @@ class _RevealItem extends StatelessWidget {
     return AnimatedBuilder(
       animation: reveal,
       child: child,
-      builder: (context, child) => Opacity(
-        opacity: reveal.value,
-        child: Transform.translate(
-          offset: Offset(0, 12 * (1 - reveal.value)),
-          child: child,
+      // Nothing is tappable before it can be seen.
+      builder: (context, child) => IgnorePointer(
+        ignoring: reveal.value < 0.5,
+        child: Opacity(
+          opacity: reveal.value,
+          child: Transform.translate(
+            offset: Offset(0, 12 * (1 - reveal.value)),
+            child: child,
+          ),
         ),
       ),
     );

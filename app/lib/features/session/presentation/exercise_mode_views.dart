@@ -406,59 +406,71 @@ class _ExerciseProgress extends StatelessWidget {
         AppSpacing.lg,
         AppSpacing.xs,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: LinearProgressIndicator(
-              value: total == 0 ? 0 : current / total,
-              borderRadius: AppRadii.smallBorder,
-              color: AppColors.rose,
-              backgroundColor: AppColors.blushSoft,
-              minHeight: AppSizes.progressBar,
-            ),
-          ),
-          if (notice case final text?) ...[
-            const SizedBox(width: AppSpacing.xs),
-            Flexible(
-              child: Text(
-                text,
-                key: const ValueKey('session-adjustment-card'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.label,
-              ),
-            ),
-          ],
-          const SizedBox(width: AppSpacing.sm),
-          Material(
-            color: AppColors.paper,
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadii.largeBorder,
-              side: const BorderSide(color: AppColors.line),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              key: const ValueKey('exercise-progress'),
-              onTap: onTap,
-              child: Container(
-                constraints: const BoxConstraints(
-                  minHeight: AppSizes.tapTarget,
+          Row(
+            children: [
+              Expanded(
+                child: LinearProgressIndicator(
+                  value: total == 0 ? 0 : current / total,
+                  borderRadius: AppRadii.smallBorder,
+                  color: AppColors.rose,
+                  backgroundColor: AppColors.blushSoft,
+                  minHeight: AppSizes.progressBar,
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('$current of $total', style: AppText.meta),
-                    const SizedBox(width: AppSpacing.xxs),
-                    const Icon(
-                      Icons.keyboard_arrow_up_rounded,
-                      color: AppColors.roseDeep,
-                      size: 17,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Material(
+                color: AppColors.paper,
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppRadii.largeBorder,
+                  side: const BorderSide(color: AppColors.line),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  key: const ValueKey('exercise-progress'),
+                  onTap: onTap,
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minHeight: AppSizes.tapTarget,
                     ),
-                  ],
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('$current of $total', style: AppText.meta),
+                        const SizedBox(width: AppSpacing.xxs),
+                        const Icon(
+                          Icons.keyboard_arrow_up_rounded,
+                          color: AppColors.roseDeep,
+                          size: 17,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
+          ),
+          // The confirmation of a change gets its own full line, eased in,
+          // rather than an ellipsis squeezed beside the progress bar.
+          AnimatedSize(
+            duration: AppMotion.duration(context, AppMotion.state),
+            curve: AppMotion.standardCurve,
+            alignment: Alignment.topCenter,
+            child: notice == null
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                    child: Text(
+                      notice!,
+                      key: const ValueKey('session-adjustment-card'),
+                      style: AppText.meta.copyWith(color: AppColors.roseDeep),
+                    ),
+                  ),
           ),
         ],
       ),

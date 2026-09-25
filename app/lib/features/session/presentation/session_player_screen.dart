@@ -81,7 +81,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
           child: runtimeValue.when(
             loading: () => const KeyedSubtree(
               key: ValueKey('session-loading-stage'),
-              child: Center(child: CircularProgressIndicator()),
+              child: AppDelayedSpinner(),
             ),
             error: (error, stackTrace) => KeyedSubtree(
               key: const ValueKey('session-error-stage'),
@@ -1098,9 +1098,7 @@ class _ExerciseTeachScreenState extends ConsumerState<ExerciseTeachScreen> {
             .loadGuidance(widget.entry.exerciseId),
         builder: (context, snapshot) {
           final guidance = snapshot.data;
-          if (guidance == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          if (guidance == null) return const AppDelayedSpinner();
           return SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Center(
@@ -2071,7 +2069,7 @@ class _CompletionStatsState extends State<_CompletionStats>
     _started = true;
     _entrance.duration = AppMotion.duration(
       context,
-      const Duration(milliseconds: 1300),
+      const Duration(milliseconds: 950),
     );
     _entrance.forward();
   }
@@ -2241,9 +2239,10 @@ class _CompletionActionsState extends State<_CompletionActions>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Paced with the stats: the way on lands as the last line settles.
     _entrance.duration = AppMotion.duration(
       context,
-      const Duration(milliseconds: 1750),
+      const Duration(milliseconds: 1150),
     );
     if (widget.ready && !_entrance.isAnimating && !_entrance.isCompleted) {
       _entrance.forward();

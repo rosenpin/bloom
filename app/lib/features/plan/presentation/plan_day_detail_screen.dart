@@ -5,6 +5,7 @@ import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_sizes.dart';
@@ -262,6 +263,7 @@ class _ExerciseThumbnail extends StatelessWidget {
                 fit: BoxFit.cover,
                 alignment: const Alignment(0, -0.15),
                 excludeFromSemantics: true,
+                frameBuilder: AppMotion.fadeInImage,
                 errorBuilder: (context, error, stackTrace) =>
                     const _ExerciseThumbnailFallback(),
               ),

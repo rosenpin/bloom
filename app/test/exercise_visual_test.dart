@@ -151,6 +151,49 @@ void main() {
     expect(_secondOpacity(tester), paused);
     expect(before, greaterThan(0));
   });
+
+  testWidgets('thumbnails hold still, large visuals keep their loop', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(disableAnimations: true),
+            child: Scaffold(
+              body: Column(
+                children: [
+                  SizedBox.square(
+                    dimension: AppSizes.thumbnailMd,
+                    child: ExerciseVisual(
+                      exerciseId: 'barbell-hip-thrust',
+                      exerciseName: 'Barbell Hip Thrust',
+                      blockRoleLabel: 'Glute focus',
+                      compact: true,
+                    ),
+                  ),
+                  SizedBox(
+                    height: 200,
+                    child: ExerciseVisual(
+                      exerciseId: 'dumbbell-goblet-squat',
+                      exerciseName: 'Goblet Squat',
+                      blockRoleLabel: 'Squat',
+                      aspectRatio: AppSizes.exerciseVisualAspect,
+                      compact: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(ExerciseStillsPlayer), findsNothing);
+    expect(find.byKey(const ValueKey('exercise-still-flip')), findsNothing);
+    expect(find.byType(ExerciseVideoPlayer), findsOneWidget);
+  });
 }
 
 double _secondOpacity(WidgetTester tester) => tester

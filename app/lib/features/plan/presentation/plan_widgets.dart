@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:programming_engine/programming_engine.dart' as engine;
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_sizes.dart';
@@ -102,6 +103,7 @@ class PlanDayCard extends StatelessWidget {
                           : AppSizes.thumbnailSm,
                       fit: BoxFit.cover,
                       alignment: const Alignment(0, -0.15),
+                      frameBuilder: AppMotion.fadeInImage,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),

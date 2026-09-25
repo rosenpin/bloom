@@ -515,6 +515,7 @@ class _TodayHeroCard extends StatelessWidget {
               image,
               fit: BoxFit.cover,
               alignment: Alignment.center,
+              frameBuilder: AppMotion.fadeInImage,
               errorBuilder: (context, error, stackTrace) => Image.asset(
                 'assets/images/hip-thrust-2.jpg',
                 fit: BoxFit.cover,

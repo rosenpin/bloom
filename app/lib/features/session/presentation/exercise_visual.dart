@@ -55,12 +55,14 @@ class ExerciseVisual extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final resolved = resolveExerciseVisualSource(exerciseId);
+    final source = resolveExerciseVisualSource(exerciseId);
     final stills = exerciseStills(exerciseId);
-    // Thumbnails never spin up a video player; the stills say enough small.
-    final source = compact && resolved is BundledExerciseVideoSource
-        ? stills ?? resolved
-        : resolved;
+    // Thumbnails hold still. A list of looping pictures is noise, and the
+    // exercise itself is shown moving at full size.
+    final thumbnail =
+        compact &&
+        aspectRatio == null &&
+        (height ?? AppSizes.thumbnailLg) <= AppSizes.thumbnailLg;
     // A loop's first frame is its first still, so the still stands in while
     // the video loads and the handover is invisible.
     final placeholder = stills != null && source is BundledExerciseVideoSource
@@ -74,7 +76,14 @@ class ExerciseVisual extends ConsumerWidget {
             blockRoleLabel: blockRoleLabel,
             compact: compact,
           );
-    final playback = source == null
+    final playback = thumbnail && stills != null
+        ? Image.asset(
+            stills.pos1Asset,
+            key: const ValueKey('exercise-still-1'),
+            fit: BoxFit.contain,
+            frameBuilder: AppMotion.fadeInImage,
+          )
+        : source == null
         ? placeholder
         : ref.watch(exerciseVisualPlaybackBuilderProvider)(
             key: ValueKey('exercise-visual-$exerciseId'),
@@ -191,6 +200,7 @@ class _ExerciseStillsPlayerState extends State<ExerciseStillsPlayer>
           widget.source.pos1Asset,
           key: const ValueKey('exercise-still-1'),
           fit: BoxFit.contain,
+          frameBuilder: AppMotion.fadeInImage,
         ),
         if (reduced && _showSecond)
           Image.asset(
