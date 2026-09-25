@@ -236,7 +236,18 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
   void _leave() {
     _leaving = true;
     ref.read(sessionControllerProvider.notifier).clear();
-    context.go('/today');
+    // A pop lets the player drop back down over Today; a go swaps it out with
+    // no motion at all. Started from anywhere else, go straight to Today.
+    final matches = GoRouter.of(
+      context,
+    ).routerDelegate.currentConfiguration.matches;
+    final beneath = matches.length > 1 ? matches[matches.length - 2] : null;
+    if (beneath is ShellRouteMatch &&
+        beneath.matches.last.matchedLocation == '/today') {
+      context.pop();
+    } else {
+      context.go('/today');
+    }
   }
 
   Future<void> _completeSet(
@@ -505,9 +516,16 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
           });
         }
       case _Abandon():
+        _leaving = true;
+        final sheetClosing = Future<void>.delayed(
+          AppMotion.sheet(context).reverseDuration ?? Duration.zero,
+        );
         await ref
             .read(sessionControllerProvider.notifier)
             .advance(const engine.SessionAbandoned());
+        // Let the sheet finish closing first. Only the top route animates
+        // out, so leaving under a closing sheet made the player vanish.
+        await sheetClosing;
         if (mounted) _leave();
     }
   }
@@ -2456,16 +2474,17 @@ class _EffortOptions extends StatelessWidget {
           alignment: Alignment.topCenter,
           child: AnimatedSwitcher(
             duration: AppMotion.duration(context, AppMotion.feedback),
-            child: Text(
-              selected == null
-                  ? ' '
-                  : SessionPresentation.effortMeaning(selected!),
-              key: selected == null
-                  ? const ValueKey('effort-meaning-empty')
-                  : const ValueKey('effort-meaning'),
-              textAlign: TextAlign.center,
-              style: AppText.meta,
-            ),
+            child: selected == null
+                ? const ExcludeSemantics(
+                    key: ValueKey('effort-meaning-empty'),
+                    child: Text(' ', style: AppText.meta),
+                  )
+                : Text(
+                    SessionPresentation.effortMeaning(selected!),
+                    key: const ValueKey('effort-meaning'),
+                    textAlign: TextAlign.center,
+                    style: AppText.meta,
+                  ),
           ),
         ),
       ],

@@ -330,37 +330,45 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: AppSpacing.xs,
-                    children: [
-                      TextButton(
-                        onPressed: _busy ? null : _restore,
-                        child: const Text('Restore purchases'),
-                      ),
-                      TextButton(
-                        onPressed: _busy ? null : _redeem,
-                        child: const Text('Redeem a code'),
-                      ),
-                    ],
-                  ),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: AppSpacing.xs,
-                    children: [
-                      TextButton(
-                        onPressed: () => _open(
-                          'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+                  // The links arrive with the plans instead of first.
+                  _appear(
+                    2,
+                    Column(
+                      children: [
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: AppSpacing.xs,
+                          children: [
+                            TextButton(
+                              onPressed: _busy ? null : _restore,
+                              child: const Text('Restore purchases'),
+                            ),
+                            TextButton(
+                              onPressed: _busy ? null : _redeem,
+                              child: const Text('Redeem a code'),
+                            ),
+                          ],
                         ),
-                        child: const Text('Terms of Use'),
-                      ),
-                      TextButton(
-                        onPressed: () => _open(
-                          'https://womensgym.github.io/bloom-site/privacy.html',
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: AppSpacing.xs,
+                          children: [
+                            TextButton(
+                              onPressed: () => _open(
+                                'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+                              ),
+                              child: const Text('Terms of Use'),
+                            ),
+                            TextButton(
+                              onPressed: () => _open(
+                                'https://womensgym.github.io/bloom-site/privacy.html',
+                              ),
+                              child: const Text('Privacy'),
+                            ),
+                          ],
                         ),
-                        child: const Text('Privacy'),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -392,8 +400,12 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
 Widget _fadeThrough(Widget child, Animation<double> animation) =>
     AppFadeThrough(animation: animation, child: child);
 
-Widget _topAlignedLayout(Widget? current, List<Widget> previous) =>
-    Stack(alignment: Alignment.topCenter, children: [...previous, ?current]);
+// Passthrough keeps the column's full width, so cards never shrink to fit.
+Widget _topAlignedLayout(Widget? current, List<Widget> previous) => Stack(
+  alignment: Alignment.topCenter,
+  fit: StackFit.passthrough,
+  children: [...previous, ?current],
+);
 
 class _Benefit extends StatelessWidget {
   const _Benefit({required this.icon, required this.text, super.key});
