@@ -478,6 +478,9 @@ class _ExerciseProgress extends StatelessWidget {
   }
 }
 
+/// The move at a glance: both positions in one full-width card. The whole
+/// card opens the full-size movement view. Its label sits in a row below the
+/// pictures rather than over them, where it covered her feet or head.
 class _ExerciseVisualCard extends StatelessWidget {
   const _ExerciseVisualCard({required this.entry, required this.onWatch});
 
@@ -486,57 +489,66 @@ class _ExerciseVisualCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visualHeight = (MediaQuery.sizeOf(context).height * 0.26).clamp(
-      160.0,
-      240.0,
-    );
-    return Stack(
-      alignment: Alignment.topCenter,
-      children: [
-        SizedBox(
-          height: visualHeight,
-          width: visualHeight * AppSizes.exerciseVisualAspect,
-          child: ExerciseVisual(
-            exerciseId: entry.exerciseId,
-            exerciseName: entry.planExercise.name,
-            blockRoleLabel: SessionPresentation.blockRole(
-              entry.planExercise.blockRole,
+    return Semantics(
+      button: true,
+      label: 'See the movement, ${entry.planExercise.name}',
+      onTap: onWatch,
+      excludeSemantics: true,
+      child: AppPressScale(
+        child: Material(
+          color: AppColors.paper,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadii.mediumBorder,
+            side: const BorderSide(color: AppColors.line),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: const ValueKey('watch-movement'),
+            onTap: onWatch,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ExerciseDiptych(
+                  exerciseId: entry.exerciseId,
+                  exerciseName: entry.planExercise.name,
+                  blockRoleLabel: SessionPresentation.blockRole(
+                    entry.planExercise.blockRole,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.sm,
+                    AppSpacing.sm,
+                    AppSpacing.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.visibility_outlined,
+                        color: AppColors.roseDeep,
+                        size: AppSizes.iconMedium,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          'See the movement',
+                          style: AppText.bodyStrong,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.inkFaint,
+                        size: 21,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            aspectRatio: AppSizes.exerciseVisualAspect,
           ),
         ),
-        Positioned(
-          top: AppSpacing.sm,
-          left: 0,
-          child: Material(
-            color: AppColors.paper.withValues(alpha: 0.92),
-            borderRadius: AppRadii.largeBorder,
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              key: const ValueKey('watch-movement'),
-              onTap: onWatch,
-              child: Container(
-                constraints: const BoxConstraints(
-                  minHeight: AppSizes.tapTarget,
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.visibility_outlined,
-                      color: AppColors.roseDeep,
-                      size: 18,
-                    ),
-                    const SizedBox(width: AppSpacing.xxs),
-                    Text('See the movement', style: AppText.meta),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -612,56 +624,35 @@ class _LearnEntry extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          height: (MediaQuery.sizeOf(context).height * 0.28).clamp(
-            180.0,
-            240.0,
-          ),
-          child: Stack(
-            alignment: Alignment.topCenter,
-            children: [
-              SizedBox(
-                height: (MediaQuery.sizeOf(context).height * 0.28).clamp(
-                  180.0,
-                  240.0,
+        Stack(
+          children: [
+            ExerciseDiptych(
+              exerciseId: entry.exerciseId,
+              exerciseName: entry.planExercise.name,
+              blockRoleLabel: SessionPresentation.blockRole(
+                entry.planExercise.blockRole,
+              ),
+            ),
+            Positioned(
+              left: AppSpacing.sm,
+              top: AppSpacing.sm,
+              child: Container(
+                key: const ValueKey('new-move-chip'),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 6,
                 ),
-                width:
-                    (MediaQuery.sizeOf(context).height * 0.28).clamp(
-                      180.0,
-                      240.0,
-                    ) *
-                    AppSizes.exerciseVisualAspect,
-                child: ExerciseVisual(
-                  exerciseId: entry.exerciseId,
-                  exerciseName: entry.planExercise.name,
-                  blockRoleLabel: SessionPresentation.blockRole(
-                    entry.planExercise.blockRole,
-                  ),
-                  aspectRatio: AppSizes.exerciseVisualAspect,
-                  compact: true,
+                decoration: BoxDecoration(
+                  color: AppColors.paper.withValues(alpha: 0.94),
+                  borderRadius: AppRadii.largeBorder,
+                ),
+                child: Text(
+                  'NEW MOVE',
+                  style: AppText.label.copyWith(color: AppColors.roseDeep),
                 ),
               ),
-              Positioned(
-                left: AppSpacing.sm,
-                top: AppSpacing.sm,
-                child: Container(
-                  key: const ValueKey('new-move-chip'),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.paper.withValues(alpha: 0.94),
-                    borderRadius: AppRadii.largeBorder,
-                  ),
-                  child: Text(
-                    'NEW MOVE',
-                    style: AppText.label.copyWith(color: AppColors.roseDeep),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(

@@ -104,6 +104,59 @@ class ExerciseVisual extends ConsumerWidget {
   }
 }
 
+/// Both positions of a move side by side and still, readable at a glance
+/// between sets. Two 8:9 stills make one 16:9 picture, so nothing is cropped.
+class ExerciseDiptych extends StatelessWidget {
+  const ExerciseDiptych({
+    required this.exerciseId,
+    required this.exerciseName,
+    required this.blockRoleLabel,
+    super.key,
+  });
+
+  final String exerciseId;
+  final String exerciseName;
+  final String blockRoleLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final stills = exerciseStills(exerciseId);
+    return AspectRatio(
+      key: const ValueKey('exercise-diptych'),
+      aspectRatio: AppSizes.exerciseDiptychAspect,
+      child: stills == null
+          ? _ExerciseVisualPlaceholder(
+              exerciseName: exerciseName,
+              blockRoleLabel: blockRoleLabel,
+              compact: false,
+            )
+          : ColoredBox(
+              color: AppColors.paper,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final (index, asset) in [
+                    stills.pos1Asset,
+                    stills.pos2Asset,
+                  ].indexed) ...[
+                    if (index == 1) const SizedBox(width: 2),
+                    Expanded(
+                      child: Image.asset(
+                        asset,
+                        key: ValueKey('exercise-diptych-${index + 1}'),
+                        fit: BoxFit.cover,
+                        excludeFromSemantics: true,
+                        frameBuilder: AppMotion.fadeInImage,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+    );
+  }
+}
+
 class ExerciseStillsPlayer extends StatefulWidget {
   const ExerciseStillsPlayer({required this.source, super.key});
 
@@ -115,9 +168,9 @@ class ExerciseStillsPlayer extends StatefulWidget {
 
 class _ExerciseStillsPlayerState extends State<ExerciseStillsPlayer>
     with SingleTickerProviderStateMixin {
-  static const _hold = AppMotion.visualHold;
-  static const _fade = AppMotion.visualFade;
-  static const _total = Duration(milliseconds: 2900);
+  static const _hold = AppMotion.stillsHold;
+  static const _fade = AppMotion.stillsCrossfade;
+  static final _total = (_hold + _fade) * 2;
 
   late final AnimationController _controller = AnimationController(
     vsync: this,

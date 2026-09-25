@@ -18,6 +18,11 @@ abstract final class AppMotion {
   static const Duration visualHold = Duration(milliseconds: 1200);
   static const Duration visualFade = Duration(milliseconds: 250);
 
+  /// The full-size movement view alternates its two stills slowly enough to
+  /// study each position, and blends gently between them.
+  static const Duration stillsHold = Duration(milliseconds: 1600);
+  static const Duration stillsCrossfade = Duration(milliseconds: 500);
+
   static const Curve standardCurve = Curves.easeOutQuart;
   static const Curve entranceCurve = Curves.easeOutQuint;
   static const Curve decisiveCurve = Curves.easeOutExpo;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:womens_gym/core/theme/app_motion.dart';
 import 'package:womens_gym/core/theme/app_sizes.dart';
 import 'package:womens_gym/features/session/presentation/exercise_visual.dart';
 
@@ -87,11 +88,11 @@ void main() {
     expect(find.byKey(const ValueKey('exercise-still-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('exercise-still-2')), findsOneWidget);
     expect(_secondOpacity(tester), 0);
-    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pump(AppMotion.stillsHold);
     expect(_secondOpacity(tester), 0);
-    await tester.pump(const Duration(milliseconds: 125));
+    await tester.pump(AppMotion.stillsCrossfade ~/ 2);
     expect(_secondOpacity(tester), closeTo(0.5, 0.1));
-    await tester.pump(const Duration(milliseconds: 125));
+    await tester.pump(AppMotion.stillsCrossfade ~/ 2);
     expect(_secondOpacity(tester), 1);
   });
 
@@ -138,7 +139,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 1350));
+    await tester.pump(AppMotion.stillsHold + AppMotion.stillsCrossfade ~/ 2);
     final before = _secondOpacity(tester);
     navigator.currentState!.push(
       MaterialPageRoute<void>(
@@ -150,6 +151,41 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     expect(_secondOpacity(tester), paused);
     expect(before, greaterThan(0));
+  });
+
+  testWidgets('the diptych shows both positions side by side at 16:9', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 342,
+                child: ExerciseDiptych(
+                  exerciseId: 'plank',
+                  exerciseName: 'Plank',
+                  blockRoleLabel: 'Core',
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final card = tester.getRect(find.byKey(const ValueKey('exercise-diptych')));
+    expect(card.width / card.height, closeTo(16 / 9, 0.01));
+    final first = tester.getRect(
+      find.byKey(const ValueKey('exercise-diptych-1')),
+    );
+    final second = tester.getRect(
+      find.byKey(const ValueKey('exercise-diptych-2')),
+    );
+    expect(first.height, card.height);
+    expect(second.left - first.right, 2);
+    expect(find.byType(ExerciseStillsPlayer), findsNothing);
   });
 
   testWidgets('thumbnails hold still, large visuals keep their loop', (

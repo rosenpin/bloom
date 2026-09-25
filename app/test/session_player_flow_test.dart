@@ -12,6 +12,7 @@ import 'package:womens_gym/data/db/schema.dart';
 import 'package:womens_gym/features/session/application/rest_timer_foundation.dart';
 import 'package:womens_gym/features/session/application/session_controller.dart';
 import 'package:womens_gym/core/theme/app_colors.dart';
+import 'package:womens_gym/core/theme/app_spacing.dart';
 import 'package:womens_gym/features/session/data/exercise_visual_source.dart';
 import 'package:womens_gym/features/session/data/session_event_codec.dart';
 import 'package:womens_gym/features/session/presentation/exercise_visual.dart';
@@ -38,6 +39,36 @@ void main() {
     await _tap(tester, const ValueKey('effort-justRight'));
     await _tap(tester, const ValueKey('rest-skip'));
     _expectPinnedActions(tester, const ValueKey('set-done'));
+  });
+
+  testWidgets('the move card fills the width on a short phone', (tester) async {
+    final harness = await _SessionHarness.create(tester);
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(375, 667);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await _tap(tester, const ValueKey('session-lets-go'));
+
+    final card = tester.getRect(find.byKey(const ValueKey('exercise-diptych')));
+    expect(card.width, 375 - 2 * AppSpacing.lg);
+    expect(card.width / card.height, closeTo(16 / 9, 0.01));
+    final tapTarget = tester.getRect(
+      find.byKey(const ValueKey('watch-movement')),
+    );
+    final label = tester.getRect(find.text('See the movement'));
+    // The label is inside the card but never over the pictures.
+    expect(tapTarget.contains(label.center), isTrue);
+    expect(label.top, greaterThanOrEqualTo(card.bottom));
+    expect(
+      find.bySemanticsLabel(RegExp(r'^See the movement, ')),
+      findsOneWidget,
+    );
+    final primary = find.byKey(const ValueKey('calibration-done'));
+    expect(tester.getRect(primary).bottom, lessThanOrEqualTo(667));
+    expect(tester.takeException(), equals(null));
+
+    await _tap(tester, const ValueKey('watch-movement'));
+    expect(find.byKey(const ValueKey('teach-visual')), findsOneWidget);
   });
 
   for (final level in engine.EffortLevel.values) {
