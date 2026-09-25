@@ -97,6 +97,43 @@ void main() {
     },
   );
 
+  testWidgets('going back during the auto-advance pause stays back', (
+    tester,
+  ) async {
+    _usePhoneSurface(tester);
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final container = ProviderContainer(
+      overrides: [
+        databaseProvider.overrideWithValue(database),
+        deviceLocaleProvider.overrideWithValue(const Locale('en', 'US')),
+        clockProvider.overrideWithValue(() => DateTime.utc(2026, 7, 26, 10)),
+        startupVersionGateProvider.overrideWith(
+          (ref) async => const VersionGateDecision.allowed(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WomensGymApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('welcome-start')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('age-age30To39')));
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.tap(find.byKey(const ValueKey('onboarding-back')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('welcome-start')), findsOneWidget);
+    expect(find.text('What are we working toward?'), findsNothing);
+    await _disposeWidgetTree(tester);
+  });
+
   testWidgets('menstrual opt-in stores only the two optional profile values', (
     tester,
   ) async {

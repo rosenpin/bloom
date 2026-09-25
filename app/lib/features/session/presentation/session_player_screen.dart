@@ -846,7 +846,10 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
 
   void _tick() {
     if (!mounted) return;
-    final remaining = _endsAt.difference(ref.read(clockProvider)()).inSeconds;
+    // Round up: truncating skipped a second on the first tick (1:15, 1:13).
+    final remaining =
+        (_endsAt.difference(ref.read(clockProvider)()).inMilliseconds / 1000)
+            .ceil();
     if (remaining <= 0) {
       unawaited(_finish());
     } else {

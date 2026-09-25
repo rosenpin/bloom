@@ -41,7 +41,11 @@ Future<void> _selectAndAdvance(
     await Future<void>.delayed(
       AppMotion.duration(context, const Duration(milliseconds: 280)),
     );
-    if (context.mounted) _completeStep(ref, context, step, nextPath);
+    // Going back during the pause wins: a step already leaving the screen
+    // must not pull her forward again.
+    if (context.mounted && (ModalRoute.isCurrentOf(context) ?? true)) {
+      _completeStep(ref, context, step, nextPath);
+    }
   } finally {
     _advancingSteps.remove(step);
   }
