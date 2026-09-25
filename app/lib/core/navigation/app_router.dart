@@ -138,7 +138,7 @@ GoRouter router(Ref ref) {
       ),
       GoRoute(
         path: '/history/session/:id',
-        pageBuilder: (context, state) => _softPage(
+        pageBuilder: (context, state) => _detailPage(
           context,
           state,
           SessionSummaryScreen(sessionId: state.pathParameters['id'] ?? ''),
@@ -146,7 +146,7 @@ GoRouter router(Ref ref) {
       ),
       GoRoute(
         path: '/plan/day/:dayIndex',
-        pageBuilder: (context, state) => _softPage(
+        pageBuilder: (context, state) => _detailPage(
           context,
           state,
           PlanDayDetailScreen(
@@ -156,8 +156,11 @@ GoRouter router(Ref ref) {
         ),
       ),
       StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) =>
-            _AppShell(navigationShell: navigationShell),
+        pageBuilder: (context, state, navigationShell) => _softPage(
+          context,
+          state,
+          _AppShell(navigationShell: navigationShell),
+        ),
         branches: [
           StatefulShellBranch(
             routes: [
@@ -213,76 +216,131 @@ const _onboardingPaths = [
 int _lastOnboardingIndex = 0;
 double _onboardingDirection = 1;
 
-CustomTransitionPage<void> _onboardingPage(
+/// Onboarding steps share one horizontal axis: forward travels left, back
+/// travels right, and both the arriving and leaving step move the same way.
+Page<void> _onboardingPage(
   BuildContext context,
   GoRouterState state,
   Widget child,
 ) {
   final index = _onboardingPaths.indexOf(state.matchedLocation);
-  final direction = index < _lastOnboardingIndex ? -1.0 : 1.0;
-  _onboardingDirection = direction;
-  if (index >= 0) _lastOnboardingIndex = index;
-  return CustomTransitionPage<void>(
+  // Page builders also run on router refreshes; only a real step change may
+  // flip the direction, or a refresh mid-transition would reverse it.
+  if (index >= 0 && index != _lastOnboardingIndex) {
+    _onboardingDirection = index < _lastOnboardingIndex ? -1 : 1;
+    _lastOnboardingIndex = index;
+  }
+  return _FadeThroughPage(
     key: state.pageKey,
+    duration: AppMotion.duration(context, AppMotion.routeEntrance),
+    reverseDuration: AppMotion.duration(context, AppMotion.routeExit),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+        AppFadeThrough(
+          animation: animation,
+          secondaryAnimation: secondaryAnimation,
+          enterFrom: Offset(0.06 * _onboardingDirection, 0),
+          exitTo: Offset(-0.06 * _onboardingDirection, 0),
+          child: child,
+        ),
     child: child,
-    transitionDuration: AppMotion.duration(context, AppMotion.routeEntrance),
-    reverseTransitionDuration: AppMotion.duration(context, AppMotion.routeExit),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      return AnimatedBuilder(
-        animation: Listenable.merge([animation, secondaryAnimation]),
-        child: child,
-        builder: (context, child) {
-          final entering = AppMotion.entranceCurve.transform(animation.value);
-          final leaving = AppMotion.standardCurve.transform(
-            secondaryAnimation.value,
-          );
-          return Opacity(
-            opacity: (entering * (1 - leaving)).clamp(0, 1),
-            child: FractionalTranslation(
-              translation: Offset(
-                direction * (1 - entering) * 0.06 -
-                    _onboardingDirection * leaving * 0.06,
-                0,
-              ),
-              child: child,
-            ),
-          );
-        },
-      );
-    },
   );
 }
 
-CustomTransitionPage<void> _softPage(
+/// Context changes (a new part of the app, not a step deeper) fade through
+/// with a slight rise.
+Page<void> _softPage(BuildContext context, GoRouterState state, Widget child) {
+  return _FadeThroughPage(
+    key: state.pageKey,
+    duration: AppMotion.duration(context, AppMotion.routeEntrance),
+    reverseDuration: AppMotion.duration(context, AppMotion.routeExit),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+        AppFadeThrough(
+          animation: animation,
+          secondaryAnimation: secondaryAnimation,
+          enterFrom: const Offset(0, 0.03),
+          child: child,
+        ),
+    child: child,
+  );
+}
+
+/// A page that fades through its siblings. When a screen replaces it, the
+/// arriving screen's animation fades it out; a full-screen takeover rising
+/// over it (see [_takeoverPage]) leaves it still underneath.
+class _FadeThroughPage extends Page<void> {
+  const _FadeThroughPage({
+    required this.child,
+    required this.duration,
+    required this.reverseDuration,
+    required this.transitionsBuilder,
+    super.key,
+  });
+
+  final Widget child;
+  final Duration duration;
+  final Duration reverseDuration;
+  final RouteTransitionsBuilder transitionsBuilder;
+
+  @override
+  Route<void> createRoute(BuildContext context) => _FadeThroughRoute(this);
+}
+
+class _FadeThroughRoute extends PageRoute<void> {
+  _FadeThroughRoute(_FadeThroughPage page) : super(settings: page);
+
+  _FadeThroughPage get _page => settings as _FadeThroughPage;
+
+  @override
+  Duration get transitionDuration => _page.duration;
+
+  @override
+  Duration get reverseTransitionDuration => _page.reverseDuration;
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  String? get barrierLabel => null;
+
+  @override
+  bool get maintainState => true;
+
+  @override
+  bool canTransitionTo(TransitionRoute<dynamic> nextRoute) =>
+      !(nextRoute is PageRoute && nextRoute.fullscreenDialog);
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) => Semantics(
+    scopesRoute: true,
+    explicitChildNodes: true,
+    child: _page.child,
+  );
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => _page.transitionsBuilder(context, animation, secondaryAnimation, child);
+}
+
+/// Drill-down screens use the platform push, so iOS gets its edge swipe back.
+/// Reduced motion keeps the instant soft page instead.
+Page<void> _detailPage(
   BuildContext context,
   GoRouterState state,
   Widget child,
-) {
-  return CustomTransitionPage<void>(
-    key: state.pageKey,
-    child: child,
-    transitionDuration: AppMotion.duration(context, AppMotion.routeEntrance),
-    reverseTransitionDuration: AppMotion.duration(context, AppMotion.routeExit),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: AppMotion.entranceCurve,
-        reverseCurve: AppMotion.standardCurve,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.04),
-            end: Offset.zero,
-          ).animate(curved),
-          child: child,
-        ),
-      );
-    },
-  );
-}
+) => AppMotion.isReduced(context)
+    ? _softPage(context, state, child)
+    : MaterialPage<void>(key: state.pageKey, child: child);
 
+/// The workout rises over Today as one opaque sheet and drops back down.
+/// As a full-screen dialog, it leaves the screen beneath perfectly still.
 CustomTransitionPage<void> _takeoverPage(
   BuildContext context,
   GoRouterState state,
@@ -290,29 +348,25 @@ CustomTransitionPage<void> _takeoverPage(
 ) {
   return CustomTransitionPage<void>(
     key: state.pageKey,
+    fullscreenDialog: true,
     child: child,
     transitionDuration: AppMotion.duration(context, AppMotion.layout),
     reverseTransitionDuration: AppMotion.exitDuration(
       context,
       AppMotion.layout,
     ),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: AppMotion.decisiveCurve,
-        reverseCurve: AppMotion.standardCurve,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(curved),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+        SlideTransition(
+          position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+              .animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: AppMotion.entranceCurve,
+                  reverseCurve: AppMotion.standardCurve,
+                ),
+              ),
           child: child,
         ),
-      );
-    },
   );
 }
 

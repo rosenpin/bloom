@@ -124,6 +124,9 @@ abstract final class AppTheme {
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.cream,
       canvasColor: AppColors.cream,
+      // Touch feedback on cards reads as a soft rose tint, not a grey wash.
+      splashColor: AppColors.rose.withValues(alpha: 0.10),
+      highlightColor: AppColors.rose.withValues(alpha: 0.06),
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.cream,

@@ -33,6 +33,61 @@ abstract final class AppMotion {
         context,
         Duration(microseconds: (entrance.inMicroseconds * 0.75).round()),
       );
+
+  /// Timing for every modal bottom sheet, so they all rise and settle alike.
+  static AnimationStyle sheet(BuildContext context) => AnimationStyle(
+    duration: duration(context, layout),
+    reverseDuration: exitDuration(context, layout),
+  );
+}
+
+/// A fade-through for swapping whole screens or stages.
+///
+/// The leaving layer clears in the first third of its exit and only then does
+/// the arriving layer resolve, so two layouts never read on top of each
+/// other. A layer leaves either by running [animation] in reverse (a pop, or
+/// an [AnimatedSwitcher] swap) or by being covered, as [secondaryAnimation]
+/// runs forward while the screen that replaces it arrives on top.
+class AppFadeThrough extends AnimatedWidget {
+  AppFadeThrough({
+    required this.animation,
+    required this.child,
+    super.key,
+    this.secondaryAnimation = kAlwaysDismissedAnimation,
+    this.enterFrom = Offset.zero,
+    this.exitTo = Offset.zero,
+  }) : super(listenable: Listenable.merge([animation, secondaryAnimation]));
+
+  final Animation<double> animation;
+  final Animation<double> secondaryAnimation;
+  final Widget child;
+
+  /// Fractional offset the arriving layer travels in from.
+  final Offset enterFrom;
+
+  /// Fractional offset the leaving layer travels out to.
+  final Offset exitTo;
+
+  // The leaving layer is gone at 35%, exactly when the arriving one starts.
+  static const _exitFade = Interval(0, 0.35);
+  static const _enterFade = Interval(0.35, 1, curve: Curves.easeOut);
+
+  @override
+  Widget build(BuildContext context) {
+    final popping = animation.status == AnimationStatus.reverse;
+    // How far this layer has left: by popping, or by being covered.
+    final gone = popping ? 1 - animation.value : secondaryAnimation.value;
+    final arrived = popping ? 1.0 : animation.value;
+    return Opacity(
+      opacity: _enterFade.transform(arrived) * (1 - _exitFade.transform(gone)),
+      child: FractionalTranslation(
+        translation:
+            enterFrom * (1 - AppMotion.entranceCurve.transform(arrived)) +
+            exitTo * AppMotion.standardCurve.transform(gone),
+        child: child,
+      ),
+    );
+  }
 }
 
 /// Transform-only press feedback for large, decisive controls.

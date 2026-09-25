@@ -50,6 +50,8 @@ Future<void> _selectAndAdvance(
 class WelcomeScreen extends ConsumerStatefulWidget {
   const WelcomeScreen({super.key});
 
+  static const image = 'assets/images/goblet-squat-1.jpg';
+
   @override
   ConsumerState<WelcomeScreen> createState() => _WelcomeScreenState();
 }
@@ -66,13 +68,19 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         .ensureProfile(countryCode: locale.countryCode);
   }
 
+  Future<void> _start() async {
+    final answers = await _profile;
+    if (mounted) context.go(answers.resumePath);
+  }
+
   @override
   Widget build(BuildContext context) {
+    // The screen lays out at once; only the button label waits for the saved
+    // profile, which is a local read that lands during the page entrance.
     return FutureBuilder(
       future: _profile,
       builder: (context, snapshot) {
         final answers = snapshot.data;
-        if (answers == null) return const LoadingBloom();
         return Scaffold(
           backgroundColor: AppColors.paper,
           body: SafeArea(
@@ -98,7 +106,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                         child: ClipRRect(
                           borderRadius: AppRadii.largeBorder,
                           child: Image.asset(
-                            'assets/images/goblet-squat-1.jpg',
+                            WelcomeScreen.image,
                             fit: BoxFit.cover,
                             alignment: const Alignment(0, -0.55),
                           ),
@@ -120,9 +128,9 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                       const SizedBox(height: AppSpacing.md),
                       FilledButton(
                         key: const ValueKey('welcome-start'),
-                        onPressed: () => context.go(answers.resumePath),
+                        onPressed: _start,
                         child: Text(
-                          answers.ageBand == null
+                          answers?.ageBand == null
                               ? "Let's find your plan"
                               : 'Keep going',
                         ),
@@ -369,6 +377,11 @@ class ComfortScreen extends ConsumerWidget {
       engine.GymComfort.mostlyFine: 'Mostly fine',
       engine.GymComfort.totallyAtHome: 'Totally at home',
     };
+    // Decode the next step's photo tiles now, so they are ready as it slides
+    // in instead of popping in one by one.
+    for (final emphasis in engine.Emphasis.values) {
+      precacheImage(AssetImage(_emphasisImage(emphasis)), context);
+    }
     return _withAnswers(
       ref,
       (answers) => QuizPage(
@@ -429,7 +442,7 @@ class EmphasisScreen extends ConsumerWidget {
               _EmphasisTile(
                 key: ValueKey('emphasis-${choice.key.name}'),
                 label: choice.value,
-                image: 'assets/images/emphasis/${choice.key.name}.jpg',
+                image: _emphasisImage(choice.key),
                 selected: answers.emphasis == choice.key,
                 onTap: () => _selectAndAdvance(
                   ref,
@@ -1160,6 +1173,9 @@ Widget _withAnswers(
     loading: () => const LoadingBloom(),
   );
 }
+
+String _emphasisImage(engine.Emphasis emphasis) =>
+    'assets/images/emphasis/${emphasis.name}.jpg';
 
 String _emphasisLabel(engine.Emphasis? emphasis) => switch (emphasis) {
   engine.Emphasis.glutes => 'glute',

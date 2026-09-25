@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -167,7 +168,11 @@ class QuizPage extends StatelessWidget {
   }
 }
 
-class OnboardingBackScope extends StatelessWidget {
+/// Routes system back and the iOS edge swipe to the step's own back action.
+///
+/// Steps replace each other rather than stack, so there is no route to pop;
+/// a rightward swipe that starts at the left edge goes back a step instead.
+class OnboardingBackScope extends StatefulWidget {
   const OnboardingBackScope({
     required this.onBack,
     required this.child,
@@ -178,13 +183,42 @@ class OnboardingBackScope extends StatelessWidget {
   final Widget child;
 
   @override
+  State<OnboardingBackScope> createState() => _OnboardingBackScopeState();
+}
+
+class _OnboardingBackScopeState extends State<OnboardingBackScope> {
+  static const _edgeWidth = 32.0;
+  bool _fromEdge = false;
+  double _travel = 0;
+
+  void _end(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final far = _travel > MediaQuery.sizeOf(context).width * 0.3;
+    if (_fromEdge && velocity >= 0 && (velocity > 350 || far)) widget.onBack();
+    _fromEdge = false;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return PopScope<void>(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) onBack();
+        if (!didPop) widget.onBack();
       },
-      child: child,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        // Report where the finger landed, not where the drag was recognized.
+        dragStartBehavior: DragStartBehavior.down,
+        onHorizontalDragStart: (details) {
+          _fromEdge = details.globalPosition.dx <= _edgeWidth;
+          _travel = 0;
+        },
+        onHorizontalDragUpdate: (details) =>
+            _travel += details.primaryDelta ?? 0,
+        onHorizontalDragEnd: _end,
+        onHorizontalDragCancel: () => _fromEdge = false,
+        child: widget.child,
+      ),
     );
   }
 }
@@ -329,6 +363,8 @@ class OptionCard extends StatelessWidget {
                         trailing ?? SelectionRadio(selected: selected),
                       ],
                     ),
+                    // The extra row unfolds and folds away, so the cards
+                    // below glide instead of jumping.
                     AnimatedSwitcher(
                       duration: AppMotion.duration(context, AppMotion.state),
                       reverseDuration: AppMotion.exitDuration(
@@ -337,8 +373,11 @@ class OptionCard extends StatelessWidget {
                       ),
                       switchInCurve: AppMotion.entranceCurve,
                       switchOutCurve: AppMotion.standardCurve,
-                      transitionBuilder: (child, animation) =>
-                          FadeTransition(opacity: animation, child: child),
+                      transitionBuilder: (child, animation) => SizeTransition(
+                        sizeFactor: animation,
+                        alignment: Alignment.topCenter,
+                        child: FadeTransition(opacity: animation, child: child),
+                      ),
                       child: child == null
                           ? const SizedBox(key: ValueKey('option-child-empty'))
                           : Padding(
@@ -789,12 +828,21 @@ class LoadingBloom extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: AppColors.paper,
       body: Center(
-        child: CircularProgressIndicator(
-          color: AppColors.rose,
-          backgroundColor: AppColors.blushSoft,
+        // Most loads finish within a frame or two. The spinner only fades in
+        // once a wait is long enough to notice, so quick loads never flash it.
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 600),
+          curve: const Interval(0.6, 1),
+          builder: (context, opacity, child) =>
+              Opacity(opacity: opacity, child: child),
+          child: const CircularProgressIndicator(
+            color: AppColors.rose,
+            backgroundColor: AppColors.blushSoft,
+          ),
         ),
       ),
     );

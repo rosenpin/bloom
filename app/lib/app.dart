@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/navigation/app_router.dart';
 import 'core/providers.dart';
+import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'core/version_gate.dart';
 import 'data/sync/sync_service.dart';
+import 'features/onboarding/presentation/onboarding_screens.dart';
 
 class WomensGymApp extends ConsumerStatefulWidget {
   const WomensGymApp({super.key});
@@ -26,6 +28,14 @@ class _WomensGymAppState extends ConsumerState<WomensGymApp>
     _syncService = ref.read(syncServiceProvider);
     WidgetsBinding.instance.addObserver(this);
     unawaited(_bootstrap());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Decoded during launch, so a first run's welcome photo is there with
+    // the words instead of a beat later.
+    precacheImage(const AssetImage(WelcomeScreen.image), context);
   }
 
   Future<void> _bootstrap() async {
@@ -67,12 +77,17 @@ class _WomensGymAppState extends ConsumerState<WomensGymApp>
       theme: AppTheme.light,
       themeMode: ThemeMode.light,
       routerConfig: ref.watch(routerProvider),
-      builder: (context, child) => gate.when(
-        data: (decision) => decision.isBlocked
-            ? VersionGateBlockingScreen(message: decision.message)
-            : child ?? const SizedBox.shrink(),
-        error: (error, stackTrace) => child ?? const SizedBox.shrink(),
-        loading: () => child ?? const SizedBox.shrink(),
+      // Paint the brand ground under every route, so screens that fade
+      // through each other never show the black window between them.
+      builder: (context, child) => ColoredBox(
+        color: AppColors.paper,
+        child: gate.when(
+          data: (decision) => decision.isBlocked
+              ? VersionGateBlockingScreen(message: decision.message)
+              : child ?? const SizedBox.shrink(),
+          error: (error, stackTrace) => child ?? const SizedBox.shrink(),
+          loading: () => child ?? const SizedBox.shrink(),
+        ),
       ),
     );
   }
