@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:programming_engine/programming_engine.dart' as engine;
@@ -89,6 +90,55 @@ void main() {
     expect(await database.select(database.outbox).get(), isEmpty);
     expect(remote.applied['app_events'], hasLength(1));
     expect(remote.ignoreDuplicateCalls, [true, true]);
+  });
+
+  test('a row that used up its retries drains after a restart', () async {
+    final now = DateTime.utc(2026, 7, 26, 10);
+    final remote = _FakeSyncRemote(userId: 'user-1')
+      ..failingTables.add('app_events');
+    await _insertAppEvent(database, now);
+    final service = SyncService(database, remote, () => now);
+    await service.syncNow();
+    await database
+        .update(database.outbox)
+        .write(const OutboxCompanion(attempts: Value(5)));
+
+    // The server gets fixed; this launch has already given up on the row.
+    remote.failingTables.clear();
+    await service.syncNow();
+    expect(await database.select(database.outbox).get(), hasLength(1));
+
+    final relaunched = SyncService(database, remote, () => now);
+    await relaunched.syncNow();
+    expect(await database.select(database.outbox).get(), isEmpty);
+    expect(remote.applied['app_events'], hasLength(1));
+  });
+
+  test('a failing analytics event does not hold back a plan', () async {
+    final now = DateTime.utc(2026, 7, 26, 10);
+    final remote = _FakeSyncRemote(userId: 'user-1')
+      ..failingTables.add('app_events');
+    await _insertAppEvent(database, now);
+    const planId = '01K11K5YQ00000000000000000';
+    await database
+        .into(database.outbox)
+        .insert(
+          OutboxCompanion.insert(
+            id: '01K11K5YQ20000000000000000',
+            targetTable: 'plans',
+            rowId: planId,
+            op: OutboxOperation.update,
+            payloadJson: jsonEncode({'id': planId}),
+            createdAt: now.add(const Duration(seconds: 1)),
+          ),
+        );
+
+    await SyncService(database, remote, () => now).syncNow();
+
+    expect(remote.applied['plans'], hasLength(1));
+    final left = await database.select(database.outbox).get();
+    expect(left.single.targetTable, 'app_events');
+    expect(left.single.attempts, 1);
   });
 
   test('content pull upserts the mirror and advances its cursor', () async {
@@ -250,6 +300,7 @@ final class _FakeSyncRemote implements SyncRemote {
   final ownedByTable = <String, List<Map<String, Object?>>>{};
   final applied = <String, Map<String, Map<String, Object?>>>{};
   bool failAfterApplyOnce = false;
+  final failingTables = <String>{};
   int sendCount = 0;
   final ignoreDuplicateCalls = <bool>[];
 
@@ -282,6 +333,9 @@ final class _FakeSyncRemote implements SyncRemote {
   }) async {
     sendCount++;
     ignoreDuplicateCalls.add(ignoreDuplicates);
+    if (failingTables.contains(table)) {
+      throw StateError('new row violates row-level security policy');
+    }
     final key = [
       for (final column in onConflict.split(',')) row[column],
     ].join('|');
@@ -292,3 +346,21 @@ final class _FakeSyncRemote implements SyncRemote {
     }
   }
 }
+
+Future<void> _insertAppEvent(AppDatabase database, DateTime now) => database
+    .into(database.outbox)
+    .insert(
+      OutboxCompanion.insert(
+        id: '01K11K5YQ10000000000000000',
+        targetTable: 'app_events',
+        rowId: '00000000-0000-4000-8000-000000000001',
+        op: OutboxOperation.insert,
+        payloadJson: jsonEncode({
+          'id': '00000000-0000-4000-8000-000000000001',
+          'name': 'session_started',
+          'props': <String, Object?>{},
+          'client_ts': now.toIso8601String(),
+        }),
+        createdAt: now,
+      ),
+    );

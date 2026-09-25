@@ -32,6 +32,7 @@ final class SyncService {
 
   Timer? _timer;
   Future<void>? _activeSync;
+  bool _retriesForgiven = false;
 
   void startForeground() {
     _timer?.cancel();
@@ -59,6 +60,19 @@ final class SyncService {
 
   Future<void> _sync() async {
     try {
+      // Once per launch, forget past failures, so a fix on the server is
+      // picked up on the next launch instead of waiting for an app update.
+      if (!_retriesForgiven) {
+        _retriesForgiven = true;
+        await _database
+            .update(_database.outbox)
+            .write(
+              const OutboxCompanion(
+                attempts: Value(0),
+                nextAttemptAt: Value(null),
+              ),
+            );
+      }
       await _pullContent();
       final userId = await _remote.currentUserId();
       if (userId == null) return;
@@ -77,9 +91,16 @@ final class SyncService {
       ]);
     final rows = await query.get();
     for (final entry in rows) {
-      if (entry.attempts >= maxAttempts) return;
+      // Analytics stand alone, so a stuck event is stepped over. Everything
+      // else stops the drain: the server needs profiles, plans, sessions and
+      // their events in order.
+      final independent = entry.targetTable == 'app_events';
       final now = _clock().toUtc();
-      if (entry.nextAttemptAt case final retryAt? when retryAt.isAfter(now)) {
+      final waiting =
+          entry.attempts >= maxAttempts ||
+          (entry.nextAttemptAt?.isAfter(now) ?? false);
+      if (waiting) {
+        if (independent) continue;
         return;
       }
       try {
@@ -98,6 +119,7 @@ final class SyncService {
             nextAttemptAt: Value(now.add(Duration(seconds: 1 << exponent))),
           ),
         );
+        if (independent) continue;
         return;
       }
     }
