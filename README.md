@@ -15,7 +15,7 @@ Built for RevenueCat Shipaton 2026. Bloom is a work in progress.
 ```
 app/                          Flutter app (iOS and Android)
 packages/programming_engine/  the training engine, pure Dart
-review_site/                  engine explorer: a Flutter web tool running the real engine
+review_site/                  engine explorer: Flutter web app running the real engine (live on GitHub Pages)
 supabase/migrations/          Postgres schema, row-level security, content seed
 .github/workflows/            CI and the TestFlight release pipeline
 ```
@@ -174,7 +174,7 @@ The RevenueCat app user id is the anonymous Supabase user id, so a membership fo
 
 ### CI
 
-These are the private repo's workflows, published as they are. `ci.yml` runs analyze and tests for the engine, the app and the engine explorer; the media-dependent app tests need files that are not in this repo. `testflight.yml` ships an iOS beta on every push to `main` and needs signing secrets and release scripts that are not here either.
+These are the private repo's workflows, kept for reference. GitHub Actions are disabled on this public mirror, so they do not run here. `ci.yml` runs analyze and tests for the engine, the app and the engine explorer. `testflight.yml` ships an iOS beta from the private repo and needs signing secrets and release scripts that are not in this one.
 
 ## Notice
 

@@ -3,9 +3,8 @@
 Pure Dart training-programming engine: plan assembly, progression, in-session
 adaptation. Not published — consumed by `app/` and by the web quiz funnel.
 
-Design: `docs/ENGINE.md`. Training rules: `docs/PROGRAMMING.md`. Content schema:
-`docs/EXERCISES.md`. **Read those before changing anything here** — every number in
-`ProgrammingConfig` traces to a line in the spec.
+The design and training docs are internal and not part of this repo; the root README's
+[How the engine works](../../README.md#how-the-engine-works) section is the public summary.
 
 ## Rules this package lives by
 
@@ -26,9 +25,10 @@ Design: `docs/ENGINE.md`. Training rules: `docs/PROGRAMMING.md`. Content schema:
 | Config | `src/config/` | `ProgrammingConfig` — every tuning number — and the per-market equipment ladders |
 | Content | `src/content/` | typed attribute interfaces mirroring `EXERCISES.md`; no persistence |
 | Progression | `src/progression/` | §4 effort mapping, the Epley-ratio `LoadSuggester`, §6 layoff tiers |
-
-Still to come, in `ENGINE.md`'s build order: `assemblePlan` (+ persona snapshots),
-`resolveSession` (+ journey goldens), `advanceSession` (+ calibration tests).
+| Profile | `src/profile/` | `Profile`, the quiz answers as engine input |
+| Plan | `src/plan/` | `assemblePlan`, eligibility, `Plan`, `applyPlanEdit` |
+| History | `src/history/` | the fold from the session event log to per-exercise state |
+| Session | `src/session/` | `resolveSession` and the `advanceSession` reducer |
 
 ## Two layers, in one paragraph
 
