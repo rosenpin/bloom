@@ -8,6 +8,7 @@ import 'package:womens_gym/data/db/app_database.dart';
 import 'package:womens_gym/data/db/schema.dart';
 import 'package:womens_gym/data/sync/sync_remote.dart';
 import 'package:womens_gym/data/sync/sync_service.dart';
+import 'package:womens_gym/features/onboarding/domain/onboarding_answers.dart';
 import 'package:womens_gym/features/plan/data/plan_codec.dart';
 import 'package:womens_gym/features/session/data/session_event_codec.dart';
 
@@ -288,7 +289,91 @@ void main() {
     final profile = await database.select(database.profiles).getSingle();
     expect(profile.quizAnswersJson, answers.toJson());
   });
+
+  test('reinstall replaces the blank welcome profile with hers', () async {
+    final now = DateTime.utc(2026, 7, 26, 10);
+    await _saveLocalProfile(database, _blankAnswers, now);
+    final answers = sessionTestAnswers();
+    final remote = _FakeSyncRemote(userId: 'user-1')
+      ..ownedByTable['profiles'] = [_profileRow(answers.toJson(), now)]
+      ..ownedByTable['plans'] = [_planRow(now)];
+
+    await SyncService(database, remote, () => now).syncNow();
+
+    final profile = await database.select(database.profiles).getSingle();
+    expect(profile.quizAnswersJson, answers.toJson());
+    expect(await database.select(database.plans).get(), hasLength(1));
+  });
+
+  test('a blank server profile over a blank local one stays blank', () async {
+    final now = DateTime.utc(2026, 7, 26, 10);
+    await _saveLocalProfile(database, _blankAnswers, now);
+    final remote = _FakeSyncRemote(userId: 'user-1')
+      ..ownedByTable['profiles'] = [_profileRow(_blankAnswers.toJson(), now)];
+
+    await SyncService(database, remote, () => now).syncNow();
+
+    final profile = await database.select(database.profiles).getSingle();
+    expect(profile.quizAnswersJson, _blankAnswers.toJson());
+  });
+
+  test('answers given while the restore pull is in flight survive', () async {
+    final now = DateTime.utc(2026, 7, 26, 10);
+    await _saveLocalProfile(database, _blankAnswers, now);
+    final answered = _blankAnswers.copyWith(ageBand: engine.AgeBand.age30To39);
+    final remote = _FakeSyncRemote(userId: 'user-1')
+      ..ownedByTable['profiles'] = [_profileRow(_blankAnswers.toJson(), now)]
+      // She picks her age after the profile pull, before the write.
+      ..onPull = (table) async {
+        if (table == 'plans') {
+          await _saveLocalProfile(database, answered, now);
+        }
+      };
+
+    await SyncService(database, remote, () => now).syncNow();
+
+    final profile = await database.select(database.profiles).getSingle();
+    expect(profile.quizAnswersJson, answered.toJson());
+  });
 }
+
+final _blankAnswers = OnboardingAnswers(unitSystem: engine.UnitSystem.metric);
+
+Future<void> _saveLocalProfile(
+  AppDatabase database,
+  OnboardingAnswers answers,
+  DateTime now,
+) => database
+    .into(database.profiles)
+    .insertOnConflictUpdate(
+      ProfilesCompanion.insert(
+        unitSystem: answers.unitSystem,
+        quizAnswersJson: answers.toJson(),
+        updatedAt: now,
+      ),
+    );
+
+Map<String, Object?> _profileRow(String quizAnswersJson, DateTime now) => {
+  'id': 'user-1',
+  'unit_system': 'metric',
+  'quiz_answers': jsonDecode(quizAnswersJson),
+  'last_period_start': null,
+  'usual_gap_days': null,
+  'unit_prompt_seen': false,
+  'updated_at': now.toIso8601String(),
+};
+
+Map<String, Object?> _planRow(DateTime now) => {
+  'id': '01K11K5YQ00000000000000000',
+  'user_id': 'user-1',
+  'document': jsonDecode(PlanCodec.encode(sessionTestPlan())),
+  'engine_version': 'session-test-engine',
+  'config_hash': 'session-test-config',
+  'content_hash': 'session-test-content',
+  'profile_hash': 'session-test-profile',
+  'mesocycle_index': 1,
+  'created_at': now.toIso8601String(),
+};
 
 Map<String, Object?> _exerciseRow(
   engine.Exercise exercise,
@@ -343,11 +428,16 @@ final class _FakeSyncRemote implements SyncRemote {
   @override
   Future<String?> currentUserId() async => userId;
 
+  Future<void> Function(String table)? onPull;
+
   @override
   Future<List<Map<String, Object?>>> pullOwned(
     String table, {
     required String userId,
-  }) async => ownedByTable[table] ?? const [];
+  }) async {
+    await onPull?.call(table);
+    return ownedByTable[table] ?? const [];
+  }
 
   @override
   Future<List<Map<String, Object?>>> pullUpdated(
