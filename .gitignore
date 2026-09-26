@@ -1,0 +1,27 @@
+# Flutter / Dart
+app/.dart_tool/
+app/build/
+app/.flutter-plugins*
+app/ios/Pods/
+app/ios/.symlinks/
+app/ios/Flutter/Flutter.framework/
+app/ios/Flutter/Generated.xcconfig
+app/ios/Flutter/flutter_export_environment.sh
+app/android/.gradle/
+app/android/local.properties
+app/android/app/.cxx/
+packages/*/.dart_tool/
+packages/*/build/
+**/*.g.dart
+**/*.freezed.dart
+.env
+*.swp
+.DS_Store
+app/env.json
+
+# local App Store Connect release state
+.last-build-number
+
+# signing keys / ASC API keys
+secrets/
+*.p8
