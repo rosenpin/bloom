@@ -252,6 +252,42 @@ void main() {
       expect(await database.select(database.sessionEvents).get(), hasLength(1));
     },
   );
+
+  test('restore keeps a profile she is answering on this device', () async {
+    final now = DateTime.utc(2026, 7, 26, 10);
+    final answers = sessionTestAnswers();
+    await database
+        .into(database.profiles)
+        .insert(
+          ProfilesCompanion.insert(
+            unitSystem: answers.unitSystem,
+            quizAnswersJson: answers.toJson(),
+            updatedAt: now,
+          ),
+        );
+    // The server still has the copy pushed one answer earlier.
+    final earlier = jsonDecode(answers.toJson()) as Map<String, Object?>
+      ..['emphasis'] = null;
+    final remote = _FakeSyncRemote(userId: 'user-1')
+      ..ownedByTable['profiles'] = [
+        {
+          'id': 'user-1',
+          'unit_system': 'metric',
+          'quiz_answers': earlier,
+          'last_period_start': null,
+          'usual_gap_days': null,
+          'unit_prompt_seen': false,
+          'updated_at': now
+              .subtract(const Duration(seconds: 1))
+              .toIso8601String(),
+        },
+      ];
+
+    await SyncService(database, remote, () => now).syncNow();
+
+    final profile = await database.select(database.profiles).getSingle();
+    expect(profile.quizAnswersJson, answers.toJson());
+  });
 }
 
 Map<String, Object?> _exerciseRow(

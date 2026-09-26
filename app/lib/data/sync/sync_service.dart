@@ -342,12 +342,24 @@ final class SyncService {
     }
 
     await _database.transaction(() async {
+      // Onboarding keeps saving while this pull is in flight. Once she has
+      // started answering on this device, its profile is the live one, and
+      // the server copy (pushed a moment ago) would undo her latest answer.
+      final local = await (_database.select(
+        _database.profiles,
+      )..where((row) => row.id.equals('local'))).getSingleOrNull();
+      final answering =
+          local != null &&
+          (jsonDecode(local.quizAnswersJson)
+                  as Map<String, Object?>)['ageBand'] !=
+              null;
       final abandonedAtBySession = <String, DateTime>{
         for (final event in eventRows)
           if (event['type'] == StoredSessionEventType.sessionAbandoned.name)
             event['session_id']! as String: _date(event['recorded_at']),
       };
-      for (final row in profileRows) {
+      for (final row
+          in answering ? const <Map<String, Object?>>[] : profileRows) {
         await _database
             .into(_database.profiles)
             .insertOnConflictUpdate(
