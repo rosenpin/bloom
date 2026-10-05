@@ -66,8 +66,15 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
 
     return SafeArea(
       key: const ValueKey('plan-screen'),
+      bottom: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        // Scrolls on under the floating tab bar, and clears it at the end.
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg + MediaQuery.paddingOf(context).bottom,
+        ),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),

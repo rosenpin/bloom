@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_theme.dart';
 import '../domain/onboarding_answers.dart';
 import 'onboarding_widgets.dart';
 
@@ -88,15 +89,16 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         return Scaffold(
           backgroundColor: AppColors.paper,
           body: SafeArea(
+            bottom: false,
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
+                  padding: EdgeInsets.fromLTRB(
                     AppSpacing.lg,
                     AppSpacing.md,
                     AppSpacing.lg,
-                    AppSpacing.lg,
+                    AppSpacing.bottomEdge(context),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -660,12 +662,15 @@ class MenstrualScreen extends ConsumerWidget {
     return _withAnswers(ref, (answers) {
       final ready =
           answers.lastPeriodStart != null && answers.menstrualGap != null;
+      final picked =
+          answers.lastPeriodStart != null || answers.menstrualGap != null;
       void goBack() => context.go('/onboarding/activities');
       return OnboardingBackScope(
         onBack: goBack,
         child: Scaffold(
           backgroundColor: AppColors.paper,
           body: SafeArea(
+            bottom: false,
             child: Column(
               children: [
                 OnboardingProgress(step: 9, onBack: goBack),
@@ -718,11 +723,11 @@ class MenstrualScreen extends ConsumerWidget {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(
+                  padding: EdgeInsets.fromLTRB(
                     AppSpacing.lg,
                     AppSpacing.sm,
                     AppSpacing.lg,
-                    AppSpacing.lg,
+                    AppSpacing.bottomEdge(context),
                   ),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 440),
@@ -736,35 +741,65 @@ class MenstrualScreen extends ConsumerWidget {
                               ?.copyWith(color: AppColors.inkSoft),
                         ),
                         const SizedBox(height: AppSpacing.sm),
-                        FilledButton(
-                          key: const ValueKey('menstrual-finish'),
-                          onPressed: ready
-                              ? () {
-                                  _completeStep(
-                                    ref,
-                                    context,
-                                    9,
-                                    '/onboarding/generating',
-                                  );
-                                }
-                              : null,
-                          child: const Text('Build my plan'),
-                        ),
-                        TextButton(
-                          key: const ValueKey('menstrual-not-applicable'),
-                          onPressed: () => _finishWithoutMenstrualData(
+                        // One way on at a time: the button arrives once both
+                        // answers are in, and a single pick says what is left.
+                        AnimatedSize(
+                          duration: AppMotion.duration(
                             context,
-                            ref,
-                            MenstrualPreference.notApplicable,
+                            AppMotion.state,
                           ),
-                          child: const Text("This doesn't fit me"),
+                          curve: AppMotion.standardCurve,
+                          alignment: Alignment.topCenter,
+                          child: AnimatedSwitcher(
+                            duration: AppMotion.duration(
+                              context,
+                              AppMotion.state,
+                            ),
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                            child: ready
+                                ? FilledButton(
+                                    key: const ValueKey('menstrual-finish'),
+                                    onPressed: () => _completeStep(
+                                      ref,
+                                      context,
+                                      9,
+                                      '/onboarding/generating',
+                                    ),
+                                    child: const Text('Build my plan'),
+                                  )
+                                : picked
+                                ? Padding(
+                                    key: const ValueKey('menstrual-hint'),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: AppSpacing.xs,
+                                    ),
+                                    child: Text(
+                                      'Pick both to build your plan.',
+                                      textAlign: TextAlign.center,
+                                      style: AppText.meta,
+                                    ),
+                                  )
+                                : const SizedBox(
+                                    key: ValueKey('menstrual-none'),
+                                    width: double.infinity,
+                                  ),
+                          ),
                         ),
+                        // Declining and "not for me" change nothing downstream,
+                        // so one quiet way past is enough.
                         TextButton(
                           key: const ValueKey('menstrual-skip'),
                           onPressed: () => _finishWithoutMenstrualData(
                             context,
                             ref,
                             MenstrualPreference.declined,
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.inkSoft,
                           ),
                           child: const Text('Skip'),
                         ),

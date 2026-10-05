@@ -848,6 +848,10 @@ String _configCanonical(ProgrammingConfig config) {
   final parts = <String>[
     for (final goal in Goal.values)
       _schemeCanonical(goal, config.repSchemes[goal]),
+    for (final kind in RestKind.values)
+      '${kind.name}:${config.restByKind[kind]?.inMicroseconds}',
+    '${config.shortRangeMaxReps}',
+    '${config.shortRangeRestBonus.inMicroseconds}',
     '${config.isolationRange}',
     '${config.isolationRestartRange}',
     '${config.dropBridgeBackOffReps}',
@@ -914,8 +918,7 @@ String _configCanonical(ProgrammingConfig config) {
 String _schemeCanonical(Goal goal, RepScheme? scheme) => scheme == null
     ? '${goal.name}:missing'
     : '${goal.name}:${scheme.minSets}:${scheme.maxSets}:${scheme.range}:'
-          '${scheme.effort.rpe}:${scheme.rest.inMicroseconds}:'
-          '${scheme.extraSetOnEmphasis}';
+          '${scheme.effort.rpe}:${scheme.extraSetOnEmphasis}';
 
 String _loadTableCanonical(EquipmentLoadTable table) => <double>[
   table.barbellBar.value,

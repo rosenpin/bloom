@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -131,6 +132,55 @@ void main() {
     expect(find.byKey(const ValueKey('today-screen')), findsOneWidget);
     await _disposeWidgetTree(tester);
   });
+
+  testWidgets(
+    'paywall names the store that bills her',
+    (tester) async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final container = ProviderContainer(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          entitlementServiceProvider.overrideWithValue(_FakeEntitlements()),
+          clockProvider.overrideWithValue(() => DateTime.utc(2026, 7, 26, 10)),
+          startupVersionGateProvider.overrideWith(
+            (ref) async => const VersionGateDecision.allowed(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container
+          .read(onboardingRepositoryProvider)
+          .save(_completeAnswers(completed: true));
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const WomensGymApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final android = defaultTargetPlatform == TargetPlatform.android;
+      expect(
+        find.textContaining(
+          android
+              ? 'Cancel anytime in Google Play'
+              : 'Cancel anytime in Settings',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Redeem a code'),
+        android ? findsNothing : findsOneWidget,
+      );
+      await _disposeWidgetTree(tester);
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    }),
+  );
 }
 
 class _FakeEntitlements implements EntitlementService {

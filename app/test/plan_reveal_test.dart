@@ -94,7 +94,20 @@ void main() {
     );
     await tester.pumpAndSettle();
     container.read(routerProvider).go('/onboarding/reveal');
+    // Early in the entrance the buttons and their surface are both still
+    // below the screen: no empty box sits over the plan.
+    final start = find.byKey(const ValueKey('reveal-start'));
+    for (var frame = 0; frame < 60 && start.evaluate().isEmpty; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.getRect(start).top, greaterThanOrEqualTo(844));
     await tester.pumpAndSettle();
+    // Settled, they sit on one surface at the bottom, and the last card can
+    // scroll clear of them.
+    expect(tester.getRect(start).bottom, lessThan(844));
+    final surface = find.ancestor(of: start, matching: find.byType(Container));
+    expect(tester.getRect(surface.first).bottom, 844);
 
     expect(find.byKey(const ValueKey('plan-reveal-screen')), findsOneWidget);
     expect(find.text('Strong & Toned · Core Focus'), findsOneWidget);

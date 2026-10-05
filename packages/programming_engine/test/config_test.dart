@@ -16,31 +16,113 @@ typedef Scheme = ({
   int maxSets,
   RepRange range,
   int rpe,
-  int restSeconds,
   bool extraSetOnEmphasis,
 });
 
 void main() {
+  group('§2 rest by movement and rep range, never goal', () {
+    ExerciseData move(
+      MovementClass movement, {
+      Laterality laterality = Laterality.bilateral,
+    }) => ExerciseData(
+      id: 'x',
+      name: 'x',
+      blockRole: BlockRole.core,
+      movementClass: movement,
+      metricType: MetricType.loadReps,
+      resistanceEquipment: ResistanceEquipment.dumbbell,
+      bwContribution: 0,
+      laterality: laterality,
+    );
+    RepsDose reps(int min, int max) => RepsDose(
+      sets: 3,
+      range: RepRange(min, max),
+      effort: const EffortTarget(7),
+      targetReps: min,
+    );
+    int rest(ExerciseData exercise, Dose dose) =>
+        config.restFor(exercise, dose).inSeconds;
+    const perSide = Laterality.perSide;
+    final hypertrophy = reps(10, 12);
+
+    test('the base comes from the kind of movement', () {
+      expect(rest(move(MovementClass.compoundLower), hypertrophy), 120);
+      expect(rest(move(MovementClass.compoundUpperPush), hypertrophy), 90);
+      expect(rest(move(MovementClass.compoundUpperPull), hypertrophy), 90);
+      expect(rest(move(MovementClass.isolationLower), hypertrophy), 75);
+      expect(rest(move(MovementClass.isolationUpper), hypertrophy), 75);
+      expect(
+        rest(
+          move(MovementClass.isolationLower, laterality: perSide),
+          reps(10, 15),
+        ),
+        60,
+      );
+      expect(
+        rest(
+          move(MovementClass.compoundLower, laterality: perSide),
+          reps(10, 15),
+        ),
+        90,
+      );
+      expect(rest(move(MovementClass.core), hypertrophy), 60);
+    });
+
+    test('a range topping out at 8 or fewer adds 30 s', () {
+      expect(rest(move(MovementClass.compoundLower), reps(5, 8)), 150);
+      expect(rest(move(MovementClass.compoundUpperPull), reps(5, 8)), 120);
+      expect(rest(move(MovementClass.core), reps(5, 8)), 90);
+      expect(rest(move(MovementClass.compoundLower), reps(8, 9)), 120);
+    });
+
+    test('a hold has no rep range, so it keeps the base', () {
+      expect(
+        rest(
+          move(MovementClass.core),
+          const TimedDose(sets: 3, hold: Duration(seconds: 20)),
+        ),
+        60,
+      );
+    });
+
+    test('goals reach rest only through their rep range', () {
+      final squat = move(MovementClass.compoundLower);
+      int goalRest(Goal goal) {
+        final scheme = config.schemeFor(goal);
+        return rest(squat, reps(scheme.range.min, scheme.range.max));
+      }
+
+      expect(goalRest(Goal.tonedAndDefined), 120);
+      expect(goalRest(Goal.buildCurves), 120);
+      expect(goalRest(Goal.feelHealthier), 120);
+      expect(goalRest(Goal.stronger), 150);
+    });
+
+    test('every kind of movement has an authored base', () {
+      for (final kind in RestKind.values) {
+        expect(config.restByKind[kind], isNotNull, reason: kind.name);
+      }
+    });
+  });
+
   group('§2 rep/set schemes by goal', () {
     const schemes = <Scheme>[
       (
-        rule: 'Toned & defined: 3 × 10–12, leave 2–3 reps, 60–90s',
+        rule: 'Toned & defined: 3 × 10–12, leave 2–3 reps',
         goal: Goal.tonedAndDefined,
         minSets: 3,
         maxSets: 3,
         range: RepRange(10, 12),
         rpe: 7,
-        restSeconds: 75,
         extraSetOnEmphasis: false,
       ),
       (
-        rule: 'Stronger: 3–4 × 6–8, leave 2 reps, 90–150s',
+        rule: 'Stronger: 3–4 × 5–8, leave 2 reps',
         goal: Goal.stronger,
         minSets: 3,
         maxSets: 4,
-        range: RepRange(6, 8),
+        range: RepRange(5, 8),
         rpe: 8,
-        restSeconds: 120,
         extraSetOnEmphasis: false,
       ),
       (
@@ -52,18 +134,15 @@ void main() {
         maxSets: 3,
         range: RepRange(10, 12),
         rpe: 7,
-        restSeconds: 75,
         extraSetOnEmphasis: false,
       ),
       (
-        rule:
-            'Feel healthier: 2–3 × 10–12, comfortable, never near failure, 60s',
+        rule: 'Feel healthier: 2–3 × 10–12, comfortable, never near failure',
         goal: Goal.feelHealthier,
         minSets: 2,
         maxSets: 3,
         range: RepRange(10, 12),
         rpe: 6,
-        restSeconds: 60,
         extraSetOnEmphasis: false,
       ),
     ];
@@ -75,7 +154,6 @@ void main() {
         expect(scheme.maxSets, entry.maxSets);
         expect(scheme.range, entry.range);
         expect(scheme.effort.rpe, entry.rpe);
-        expect(scheme.rest.inSeconds, entry.restSeconds);
         expect(scheme.extraSetOnEmphasis, entry.extraSetOnEmphasis);
       });
     }
@@ -152,7 +230,6 @@ void main() {
         maxSets: 3,
         range: RepRange(10, 12),
         effort: EffortTarget.rpe7,
-        rest: Duration(seconds: 75),
       );
       expect(config.isolationRange, const RepRange(10, 15));
       expect(config.rangeFor(lateralRaise, scheme), const RepRange(10, 15));
@@ -203,9 +280,9 @@ void main() {
     test('week vectors apply deterministically from one base dose', () {
       const base = RepsDose(
         sets: 4,
-        range: RepRange(6, 8),
+        range: RepRange(5, 8),
         effort: EffortTarget(8),
-        targetReps: 6,
+        targetReps: 5,
       );
       for (var week = 1; week <= 12; week++) {
         expect(config.doseForWeek(base, week), config.doseForWeek(base, week));

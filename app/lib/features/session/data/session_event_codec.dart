@@ -42,6 +42,7 @@ abstract final class SessionEventCodec {
           :final targetReps,
           :final targetRpe,
           :final prescribedLoad,
+          :final hold,
         ) =>
           (
             type: StoredSessionEventType.setCompleted,
@@ -53,6 +54,7 @@ abstract final class SessionEventCodec {
               'targetReps': targetReps,
               'targetRpe': targetRpe,
               'prescribedLoadKg': prescribedLoad?.value,
+              if (hold != null) 'holdSeconds': hold.inSeconds,
             }),
           ),
         engine.EffortReported(:final exerciseId, :final level) => (
@@ -121,6 +123,10 @@ abstract final class SessionEventCodec {
             maximum: 10,
           ),
           prescribedLoad: _optionalKg(decoded, 'prescribedLoadKg'),
+          hold: switch (_optionalInteger(decoded, 'holdSeconds', minimum: 1)) {
+            final seconds? => Duration(seconds: seconds),
+            null => null,
+          },
         ),
         StoredSessionEventType.effortReported => engine.EffortReported(
           exerciseId: _string(decoded, 'exerciseId'),

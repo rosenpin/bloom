@@ -202,6 +202,7 @@ class _SessionSummary extends StatelessWidget {
           isPerSide:
               session.exerciseLaterality(entry.key) ==
               engine.Laterality.perSide,
+          isTimed: session.exerciseMetric(entry.key) == engine.MetricType.timed,
           wasSwapped: session.swappedExerciseIds.contains(entry.key),
         ),
     ];
@@ -215,6 +216,7 @@ class _ExerciseLog {
     required this.sets,
     required this.isPerSide,
     required this.wasSwapped,
+    this.isTimed = false,
   });
 
   final String exerciseId;
@@ -222,11 +224,15 @@ class _ExerciseLog {
   final List<engine.SetCompleted> sets;
   final bool isPerSide;
   final bool wasSwapped;
+  final bool isTimed;
 
   bool get isUniform => sets
       .skip(1)
       .every(
-        (set) => set.reps == sets.first.reps && set.load == sets.first.load,
+        (set) =>
+            set.reps == sets.first.reps &&
+            set.load == sets.first.load &&
+            set.hold == sets.first.hold,
       );
 }
 
@@ -312,7 +318,12 @@ class _LoggedExercise extends StatelessWidget {
                           ),
                           Expanded(
                             child: Text(
-                              _setSummary(set, log.isPerSide, unitSystem),
+                              SessionPresentation.loggedSet(
+                                set,
+                                unitSystem,
+                                timed: log.isTimed,
+                                perSide: log.isPerSide,
+                              ),
                               style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(color: AppColors.inkSoft),
                             ),
@@ -333,23 +344,14 @@ class _LoggedExercise extends StatelessWidget {
     engine.UnitSystem unitSystem,
   ) {
     final first = log.sets.first;
+    if (log.isTimed) {
+      return '${log.sets.length} × ${SessionPresentation.loggedSet(first, unitSystem, timed: true, perSide: log.isPerSide)}';
+    }
     final reps = '${first.reps}${log.isPerSide ? ' each side' : ''}';
     final load = first.load.value > 0
         ? ' · ${SessionPresentation.formatLoad(first.load, unitSystem)}'
         : '';
     return '${log.sets.length} × $reps$load';
-  }
-
-  static String _setSummary(
-    engine.SetCompleted set,
-    bool isPerSide,
-    engine.UnitSystem unitSystem,
-  ) {
-    final reps = '${set.reps} reps${isPerSide ? ' each side' : ''}';
-    final load = set.load.value > 0
-        ? ' · ${SessionPresentation.formatLoad(set.load, unitSystem)}'
-        : '';
-    return '$reps$load';
   }
 }
 

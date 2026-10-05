@@ -81,9 +81,9 @@ class RevenueCatEntitlementService implements EntitlementService {
       start(null).timeout(const Duration(seconds: 3), onTimeout: () {});
 
   Future<void> _start(String? appUserId) async {
-    if (revenueCatAppleApiKey.isEmpty) return;
+    if (revenueCatApiKey.isEmpty) return;
     try {
-      final configuration = PurchasesConfiguration(revenueCatAppleApiKey)
+      final configuration = PurchasesConfiguration(revenueCatApiKey)
         ..appUserID = appUserId;
       await Purchases.configure(configuration);
       _appUserId = await Purchases.appUserID;
@@ -97,7 +97,7 @@ class RevenueCatEntitlementService implements EntitlementService {
 
   Future<void> identify(String appUserId) async {
     await start(null);
-    if (revenueCatAppleApiKey.isEmpty) return;
+    if (revenueCatApiKey.isEmpty) return;
     try {
       if (await Purchases.appUserID == appUserId) return;
       final info = (await Purchases.logIn(appUserId)).customerInfo;
@@ -123,7 +123,7 @@ class RevenueCatEntitlementService implements EntitlementService {
 
   Future<void> _ready() async {
     await start(null);
-    if (revenueCatAppleApiKey.isEmpty || !await Purchases.isConfigured) {
+    if (revenueCatApiKey.isEmpty || !await Purchases.isConfigured) {
       throw StateError('Store unavailable');
     }
   }
@@ -146,23 +146,31 @@ class RevenueCatEntitlementService implements EntitlementService {
     }
     final annual = _packages[r'$rc_annual'];
     final monthly = _packages[r'$rc_monthly'];
+    // Play identifiers carry the base plan: bloom_premium_annual:yearly.
+    String subscription(Package package) =>
+        package.storeProduct.identifier.split(':').first;
     if (annual == null ||
         monthly == null ||
-        annual.storeProduct.identifier != 'bloom_premium_annual' ||
-        monthly.storeProduct.identifier != 'bloom_premium_monthly') {
+        subscription(annual) != 'bloom_premium_annual' ||
+        subscription(monthly) != 'bloom_premium_monthly') {
       throw StateError('Plans unavailable');
     }
     bool eligible = false;
-    try {
-      final eligibility =
-          await Purchases.checkTrialOrIntroductoryPriceEligibility([
-            annual.storeProduct.identifier,
-          ]);
-      eligible =
-          eligibility[annual.storeProduct.identifier]?.status ==
-          IntroEligibilityStatus.introEligibilityStatusEligible;
-    } on Object {
-      // Unknown eligibility must not promise a trial.
+    if (isPlayStore) {
+      // Play only offers the trial phase to people who can still take it.
+      eligible = annual.storeProduct.defaultOption?.freePhase != null;
+    } else {
+      try {
+        final eligibility =
+            await Purchases.checkTrialOrIntroductoryPriceEligibility([
+              annual.storeProduct.identifier,
+            ]);
+        eligible =
+            eligibility[annual.storeProduct.identifier]?.status ==
+            IntroEligibilityStatus.introEligibilityStatusEligible;
+      } on Object {
+        // Unknown eligibility must not promise a trial.
+      }
     }
     return [
       MembershipPlan(

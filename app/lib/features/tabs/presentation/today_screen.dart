@@ -154,8 +154,15 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
         answers.lastPeriodStart != null;
     return SafeArea(
       key: const ValueKey('today-screen'),
+      bottom: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        // Scrolls on under the floating tab bar, and clears it at the end.
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg + MediaQuery.paddingOf(context).bottom,
+        ),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),

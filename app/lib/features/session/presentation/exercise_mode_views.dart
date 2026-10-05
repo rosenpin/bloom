@@ -47,6 +47,8 @@ class CalibrationExerciseView extends StatelessWidget {
     final probe = entry.prescription.suggestion as engine.NeedsCalibration;
     final firstExercise = index == 1 && entry.setLogs.isEmpty;
     return SafeArea(
+      // The action zone runs into the home indicator area itself.
+      bottom: false,
       child: Column(
         children: [
           _ExerciseProgress(
@@ -130,6 +132,7 @@ class ActiveExerciseView extends StatelessWidget {
     required this.onDone,
     required this.onEdit,
     required this.onReviewSet,
+    this.hold,
     required this.onSetup,
     required this.onLifeHappened,
     required this.onOverview,
@@ -141,6 +144,7 @@ class ActiveExerciseView extends StatelessWidget {
   final SessionRuntime runtime;
   final engine.SessionExerciseEntry entry;
   final int reps;
+  final Duration? hold;
   final VoidCallback onDone;
   final VoidCallback onEdit;
   final ValueChanged<int> onReviewSet;
@@ -167,6 +171,8 @@ class ActiveExerciseView extends StatelessWidget {
       entry,
     );
     return SafeArea(
+      // The action zone runs into the home indicator area itself.
+      bottom: false,
       child: Column(
         children: [
           _ExerciseProgress(
@@ -213,6 +219,7 @@ class ActiveExerciseView extends StatelessWidget {
                         entry: entry,
                         load: load,
                         reps: reps,
+                        hold: hold,
                         unitSystem: runtime.displayUnitSystem,
                         onEdit: onEdit,
                       ),
@@ -755,7 +762,12 @@ class _SetPills extends StatelessWidget {
     );
   }
 
-  String _completedSetLabel(engine.SetCompleted set) => set.load.isZero
+  String _completedSetLabel(engine.SetCompleted set) =>
+      SessionPresentation.isTimed(entry)
+      ? SessionPresentation.formatHold(
+          set.hold ?? SessionPresentation.targetHold(entry),
+        )
+      : set.load.isZero
       ? '${set.reps} reps'
       : '${set.reps} × ${SessionPresentation.formatLoad(set.load, unitSystem)}';
 }
@@ -920,11 +932,11 @@ class _ExerciseActionZone extends StatelessWidget {
     return Container(
       key: const ValueKey('exercise-action-zone'),
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.lg,
         AppSpacing.xs,
         AppSpacing.lg,
-        AppSpacing.sm,
+        AppSpacing.bottomEdge(context),
       ),
       decoration: const BoxDecoration(
         color: AppColors.paper,
@@ -1016,6 +1028,7 @@ class _PrescriptionCard extends StatelessWidget {
     required this.reps,
     required this.unitSystem,
     required this.onEdit,
+    this.hold,
   });
 
   final engine.SessionExerciseEntry entry;
@@ -1023,6 +1036,9 @@ class _PrescriptionCard extends StatelessWidget {
   final int reps;
   final engine.UnitSystem unitSystem;
   final VoidCallback onEdit;
+
+  /// Her adjusted hold on a timed movement, over the prescribed one.
+  final Duration? hold;
 
   @override
   Widget build(BuildContext context) {
@@ -1036,7 +1052,7 @@ class _PrescriptionCard extends StatelessWidget {
       engine.NeedsCalibration() =>
         '${SessionPresentation.formatLoad(load, unitSystem)} · $reps reps',
       engine.RepOrDurationTarget(:final hold) when hold != null =>
-        '${hold.inSeconds} second hold',
+        '${(this.hold ?? hold).inSeconds} second hold',
       engine.RepOrDurationTarget(:final reps) => '$reps reps',
     };
     return InkWell(

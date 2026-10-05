@@ -23,6 +23,15 @@ void main() {
         targetRpe: 7,
         prescribedLoad: engine.Kg(10),
       ),
+      engine.SetCompleted(
+        exerciseId: 'plank',
+        setIndex: 0,
+        load: engine.Kg.zero,
+        reps: 1,
+        unitSystem: engine.UnitSystem.metric,
+        targetReps: 1,
+        hold: const Duration(seconds: 25),
+      ),
       engine.EffortReported(
         exerciseId: 'dumbbell-goblet-squat',
         level: engine.EffortLevel.harderThanIdLike,

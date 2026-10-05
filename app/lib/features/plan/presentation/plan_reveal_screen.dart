@@ -25,6 +25,8 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _entrance = AnimationController(vsync: this);
   bool _entranceQueued = false;
+  final _zoneKey = GlobalKey();
+  double _zoneHeight = 0;
 
   void _queueEntrance(int dayCount) {
     if (_entranceQueued) return;
@@ -54,16 +56,20 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
     if (document == null || answers == null) return const LoadingBloom();
     final dayCount = document.plan.days.length;
     _queueEntrance(dayCount);
+    WidgetsBinding.instance.addPostFrameCallback(_measureZone);
     final totalMilliseconds = _totalEntranceDuration(dayCount).inMilliseconds;
 
     return Scaffold(
       key: const ValueKey('plan-reveal-screen'),
       backgroundColor: AppColors.paper,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SafeArea(
+              bottom: false,
               child: SingleChildScrollView(
+                // The last card can scroll clear of the pinned buttons.
+                padding: EdgeInsets.only(bottom: _zoneHeight),
                 child: Column(
                   children: [
                     Container(
@@ -197,25 +203,39 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.lg,
-                AppSpacing.lg,
+          ),
+          // The buttons and their surface rise together, over the plan, once
+          // the first cards are in. There is never an empty box, and before
+          // it arrives the plan runs to the bottom edge.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _RevealItem(
+              animation: _entrance,
+              interval: _motionInterval(
+                start: 450,
+                end: 850,
+                total: totalMilliseconds,
               ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: _RevealItem(
-                    animation: _entrance,
-                    // The way on arrives with the first cards, not after all.
-                    interval: _motionInterval(
-                      start: 450,
-                      end: 850,
-                      total: totalMilliseconds,
-                    ),
+              rise: 1,
+              child: Container(
+                key: _zoneKey,
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.bottomEdge(context),
+                ),
+                decoration: const BoxDecoration(
+                  color: AppColors.paper,
+                  border: Border(top: BorderSide(color: AppColors.line)),
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         FilledButton(
@@ -234,10 +254,17 @@ class _PlanRevealScreenState extends ConsumerState<PlanRevealScreen>
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  void _measureZone(Duration _) {
+    final height = _zoneKey.currentContext?.size?.height;
+    if (mounted && height != null && height != _zoneHeight) {
+      setState(() => _zoneHeight = height);
+    }
   }
 }
 
@@ -338,11 +365,15 @@ class _RevealItem extends StatelessWidget {
     required this.animation,
     required this.interval,
     required this.child,
+    this.rise,
   });
 
   final Animation<double> animation;
   final Interval interval;
   final Widget child;
+
+  /// Rise from this fraction of its own height below, instead of 12 pt.
+  final double? rise;
 
   @override
   Widget build(BuildContext context) {
@@ -353,13 +384,20 @@ class _RevealItem extends StatelessWidget {
       // Nothing is tappable before it can be seen.
       builder: (context, child) => IgnorePointer(
         ignoring: reveal.value < 0.5,
-        child: Opacity(
-          opacity: reveal.value,
-          child: Transform.translate(
-            offset: Offset(0, 12 * (1 - reveal.value)),
-            child: child,
-          ),
-        ),
+        // A rising surface stays opaque, so it covers the plan as it comes up
+        // instead of showing the cards through it.
+        child: rise == null
+            ? Opacity(
+                opacity: reveal.value,
+                child: Transform.translate(
+                  offset: Offset(0, 12 * (1 - reveal.value)),
+                  child: child,
+                ),
+              )
+            : FractionalTranslation(
+                translation: Offset(0, rise! * (1 - reveal.value)),
+                child: child,
+              ),
       ),
     );
   }

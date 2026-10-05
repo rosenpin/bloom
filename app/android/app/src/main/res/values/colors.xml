@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppColors.cream and AppColors.paper -->
+    <color name="ic_launcher_background">#FDF5F1</color>
+    <color name="paper">#FFFBF8</color>
+</resources>

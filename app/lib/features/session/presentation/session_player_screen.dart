@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,6 +45,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
   bool _keepSwapShown = false;
   _RestPhase? _rest;
   final Map<String, int> _repOverrides = <String, int>{};
+  final Map<String, Duration> _holdOverrides = <String, Duration>{};
   bool _loggingSet = false;
   String? _adjustmentNotice;
   String? _recapSessionId;
@@ -199,6 +201,9 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
                   runtime: runtime,
                   entry: entry,
                   reps: reps,
+                  hold: SessionPresentation.isTimed(entry)
+                      ? _holdFor(entry)
+                      : null,
                   onDone: () => _completeSet(runtime, entry),
                   onEdit: () => _editSet(runtime, entry),
                   onReviewSet: (setIndex) =>
@@ -293,6 +298,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
               },
               targetRpe: dose is engine.RepsDose ? dose.effort.rpe : null,
               prescribedLoad: prescribedLoad,
+              hold: SessionPresentation.isTimed(entry) ? _holdFor(entry) : null,
             ),
           );
       if (!mounted) return;
@@ -353,7 +359,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
     final currentReps =
         _repOverrides[entry.exerciseId] ??
         SessionPresentation.targetReps(entry);
-    final result = await showModalBottomSheet<({engine.Kg load, int reps})>(
+    final result = await showModalBottomSheet<_SetAdjustment>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
@@ -364,14 +370,24 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
         config: runtime.state.config,
         initialLoad: currentLoad,
         initialReps: currentReps,
+        initialHold: SessionPresentation.isTimed(entry)
+            ? _holdFor(entry)
+            : null,
       ),
     );
     if (result == null || !mounted) return;
+    if (result.hold case final hold?) {
+      setState(() => _holdOverrides[entry.exerciseId] = hold);
+      return;
+    }
     ref
         .read(sessionControllerProvider.notifier)
         .overrideLoad(entry.exerciseId, result.load);
     setState(() => _repOverrides[entry.exerciseId] = result.reps);
   }
+
+  Duration _holdFor(engine.SessionExerciseEntry entry) =>
+      _holdOverrides[entry.exerciseId] ?? SessionPresentation.targetHold(entry);
 
   Future<void> _reviewCompletedSet(
     SessionRuntime runtime,
@@ -382,7 +398,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
         .where((set) => set.setIndex == setIndex)
         .firstOrNull;
     if (logged == null) return;
-    final result = await showModalBottomSheet<({engine.Kg load, int reps})>(
+    final result = await showModalBottomSheet<_SetAdjustment>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
@@ -393,6 +409,9 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
         config: runtime.state.config,
         initialLoad: logged.load,
         initialReps: logged.reps,
+        initialHold: SessionPresentation.isTimed(entry)
+            ? logged.hold ?? SessionPresentation.targetHold(entry)
+            : null,
         title: 'Review set ${setIndex + 1}',
         supportingText:
             'The set stays complete. Save only if the logged numbers need a correction.',
@@ -407,6 +426,7 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
           setIndex: setIndex,
           load: result.load,
           reps: result.reps,
+          hold: result.hold,
         );
   }
 
@@ -421,8 +441,13 @@ class _SessionPlayerScreenState extends ConsumerState<SessionPlayerScreen> {
       backgroundColor: AppColors.paper,
       showDragHandle: false,
       sheetAnimationStyle: AppMotion.sheet(context),
-      builder: (context) =>
-          _SessionOverviewSheet(runtime: runtime, current: current),
+      builder: (context) => _SessionOverviewSheet(
+        runtime: runtime,
+        current: current,
+        currentHold: SessionPresentation.isTimed(current)
+            ? _holdFor(current)
+            : null,
+      ),
     );
     if (!mounted || completedSlotId == null) return;
     final latest = ref.read(sessionControllerProvider).value;
@@ -623,15 +648,22 @@ class _SessionStart extends StatelessWidget {
     final hasComebackReduction = runtime.state.reasonCodes.contains(
       engine.ReasonCode.layoffAdjusted,
     );
+    final bottom = AppSpacing.bottomEdge(context);
     return SafeArea(
+      bottom: false,
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.lg,
+            bottom,
+          ),
           child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: 440,
-                minHeight: constraints.maxHeight - AppSpacing.xxl,
+                minHeight: constraints.maxHeight - AppSpacing.lg - bottom,
               ),
               child: IntrinsicHeight(
                 child: Column(
@@ -826,9 +858,10 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _foundation = ref.read(restTimerFoundationProvider);
-    _totalSeconds = widget.runtime.restDuration.inSeconds;
+    final rest = widget.runtime.restAfter(_entry);
+    _totalSeconds = rest.inSeconds;
     _remainingSeconds = _totalSeconds;
-    _endsAt = ref.read(clockProvider)().add(widget.runtime.restDuration);
+    _endsAt = ref.read(clockProvider)().add(rest);
     unawaited(_schedule());
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
@@ -881,6 +914,9 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
     await widget.onFinished(_selected);
   }
 
+  engine.SessionExerciseEntry get _entry => widget.runtime.state.exercises
+      .firstWhere((entry) => entry.exerciseId == widget.phase.exerciseId);
+
   void _selectEffort(engine.EffortLevel level) {
     setState(() => _selected = level);
   }
@@ -913,8 +949,14 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
         ),
       ),
       child: SafeArea(
+        bottom: false,
         child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.bottomEdge(context),
+          ),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
@@ -969,12 +1011,7 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
                   SizedBox(height: compactRest ? AppSpacing.xs : AppSpacing.md),
                   if (widget.phase.askForEffort) ...[
                     Text(
-                      SessionPresentation.feelQuestion(
-                        widget.runtime.state.exercises.firstWhere(
-                          (entry) =>
-                              entry.exerciseId == widget.phase.exerciseId,
-                        ),
-                      ),
+                      SessionPresentation.feelQuestion(_entry),
                       textAlign: TextAlign.center,
                       style: AppText.bodyStrong,
                     ),
@@ -982,6 +1019,7 @@ class _RestTakeoverState extends ConsumerState<_RestTakeover>
                     _EffortOptions(
                       selected: _selected,
                       onSelected: _selectEffort,
+                      timed: SessionPresentation.isTimed(_entry),
                     ),
                   ],
                   SizedBox(height: compactRest ? AppSpacing.xs : AppSpacing.md),
@@ -1068,33 +1106,9 @@ class _ExerciseTeachScreenState extends ConsumerState<ExerciseTeachScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       key: const ValueKey('exercise-teach-screen'),
-      appBar: AppBar(
-        title: Text(widget.entry.planExercise.name),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.md),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 6,
-                ),
-                decoration: const BoxDecoration(
-                  color: AppColors.blushSoft,
-                  borderRadius: AppRadii.largeBorder,
-                ),
-                child: Text(
-                  'Beginner friendly',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.roseDeep,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      // The name lives in the page, where a long one wraps instead of being
+      // cut off beside the level pill.
+      appBar: AppBar(),
       body: FutureBuilder<ExerciseGuidance?>(
         future: ref
             .read(exerciseContentRepositoryProvider)
@@ -1103,13 +1117,46 @@ class _ExerciseTeachScreenState extends ConsumerState<ExerciseTeachScreen> {
           final guidance = snapshot.data;
           if (guidance == null) return const AppDelayedSpinner();
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Text(
+                      widget.entry.planExercise.name,
+                      key: const ValueKey('teach-title'),
+                      style: AppText.title,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: 6,
+                        ),
+                        decoration: const BoxDecoration(
+                          color: AppColors.blushSoft,
+                          borderRadius: AppRadii.largeBorder,
+                        ),
+                        child: Text(
+                          'Beginner friendly',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: AppColors.roseDeep,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
                     AspectRatio(
                       key: const ValueKey('teach-visual'),
                       aspectRatio: AppSizes.exerciseVisualAspect,
@@ -1264,10 +1311,17 @@ class _ExerciseTeachScreenState extends ConsumerState<ExerciseTeachScreen> {
 }
 
 class _SessionOverviewSheet extends StatelessWidget {
-  const _SessionOverviewSheet({required this.runtime, required this.current});
+  const _SessionOverviewSheet({
+    required this.runtime,
+    required this.current,
+    this.currentHold,
+  });
 
   final SessionRuntime runtime;
   final engine.SessionExerciseEntry current;
+
+  /// Her hold for the current timed move, adjusted or prescribed.
+  final Duration? currentHold;
 
   @override
   Widget build(BuildContext context) {
@@ -1416,7 +1470,9 @@ class _SessionOverviewSheet extends StatelessWidget {
       current,
       override: runtime.loadOverrides[current.exerciseId],
     );
-    final loadText = load.isZero
+    final loadText = SessionPresentation.isTimed(current)
+        ? ' · ${SessionPresentation.formatHold(currentHold ?? SessionPresentation.targetHold(current))}'
+        : load.isZero
         ? ''
         : ' · ${SessionPresentation.formatLoad(load, runtime.displayUnitSystem)}';
     return Container(
@@ -1568,7 +1624,7 @@ class _CompletedExerciseReviewSheet extends StatelessWidget {
                     ),
                   ),
                   title: Text('Set ${set.setIndex + 1}'),
-                  subtitle: Text(_loggedSet(set)),
+                  subtitle: Text(_loggedSet(entry, set)),
                   trailing: const Icon(
                     Icons.edit_outlined,
                     color: AppColors.inkFaint,
@@ -1584,12 +1640,14 @@ class _CompletedExerciseReviewSheet extends StatelessWidget {
     );
   }
 
-  String _loggedSet(engine.SetCompleted set) {
-    final load = set.load.isZero
-        ? ''
-        : ' · ${SessionPresentation.formatLoad(set.load, unitSystem)}';
-    return '${set.reps} reps$load';
-  }
+  String _loggedSet(
+    engine.SessionExerciseEntry entry,
+    engine.SetCompleted set,
+  ) => SessionPresentation.loggedSet(
+    set,
+    unitSystem,
+    timed: SessionPresentation.isTimed(entry),
+  );
 }
 
 class _LifeHappenedSheet extends StatefulWidget {
@@ -1941,6 +1999,7 @@ class _SessionCompleteState extends State<_SessionComplete>
     return ColoredBox(
       color: AppColors.blushSoft,
       child: SafeArea(
+        bottom: false,
         child: FutureBuilder<SessionRecap?>(
           future: widget.recap,
           builder: (context, snapshot) {
@@ -1949,7 +2008,12 @@ class _SessionCompleteState extends State<_SessionComplete>
               widget.runtime.state,
             );
             return Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.bottomEdge(context),
+              ),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 440),
@@ -2313,6 +2377,7 @@ class _SetStepperSheet extends StatefulWidget {
     required this.config,
     required this.initialLoad,
     required this.initialReps,
+    this.initialHold,
     this.title = 'Adjust this set',
     this.supportingText,
     this.saveLabel = 'Use for this set',
@@ -2323,6 +2388,9 @@ class _SetStepperSheet extends StatefulWidget {
   final engine.ProgrammingConfig config;
   final engine.Kg initialLoad;
   final int initialReps;
+
+  /// Set for timed movements: the sheet then adjusts only the hold.
+  final Duration? initialHold;
   final String title;
   final String? supportingText;
   final String saveLabel;
@@ -2331,9 +2399,25 @@ class _SetStepperSheet extends StatefulWidget {
   State<_SetStepperSheet> createState() => _SetStepperSheetState();
 }
 
+typedef _SetAdjustment = ({engine.Kg load, int reps, Duration? hold});
+
 class _SetStepperSheetState extends State<_SetStepperSheet> {
+  static const _holdStep = Duration(seconds: 5);
+  static const _holdMin = Duration(seconds: 5);
+  static const _holdMax = Duration(minutes: 5);
+
   late engine.Kg _load = widget.initialLoad;
   late int _reps = widget.initialReps;
+  late Duration? _hold = widget.initialHold;
+
+  void _shiftHold(int steps) => setState(() {
+    final next = _hold! + _holdStep * steps;
+    _hold = next < _holdMin
+        ? _holdMin
+        : next > _holdMax
+        ? _holdMax
+        : next;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2368,24 +2452,43 @@ class _SetStepperSheetState extends State<_SetStepperSheet> {
               ),
             ],
             const SizedBox(height: AppSpacing.lg),
-            _StepperRow(
-              label: 'Weight',
-              value: SessionPresentation.formatLoad(_load, widget.unitSystem),
-              onMinus: () => setState(() => _load = loads.shift(_load, -1)),
-              onPlus: () => setState(() => _load = loads.shift(_load, 1)),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _StepperRow(
-              label: 'Reps',
-              value: '$_reps',
-              onMinus: () => setState(() => _reps = (_reps - 1).clamp(1, 99)),
-              onPlus: () => setState(() => _reps = (_reps + 1).clamp(1, 99)),
-            ),
+            if (_hold case final hold?)
+              _StepperRow(
+                key: const ValueKey('stepper-hold'),
+                label: 'Hold',
+                value: SessionPresentation.formatHold(hold),
+                onMinus: () => _shiftHold(-1),
+                onPlus: () => _shiftHold(1),
+              )
+            else ...[
+              // Only movements measured in load get a weight to adjust.
+              if (widget.entry.planExercise.metricType.hasLoad) ...[
+                _StepperRow(
+                  label: 'Weight',
+                  value: SessionPresentation.formatLoad(
+                    _load,
+                    widget.unitSystem,
+                  ),
+                  onMinus: () => setState(() => _load = loads.shift(_load, -1)),
+                  onPlus: () => setState(() => _load = loads.shift(_load, 1)),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+              _StepperRow(
+                label: 'Reps',
+                value: '$_reps',
+                onMinus: () => setState(() => _reps = (_reps - 1).clamp(1, 99)),
+                onPlus: () => setState(() => _reps = (_reps + 1).clamp(1, 99)),
+              ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             FilledButton(
               key: const ValueKey('stepper-save'),
-              onPressed: () =>
-                  Navigator.pop(context, (load: _load, reps: _reps)),
+              onPressed: () => Navigator.pop<_SetAdjustment>(context, (
+                load: _load,
+                reps: _reps,
+                hold: _hold,
+              )),
               child: Text(widget.saveLabel),
             ),
           ],
@@ -2396,10 +2499,15 @@ class _SetStepperSheetState extends State<_SetStepperSheet> {
 }
 
 class _EffortOptions extends StatelessWidget {
-  const _EffortOptions({required this.onSelected, this.selected});
+  const _EffortOptions({
+    required this.onSelected,
+    this.selected,
+    this.timed = false,
+  });
 
   final ValueChanged<engine.EffortLevel>? onSelected;
   final engine.EffortLevel? selected;
+  final bool timed;
 
   @override
   Widget build(BuildContext context) {
@@ -2482,7 +2590,7 @@ class _EffortOptions extends StatelessWidget {
                     child: Text(' ', style: AppText.meta),
                   )
                 : Text(
-                    SessionPresentation.effortMeaning(selected!),
+                    SessionPresentation.effortMeaning(selected!, timed: timed),
                     key: const ValueKey('effort-meaning'),
                     textAlign: TextAlign.center,
                     style: AppText.meta,
@@ -2799,6 +2907,7 @@ class _StepperRow extends StatelessWidget {
     required this.value,
     required this.onMinus,
     required this.onPlus,
+    super.key,
   });
 
   final String label;
@@ -2849,16 +2958,21 @@ class _AdherenceDots extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            for (var index = 0; index < total; index++)
+            // Every planned slot shows: the done ones filled, the rest open
+            // on paper, so the row centres as one week, not a lone tick.
+            // An extra session beyond the plan still gets its own tick.
+            for (var index = 0; index < math.max(total, completed); index++)
               Container(
+                key: ValueKey('adherence-slot-$index'),
                 width: 28,
                 height: 28,
                 margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: index < completed
-                      ? AppColors.sage
-                      : AppColors.blushSoft,
+                  color: index < completed ? AppColors.sage : AppColors.paper,
+                  border: index < completed
+                      ? null
+                      : Border.all(color: AppColors.line),
                 ),
                 child: index < completed
                     ? const Icon(

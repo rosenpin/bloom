@@ -18,7 +18,6 @@ Iterable<ProgressionInput> sweep({List<EffortLevel?>? levels}) sync* {
     maxSets: 3,
     range: compoundRange,
     effort: EffortTarget.rpe7,
-    rest: Duration(seconds: 75),
   );
   const loads = <Kg>[Kg(2), Kg(5), Kg(12), Kg(22.5), Kg(45), Kg(100)];
   const repsSpread = <int>[5, 8, 10, 12, 15];

@@ -141,25 +141,25 @@ day 4: upper (warmup 5m, finisher)
   plank [core] 3x20s''',
   '''
 day 1: lower (warmup 5m, finisher)
-  dumbbell-goblet-squat [lowerSquat] 4x6-8@8
-  barbell-romanian-deadlift [lowerHinge] 4x6-8@8
-  machine-leg-press [lowerSquat] 4x6-8@8
+  dumbbell-goblet-squat [lowerSquat] 4x5-8@8
+  barbell-romanian-deadlift [lowerHinge] 4x5-8@8
+  machine-leg-press [lowerSquat] 4x5-8@8
   machine-leg-extension [legIsolation] 4x10-15@8
   dumbbell-glute-bridge [gluteIsolation] 4x10-15@8
   plank [core] 4x20s
   machine-seated-hamstring-curl [legIsolation] 4x10-15@8
 day 2: upper (warmup 5m, finisher)
-  dumbbell-bench-press [upperPush] 4x6-8@8
-  machine-pulldown [upperPull] 4x6-8@8
-  dumbbell-incline-bench-press [upperPush] 4x6-8@8
+  dumbbell-bench-press [upperPush] 4x5-8@8
+  machine-pulldown [upperPull] 4x5-8@8
+  dumbbell-incline-bench-press [upperPush] 4x5-8@8
   dumbbell-lateral-raise [armShoulderIsolation] 4x10-15@8
-  cable-rope-kneeling-crunch [core] 4x6-8@8
+  cable-rope-kneeling-crunch [core] 4x5-8@8
   dumbbell-curl [armShoulderIsolation] 4x10-15@8
-  crunches [core] 4x6-8@8
+  crunches [core] 4x5-8@8
 day 3: fullBodyA (warmup 5m, finisher)
   dumbbell-bulgarian-split-squat [lowerSquat] 4x10-15@8
-  machine-seated-cable-row [upperPull] 4x6-8@8
-  dumbbell-seated-overhead-press [upperPush] 4x6-8@8
+  machine-seated-cable-row [upperPull] 4x5-8@8
+  dumbbell-seated-overhead-press [upperPush] 4x5-8@8
   dumbbell-hip-thrust [gluteIsolation] 4x10-15@8
   cable-rope-pushdown [armShoulderIsolation] 4x10-15@8
   machine-standing-calf-raises [legIsolation] 4x10-15@8
@@ -204,16 +204,16 @@ day 3: fullBodyA (warmup 5m)
   dead-bug [core] 3x10-12@7''',
   '''
 day 1: fullBodyA (warmup 6m)
-  machine-leg-press [lowerSquat] 3x6-8@7
-  machine-pulldown [upperPull] 3x6-8@7
-  dumbbell-bench-press [upperPush] 3x6-8@7
+  machine-leg-press [lowerSquat] 3x5-8@7
+  machine-pulldown [upperPull] 3x5-8@7
+  dumbbell-bench-press [upperPush] 3x5-8@7
   dumbbell-glute-bridge [gluteIsolation] 3x10-15@7
   dumbbell-lateral-raise [armShoulderIsolation] 3x10-15@7
   machine-leg-extension [legIsolation] 3x10-15@7
 day 2: fullBodyB (warmup 6m)
-  barbell-romanian-deadlift [lowerHinge] 3x6-8@7
-  machine-chest-press [upperPush] 3x6-8@7
-  machine-seated-cable-row [upperPull] 3x6-8@7
+  barbell-romanian-deadlift [lowerHinge] 3x5-8@7
+  machine-chest-press [upperPush] 3x5-8@7
+  machine-seated-cable-row [upperPull] 3x5-8@7
   dumbbell-hip-thrust [gluteIsolation] 3x10-15@7
   dumbbell-curl [armShoulderIsolation] 3x10-15@7
   machine-seated-hamstring-curl [legIsolation] 3x10-15@7''',

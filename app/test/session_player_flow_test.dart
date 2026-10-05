@@ -41,6 +41,89 @@ void main() {
     _expectPinnedActions(tester, const ValueKey('set-done'));
   });
 
+  testWidgets('a timed move adjusts and logs its hold, never reps or load', (
+    tester,
+  ) async {
+    final harness = await _SessionHarness.create(
+      tester,
+      plan: sessionTestPlankPlan(),
+    );
+    addTearDown(harness.dispose);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await _tap(tester, const ValueKey('session-lets-go'));
+    expect(find.text('20 second hold'), findsOneWidget);
+
+    await _tap(tester, const ValueKey('prescription-card'));
+    expect(find.byKey(const ValueKey('stepper-hold')), findsOneWidget);
+    expect(find.text('Weight'), findsNothing);
+    expect(find.text('Reps'), findsNothing);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('stepper-hold')),
+        matching: find.byIcon(Icons.add_rounded),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('25 s'), findsOneWidget);
+    await _tap(tester, const ValueKey('stepper-save'));
+    expect(find.text('25 second hold'), findsOneWidget);
+
+    await _tap(tester, const ValueKey('set-done'));
+    await _tap(tester, const ValueKey('rest-skip'));
+    expect(find.text('25 s'), findsOneWidget);
+    expect(find.textContaining('reps'), findsNothing);
+
+    final logged = harness.container
+        .read(sessionControllerProvider)
+        .value!
+        .state
+        .exercises
+        .single
+        .setLogs
+        .single;
+    expect(logged.hold, const Duration(seconds: 25));
+    expect(logged.load, engine.Kg.zero);
+  });
+
+  testWidgets('rest follows the movement: two minutes after a squat', (
+    tester,
+  ) async {
+    final harness = await _SessionHarness.create(tester);
+    addTearDown(harness.dispose);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await _tap(tester, const ValueKey('session-lets-go'));
+    await _tap(tester, const ValueKey('calibration-done'));
+    await _tap(tester, const ValueKey('effort-justRight'));
+    // Goblet squat is a lower-body compound: 120 s for a toned plan.
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('rest-countdown'))).data,
+      '2:00',
+    );
+  });
+
+  testWidgets('the pinned action zone runs to the edge, controls above it', (
+    tester,
+  ) async {
+    final harness = await _SessionHarness.create(tester);
+    addTearDown(harness.dispose);
+    tester.view.padding = const FakeViewPadding(bottom: 34);
+    addTearDown(tester.view.resetPadding);
+
+    await _tap(tester, const ValueKey('start-workout'));
+    await _tap(tester, const ValueKey('session-lets-go'));
+
+    final zone = tester.getRect(
+      find.byKey(const ValueKey('exercise-action-zone')),
+    );
+    expect(zone.bottom, 844);
+    final links = tester.getRect(
+      find.byKey(const ValueKey('life-happened-link')),
+    );
+    expect(links.bottom, 844 - 34);
+  });
+
   testWidgets('the move card fills the width on a short phone', (tester) async {
     final harness = await _SessionHarness.create(tester);
     addTearDown(harness.dispose);
@@ -135,6 +218,18 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const ValueKey('teach-visual')), findsOneWidget);
+      // The name is a page title that wraps, not an app bar title that clips.
+      final title = tester.widget<Text>(
+        find.byKey(const ValueKey('teach-title')),
+      );
+      expect(title.maxLines, equals(null));
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text(title.data!),
+        ),
+        findsNothing,
+      );
       expect(find.text('Beginner friendly'), findsOneWidget);
       expect(find.text('Set up'), findsOneWidget);
       expect(find.text('How it feels'), findsOneWidget);
@@ -313,6 +408,27 @@ void main() {
       expect(find.text("Keep today's swap?"), findsOneWidget);
       await _tap(tester, const ValueKey('keep-swap-yes'));
       expect(find.text("That's your workout."), findsOneWidget);
+      // Every planned slot of the week shows, centred as one row.
+      final slots = find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'adherence-slot-',
+            ),
+      );
+      final weekLine = tester.widget<Text>(find.textContaining('this week'));
+      final planned = int.parse(
+        RegExp(r'of (\d+) this week').firstMatch(weekLine.data!)!.group(1)!,
+      );
+      expect(slots, findsNWidgets(planned));
+      final row = tester
+          .getRect(slots.first)
+          .expandToInclude(tester.getRect(slots.last));
+      expect(row.center.dx, closeTo(390 / 2, 1));
+      expect(
+        tester.getRect(find.textContaining('this week')).center.dx,
+        closeTo(row.center.dx, 1),
+      );
       expect(find.text('Show me my recap'), findsOneWidget);
       await _tap(tester, const ValueKey('session-complete-recap'));
       expect(find.byKey(const ValueKey('share-recap-screen')), findsOneWidget);
@@ -669,6 +785,7 @@ final class _SessionHarness {
   static Future<_SessionHarness> create(
     WidgetTester tester, {
     int? seedCompletedSessionDaysAgo,
+    engine.Plan? plan,
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -690,7 +807,7 @@ final class _SessionHarness {
         ),
       ],
     );
-    final document = await storeSessionTestPlan(container);
+    final document = await storeSessionTestPlan(container, plan: plan);
     if (seedCompletedSessionDaysAgo case final days?) {
       await _seedCompletedSession(
         database,

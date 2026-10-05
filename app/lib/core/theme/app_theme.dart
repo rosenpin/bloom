@@ -141,26 +141,6 @@ abstract final class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: AppRadii.mediumBorder),
       ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: AppColors.paper,
-        elevation: 0,
-        height: 76,
-        indicatorColor: AppColors.rose,
-        iconTheme: WidgetStateProperty.resolveWith(
-          (states) => IconThemeData(
-            color: states.contains(WidgetState.selected)
-                ? AppColors.paper
-                : AppColors.inkFaint,
-          ),
-        ),
-        labelTextStyle: WidgetStateProperty.resolveWith(
-          (states) => textTheme.labelMedium?.copyWith(
-            color: states.contains(WidgetState.selected)
-                ? AppColors.roseDeep
-                : AppColors.inkSoft,
-          ),
-        ),
-      ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.rose,

@@ -150,7 +150,6 @@ void main() {
                   maxSets: 3,
                   range: compoundRange,
                   effort: EffortTarget.rpe7,
-                  rest: Duration(seconds: 75),
                 ),
               ),
               lastLoad: const Kg(20),

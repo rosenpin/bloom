@@ -54,10 +54,6 @@ final class SessionPreview {
     orElse: () => document.plan.days.first,
   );
 
-  Duration get restDuration =>
-      state.config.repSchemes[answers.goal]?.rest ??
-      const Duration(seconds: 75);
-
   bool get isComeback =>
       state.reasonCodes.contains(engine.ReasonCode.layoffAdjusted);
 }
@@ -108,9 +104,11 @@ final class SessionRuntime {
     orElse: () => document.plan.days.first,
   );
 
-  Duration get restDuration =>
-      state.config.repSchemes[answers.goal]?.rest ??
-      const Duration(seconds: 75);
+  /// Rest after a set of [entry]: by the kind of movement and its rep range,
+  /// never her goal directly. Read live from the config, so a tuning change
+  /// reaches saved plans.
+  Duration restAfter(engine.SessionExerciseEntry entry) =>
+      state.config.restFor(entry.planExercise, entry.prescription.dose);
 
   bool get isComeback =>
       state.reasonCodes.contains(engine.ReasonCode.layoffAdjusted);
@@ -156,6 +154,7 @@ final class CompletedSession {
     required this.events,
     required this.exerciseNames,
     required this.exerciseLateralities,
+    this.exerciseMetrics = const {},
   });
 
   final SessionRecordRow record;
@@ -164,6 +163,7 @@ final class CompletedSession {
   final List<engine.SessionEvent> events;
   final Map<String, String> exerciseNames;
   final Map<String, engine.Laterality> exerciseLateralities;
+  final Map<String, engine.MetricType> exerciseMetrics;
 
   engine.PlanDay get day => document.plan.days.firstWhere(
     (day) => day.dayIndex == record.dayIndex,
@@ -207,6 +207,19 @@ final class CompletedSession {
       }
     }
     return exerciseId;
+  }
+
+  engine.MetricType? exerciseMetric(String exerciseId) {
+    if (exerciseMetrics[exerciseId] case final metric?) return metric;
+    for (final day in document.plan.days) {
+      for (final exercise in day.exercises) {
+        if (exercise.exerciseId == exerciseId) return exercise.metricType;
+        for (final candidate in exercise.orderedSwapCandidates) {
+          if (candidate.exerciseId == exerciseId) return candidate.metricType;
+        }
+      }
+    }
+    return null;
   }
 
   engine.Laterality? exerciseLaterality(String exerciseId) {
@@ -662,6 +675,7 @@ final class SessionLifecycleService {
     required int setIndex,
     required engine.Kg load,
     required int reps,
+    Duration? hold,
   }) async {
     final entry = runtime.state.exercises
         .where((entry) => entry.exerciseId == exerciseId)
@@ -670,7 +684,9 @@ final class SessionLifecycleService {
         .where((set) => set.setIndex == setIndex)
         .firstOrNull;
     if (logged == null) return runtime;
-    if (logged.load == load && logged.reps == reps) return runtime;
+    if (logged.load == load && logged.reps == reps && logged.hold == hold) {
+      return runtime;
+    }
     return advance(
       runtime,
       engine.SetCompleted(
@@ -682,6 +698,7 @@ final class SessionLifecycleService {
         targetReps: logged.targetReps,
         targetRpe: logged.targetRpe,
         prescribedLoad: logged.prescribedLoad,
+        hold: hold,
       ),
       isCorrection: true,
     );
@@ -872,6 +889,9 @@ final class SessionLifecycleService {
       },
       exerciseLateralities: {
         for (final exercise in exercises) exercise.id: exercise.laterality,
+      },
+      exerciseMetrics: {
+        for (final exercise in exercises) exercise.id: exercise.metricType,
       },
     );
   }

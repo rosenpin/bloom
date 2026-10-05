@@ -21,13 +21,14 @@ OnboardingAnswers sessionTestAnswers({
 Future<StoredPlanDocument> storeSessionTestPlan(
   ProviderContainer container, {
   engine.UnitSystem unitSystem = engine.UnitSystem.metric,
+  engine.Plan? plan,
 }) async {
   final answers = sessionTestAnswers(unitSystem: unitSystem);
   await container.read(onboardingRepositoryProvider).save(answers);
   return container
       .read(planRepositoryProvider)
       .store(
-        sessionTestPlan(),
+        plan ?? sessionTestPlan(),
         onboardingRepository: container.read(onboardingRepositoryProvider),
         unitSystem: unitSystem,
       );
@@ -166,5 +167,48 @@ engine.Plan sessionTestPlan() {
       ),
     ],
     warnings: const [],
+  );
+}
+
+/// The session test plan with day 1 reduced to one timed movement, a plank.
+engine.Plan sessionTestPlankPlan() {
+  final plan = sessionTestPlan();
+  final day = plan.days.first;
+  return engine.Plan(
+    mesocycleIndex: plan.mesocycleIndex,
+    stamps: plan.stamps,
+    mesocycleCalendar: plan.mesocycleCalendar,
+    warnings: plan.warnings,
+    days: [
+      engine.PlanDay(
+        dayIndex: day.dayIndex,
+        kind: day.kind,
+        warmUpMinutes: day.warmUpMinutes,
+        hasCardioFinisher: day.hasCardioFinisher,
+        exercises: [
+          engine.PlanExercise(
+            exerciseId: 'plank',
+            name: 'Plank',
+            blockRole: engine.BlockRole.core,
+            movementClass: engine.MovementClass.core,
+            metricType: engine.MetricType.timed,
+            laterality: engine.Laterality.bilateral,
+            difficultyTier: engine.DifficultyTier.beginner,
+            resistanceEquipment: engine.ResistanceEquipment.bodyweight,
+            supportEquipment: engine.SupportEquipment.mat,
+            bwContribution: 1,
+            loadStepOverride: null,
+            dropPriority: 0,
+            isEmphasis: false,
+            rotatesAcrossMesocycles: false,
+            rotationCandidateIds: const [],
+            orderedSwapCandidates: const [],
+            baseDose: const engine.TimedDose(sets: 2, hold: Duration(seconds: 20)),
+            repRange: const engine.RepRange(1, 1),
+          ),
+        ],
+      ),
+      ...plan.days.skip(1),
+    ],
   );
 }

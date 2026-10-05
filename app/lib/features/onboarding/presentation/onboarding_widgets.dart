@@ -99,6 +99,8 @@ class QuizPage extends StatelessWidget {
       child: Scaffold(
         backgroundColor: AppColors.paper,
         body: SafeArea(
+          // A pinned footer keeps its own clearance from the home indicator.
+          bottom: onContinue == null && footer == null,
           child: Column(
             children: [
               OnboardingProgress(step: step, onBack: onBack),
@@ -138,11 +140,11 @@ class QuizPage extends StatelessWidget {
               ),
               if (onContinue != null || footer != null)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(
+                  padding: EdgeInsets.fromLTRB(
                     AppSpacing.lg,
                     AppSpacing.sm,
                     AppSpacing.lg,
-                    AppSpacing.lg,
+                    AppSpacing.bottomEdge(context),
                   ),
                   child: Center(
                     child: ConstrainedBox(

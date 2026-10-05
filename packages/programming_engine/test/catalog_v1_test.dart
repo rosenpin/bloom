@@ -58,6 +58,24 @@ void main() {
     }
   });
 
+  test('one-side-at-a-time moves are exactly the per-side ones', () {
+    // §2 rest and §3 rep counting read Laterality.perSide.
+    expect(
+      [
+        for (final exercise in catalogV1.exercises)
+          if (exercise.laterality.isPerSide) exercise.id,
+      ]..sort(),
+      [
+        'bodyweight-reverse-lunge',
+        'cable-standing-glute-kickback',
+        'dumbbell-bulgarian-split-squat',
+        'dumbbell-row-unilateral',
+        'elbow-side-plank',
+        'machine-glute-kickback',
+      ],
+    );
+  });
+
   test('the six restored candidates carry the documented tiers', () {
     const expected = <String, int>{
       'barbell-deadlift->machine-leg-press': 2,

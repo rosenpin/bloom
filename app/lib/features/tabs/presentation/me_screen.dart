@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/providers.dart';
+import '../../../core/revenuecat_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
@@ -25,12 +26,14 @@ class MeScreen extends ConsumerWidget {
     final sessions = ref.watch(completedSessionsProvider);
     return SafeArea(
       key: const ValueKey('me-screen'),
+      bottom: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
+        // Scrolls on under the floating tab bar, and clears it at the end.
+        padding: EdgeInsets.fromLTRB(
           AppSpacing.lg,
           AppSpacing.lg,
           AppSpacing.lg,
-          AppSpacing.xxl,
+          AppSpacing.lg + MediaQuery.paddingOf(context).bottom,
         ),
         child: Center(
           child: ConstrainedBox(
@@ -168,11 +171,12 @@ class _MembershipSection extends ConsumerWidget {
               icon: Icons.refresh_rounded,
               onTap: restore,
             ),
-            _QuietRow(
-              title: 'Redeem a code',
-              icon: Icons.card_giftcard_rounded,
-              onTap: redeem,
-            ),
+            if (!isPlayStore)
+              _QuietRow(
+                title: 'Redeem a code',
+                icon: Icons.card_giftcard_rounded,
+                onTap: redeem,
+              ),
             _QuietRow(
               title: 'Support ID',
               subtitle: status.appUserId ?? 'Unavailable',
@@ -217,9 +221,7 @@ class _AboutSection extends StatelessWidget {
           _QuietRow(
             title: 'Terms of use',
             icon: Icons.open_in_new_rounded,
-            onTap: () => _open(
-              'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
-            ),
+            onTap: () => _open(storeTermsUrl),
           ),
         ],
       ),

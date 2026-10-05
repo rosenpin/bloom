@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/providers.dart';
+import '../../../core/revenuecat_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_radii.dart';
@@ -318,8 +319,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
                                   const SizedBox(height: AppSpacing.sm),
                                   Text(
                                     selected?.trialEligible == true
-                                        ? '7 days free, then ${selected!.price} per year. Auto-renews until cancelled. Cancel anytime in Settings at least 24 hours before renewal.'
-                                        : '${selected?.price ?? ''} per ${_selected == r'$rc_annual' ? 'year' : 'month'}. Auto-renews until cancelled. Cancel anytime in Settings at least 24 hours before renewal.',
+                                        ? '7 days free, then ${selected!.price} per year. Auto-renews until cancelled. $storeCancelTerms'
+                                        : '${selected?.price ?? ''} per ${_selected == r'$rc_annual' ? 'year' : 'month'}. Auto-renews until cancelled. $storeCancelTerms',
                                     textAlign: TextAlign.center,
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(color: AppColors.inkSoft),
@@ -343,10 +344,12 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
                               onPressed: _busy ? null : _restore,
                               child: const Text('Restore purchases'),
                             ),
-                            TextButton(
-                              onPressed: _busy ? null : _redeem,
-                              child: const Text('Redeem a code'),
-                            ),
+                            // Offer codes redeem in Apple's sheet; Play redeems in its own app.
+                            if (!isPlayStore)
+                              TextButton(
+                                onPressed: _busy ? null : _redeem,
+                                child: const Text('Redeem a code'),
+                              ),
                           ],
                         ),
                         Wrap(
@@ -354,9 +357,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
                           spacing: AppSpacing.xs,
                           children: [
                             TextButton(
-                              onPressed: () => _open(
-                                'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
-                              ),
+                              onPressed: () => _open(storeTermsUrl),
                               child: const Text('Terms of Use'),
                             ),
                             TextButton(

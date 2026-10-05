@@ -57,13 +57,52 @@ abstract final class SessionPresentation {
     engine.EffortLevel.tooHard => 'Too hard',
   };
 
-  static String effortMeaning(engine.EffortLevel level) => switch (level) {
+  static String effortMeaning(
+    engine.EffortLevel level, {
+    bool timed = false,
+  }) => switch (level) {
     engine.EffortLevel.wayTooEasy => 'Very easy · I could have done lots more',
     engine.EffortLevel.aBitEasy => 'Easy · a few more in the tank',
-    engine.EffortLevel.justRight => 'Just right · about 3 more left',
-    engine.EffortLevel.harderThanIdLike => 'Hard · maybe 2 more',
+    engine.EffortLevel.justRight =>
+      timed
+          ? 'Just right · I could have held a bit longer'
+          : 'Just right · about 3 more left',
+    engine.EffortLevel.harderThanIdLike =>
+      timed ? 'Hard · only a few more seconds' : 'Hard · maybe 2 more',
     engine.EffortLevel.tooHard => 'Too hard · nothing left, or my form slipped',
   };
+
+  /// Timed movements (plank) are measured by the hold, never reps or load.
+  static bool isTimed(engine.SessionExerciseEntry entry) =>
+      entry.planExercise.metricType == engine.MetricType.timed;
+
+  /// The hold to aim for on a timed movement.
+  static Duration targetHold(engine.SessionExerciseEntry entry) =>
+      switch ((entry.prescription.suggestion, entry.prescription.dose)) {
+        (engine.RepOrDurationTarget(:final hold?), _) => hold,
+        (_, engine.TimedDose(:final hold)) => hold,
+        _ => const Duration(seconds: 20),
+      };
+
+  static String formatHold(Duration hold) => '${hold.inSeconds} s';
+
+  /// One logged set in words: "20 s", "8 reps · 5 kg", "10 reps each side".
+  /// A timed set logged before holds were recorded reads as "Held".
+  static String loggedSet(
+    engine.SetCompleted set,
+    engine.UnitSystem unitSystem, {
+    required bool timed,
+    bool perSide = false,
+  }) {
+    final side = perSide ? ' each side' : '';
+    if (timed) {
+      return set.hold == null ? 'Held$side' : '${formatHold(set.hold!)}$side';
+    }
+    final load = set.load.isZero
+        ? ''
+        : ' · ${formatLoad(set.load, unitSystem)}';
+    return '${set.reps} reps$side$load';
+  }
 
   static String blockRole(engine.BlockRole role) => switch (role) {
     engine.BlockRole.warmUp => 'Warm-up',

@@ -60,7 +60,9 @@ final class SetCompleted extends SessionEvent {
     this.targetReps,
     this.targetRpe,
     this.prescribedLoad,
+    this.hold,
   }) : assert(setIndex >= 0),
+       assert(hold == null || hold > Duration.zero),
        assert(
          load.value > double.negativeInfinity && load.value < double.infinity,
        ),
@@ -90,6 +92,11 @@ final class SetCompleted extends SessionEvent {
   final int? targetRpe;
   final Kg? prescribedLoad;
 
+  /// How long she held a timed movement (plank). A timed set is one hold, so
+  /// its [reps] is 1; this is what she actually did. Null for every other
+  /// metric, and for timed sets logged before it was recorded.
+  final Duration? hold;
+
   @override
   bool operator ==(Object other) =>
       other is SetCompleted &&
@@ -100,7 +107,8 @@ final class SetCompleted extends SessionEvent {
       other.unitSystem == unitSystem &&
       other.targetReps == targetReps &&
       other.targetRpe == targetRpe &&
-      other.prescribedLoad == prescribedLoad;
+      other.prescribedLoad == prescribedLoad &&
+      other.hold == hold;
 
   @override
   int get hashCode => Object.hash(
@@ -112,6 +120,7 @@ final class SetCompleted extends SessionEvent {
     targetReps,
     targetRpe,
     prescribedLoad,
+    hold,
   );
 
   @override
@@ -119,7 +128,8 @@ final class SetCompleted extends SessionEvent {
       'SetCompleted($exerciseId, set $setIndex, ${load.value}kg x $reps, '
       '${unitSystem.name}${targetReps == null ? '' : ', target $targetReps'}'
       '${targetRpe == null ? '' : ' @RPE $targetRpe'}'
-      '${prescribedLoad == null ? '' : ', prescribed ${prescribedLoad!.value}kg'})';
+      '${prescribedLoad == null ? '' : ', prescribed ${prescribedLoad!.value}kg'}'
+      '${hold == null ? '' : ', held ${hold!.inSeconds}s'})';
 }
 
 /// The feel tap — once per exercise, on the last set, during rest. Optional,

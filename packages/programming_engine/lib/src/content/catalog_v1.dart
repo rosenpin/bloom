@@ -616,6 +616,8 @@ final List<Exercise> _exercises = <Exercise>[
     slug: 'cable-standing-glute-kickback',
     role: BlockRole.gluteIsolation,
     movement: MovementClass.isolationLower,
+    // One leg at a time: rest and rep counting go per side.
+    laterality: Laterality.perSide,
     equipment: ResistanceEquipment.cable,
     bw: 0.10,
     primary: const [MuscleGroup.glutes],
@@ -652,6 +654,8 @@ final List<Exercise> _exercises = <Exercise>[
     slug: 'machine-glute-kickback',
     role: BlockRole.gluteIsolation,
     movement: MovementClass.isolationLower,
+    // One leg at a time: rest and rep counting go per side.
+    laterality: Laterality.perSide,
     equipment: ResistanceEquipment.machine,
     bw: 0.10,
     primary: const [MuscleGroup.glutes],
@@ -661,7 +665,7 @@ final List<Exercise> _exercises = <Exercise>[
     machineLean: true,
     setupSteps: const [
       'Choose a light pin and adjust the knee pad, if it moves, so your hips meet the machine pivot.',
-      'Set up on all fours on the machine: one knee on the pad, hands on the handles, and your working foot resting on the plate behind you.',
+      'Grip the handles, place one knee on the support pad, and set the other foot flat on the moving plate.',
       'Start with the working knee under your hip, then press the footplate back with your heel.',
       'Stop before your back arches and return without resting the stack, then switch sides.',
     ],
@@ -969,7 +973,7 @@ final List<Exercise> _exercises = <Exercise>[
     seated: true,
     setupSteps: const [
       'Set the bench back almost upright, then sit with feet flat and dumbbells on your thighs.',
-      'Bring the dumbbells up beside your shoulders, palms turned forward or a little toward each other.',
+      'Guide the dumbbells to shoulder height with palms facing forward or slightly inward.',
       'Keep your back on the pad and press both weights overhead without knocking them together.',
       'Lower until the dumbbells return beside your shoulders, then repeat.',
     ],

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -15,6 +16,7 @@ import '../../features/tabs/presentation/plan_screen.dart';
 import '../../features/tabs/presentation/today_screen.dart';
 import '../providers.dart';
 import '../theme/app_motion.dart';
+import 'app_tab_bar.dart';
 
 part 'app_router.g.dart';
 
@@ -410,6 +412,7 @@ class _AppShellState extends State<_AppShell>
       widget.navigationShell.goBranch(index, initialLocation: true);
       return;
     }
+    unawaited(HapticFeedback.selectionClick());
     if (AppMotion.isReduced(context)) {
       widget.navigationShell.goBranch(index);
       return;
@@ -444,32 +447,25 @@ class _AppShellState extends State<_AppShell>
 
   @override
   Widget build(BuildContext context) {
+    // Android back from Plan or Me returns to Today before leaving the app.
+    return PopScope<void>(
+      canPop: widget.navigationShell.currentIndex == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _selectTab(0);
+      },
+      child: _scaffold(context),
+    );
+  }
+
+  Widget _scaffold(BuildContext context) {
     return Scaffold(
+      // Tab content scrolls on under the floating bar; its height reaches the
+      // tabs as bottom padding.
+      extendBody: true,
       body: FadeTransition(opacity: _tabFade, child: widget.navigationShell),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: AppTabBar(
         selectedIndex: _target ?? widget.navigationShell.currentIndex,
-        animationDuration: AppMotion.duration(context, AppMotion.layout),
-        onDestinationSelected: _selectTab,
-        destinations: const [
-          NavigationDestination(
-            key: ValueKey('today-tab'),
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Today',
-          ),
-          NavigationDestination(
-            key: ValueKey('plan-tab'),
-            icon: Icon(Icons.view_agenda_outlined),
-            selectedIcon: Icon(Icons.view_agenda_rounded),
-            label: 'Plan',
-          ),
-          NavigationDestination(
-            key: ValueKey('me-tab'),
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Me',
-          ),
-        ],
+        onSelected: _selectTab,
       ),
     );
   }

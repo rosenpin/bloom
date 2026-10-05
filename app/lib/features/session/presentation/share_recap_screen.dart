@@ -39,12 +39,13 @@ class _ShareRecapScreenState extends State<ShareRecapScreen> {
   Widget build(BuildContext context) {
     return SafeArea(
       key: const ValueKey('share-recap-screen'),
+      bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           AppSpacing.lg,
           AppSpacing.sm,
           AppSpacing.lg,
-          AppSpacing.lg,
+          AppSpacing.bottomEdge(context),
         ),
         child: Center(
           child: ConstrainedBox(

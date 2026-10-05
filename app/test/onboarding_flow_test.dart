@@ -176,10 +176,18 @@ void main() {
     container.read(routerProvider).go('/onboarding/menstrual');
     await tester.pumpAndSettle();
 
+    // One quiet way past, and no build button until both answers are in.
+    expect(find.byKey(const ValueKey('menstrual-skip')), findsOneWidget);
+    expect(find.text("This doesn't fit me"), findsNothing);
+    expect(find.byKey(const ValueKey('menstrual-finish')), findsNothing);
+    expect(find.byKey(const ValueKey('menstrual-hint')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('menstrual-date-1')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menstrual-finish')), findsNothing);
+    expect(find.text('Pick both to build your plan.'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('menstrual-gap-days28')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('menstrual-hint')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('menstrual-finish')));
     await tester.pumpAndSettle();
 

@@ -417,7 +417,7 @@ void main() {
           'it was harder than she wanted',
       input: inputFor(
         gobletSquat,
-        range: const RepRange(6, 8),
+        range: const RepRange(5, 8),
         effort: const EffortTarget(8),
         lastLoad: const Kg(12),
         lastReps: 8,
@@ -435,7 +435,7 @@ void main() {
           'weight moves at the top of the range',
       input: inputFor(
         gobletSquat,
-        range: const RepRange(6, 8),
+        range: const RepRange(5, 8),
         effort: const EffortTarget(8),
         lastLoad: const Kg(12),
         lastReps: 8,
@@ -444,7 +444,7 @@ void main() {
       ),
       regime: ProgressionRegime.normal,
       load: const Kg(14),
-      reps: 6,
+      reps: 5,
       steps: 1,
       why: [
         ReasonCode.topOfRangeStepUp,

@@ -92,6 +92,7 @@ final class SessionController extends AsyncNotifier<SessionRuntime?> {
     required int setIndex,
     required engine.Kg load,
     required int reps,
+    Duration? hold,
   }) async {
     final current = state.value;
     if (current == null) return;
@@ -102,6 +103,7 @@ final class SessionController extends AsyncNotifier<SessionRuntime?> {
         setIndex: setIndex,
         load: load,
         reps: reps,
+        hold: hold,
       ),
     );
   }

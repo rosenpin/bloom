@@ -32,14 +32,14 @@ enum Goal {
 /// deload 6 — pinned, not floating.
 enum MesocycleWeekKind { build, easier, push, deload }
 
-/// Sets × rep range × effort target × rest, per goal (§2).
+/// Sets × rep range × effort target, per goal (§2). Rest is per movement, not
+/// per goal: see [ProgrammingConfig.restFor].
 final class RepScheme {
   const RepScheme({
     required this.minSets,
     required this.maxSets,
     required this.range,
     required this.effort,
-    required this.rest,
     this.extraSetOnEmphasis = false,
   }) : assert(minSets >= 1 && maxSets >= minSets);
 
@@ -47,7 +47,6 @@ final class RepScheme {
   final int maxSets;
   final RepRange range;
   final EffortTarget effort;
-  final Duration rest;
 
   /// Optional scheme-level emphasis bonus. Shipped goal schemes leave this
   /// false; emphasis-driven volume comes from plan assembly.
@@ -69,17 +68,41 @@ final class RepScheme {
       other.maxSets == maxSets &&
       other.range == range &&
       other.effort == effort &&
-      other.rest == rest &&
       other.extraSetOnEmphasis == extraSetOnEmphasis;
 
   @override
   int get hashCode =>
-      Object.hash(minSets, maxSets, range, effort, rest, extraSetOnEmphasis);
+      Object.hash(minSets, maxSets, range, effort, extraSetOnEmphasis);
 
   @override
-  String toString() =>
-      'RepScheme($minSets-${maxSets}x$range @$effort, '
-      'rest ${rest.inSeconds}s)';
+  String toString() => 'RepScheme($minSets-${maxSets}x$range @$effort)';
+}
+
+/// What kind of movement a rest period follows (§2 rest). One-side-at-a-time
+/// work is [Laterality.perSide].
+enum RestKind {
+  compoundLower,
+  compoundUpper,
+  isolationLower,
+  isolationUpper,
+  unilateralCompound,
+  unilateralIsolation,
+  core;
+
+  static RestKind of(LoadProfile profile) {
+    final oneSide = profile.laterality.isPerSide;
+    return switch (profile.movementClass) {
+      MovementClass.compoundLower =>
+        oneSide ? unilateralCompound : compoundLower,
+      MovementClass.compoundUpperPush || MovementClass.compoundUpperPull =>
+        oneSide ? unilateralCompound : compoundUpper,
+      MovementClass.isolationLower =>
+        oneSide ? unilateralIsolation : isolationLower,
+      MovementClass.isolationUpper =>
+        oneSide ? unilateralIsolation : isolationUpper,
+      MovementClass.core || MovementClass.cardio => core,
+    };
+  }
 }
 
 /// The tuning surface. Construct [ProgrammingConfig] for the shipped defaults;
@@ -87,6 +110,9 @@ final class RepScheme {
 final class ProgrammingConfig {
   const ProgrammingConfig({
     this.repSchemes = _defaultRepSchemes,
+    this.restByKind = _defaultRestByKind,
+    this.shortRangeMaxReps = 8,
+    this.shortRangeRestBonus = const Duration(seconds: 30),
     this.isolationRange = const RepRange(10, 15),
     this.isolationRestartRange = const RepRange(8, 10),
     this.dropBridgeBackOffReps = const RepRange(4, 5),
@@ -194,6 +220,14 @@ final class ProgrammingConfig {
 
   // ── §2 Rep/set schemes by goal ─────────────────────────────────────────────
   final Map<Goal, RepScheme> repSchemes;
+
+  /// §2 rest: the base for each kind of movement...
+  final Map<RestKind, Duration> restByKind;
+
+  /// ...plus [shortRangeRestBonus] when the prescribed rep range tops out at
+  /// [shortRangeMaxReps] or fewer. Goals never set rest directly.
+  final int shortRangeMaxReps;
+  final Duration shortRangeRestBonus;
 
   /// §3 RESOLVED: isolation and single-side work use a wide range, and the weight
   /// only moves at the top of it — the smallest dumbbell jump is proportionally huge.
@@ -361,9 +395,18 @@ final class ProgrammingConfig {
       maxSets: targetSets,
       range: scheme.range,
       effort: EffortTarget(targetRpe),
-      rest: scheme.rest,
       extraSetOnEmphasis: scheme.extraSetOnEmphasis,
     );
+  }
+
+  /// The rest after a set of [profile] at [dose]: the movement's base, plus
+  /// the short-range bonus for heavy, low-rep work. A hold has no rep range.
+  Duration restFor(LoadProfile profile, Dose dose) {
+    final kind = RestKind.of(profile);
+    final base = restByKind[kind];
+    assert(base != null, 'missing rest for ${kind.name}');
+    final shortRange = dose is RepsDose && dose.range.max <= shortRangeMaxReps;
+    return shortRange ? base! + shortRangeRestBonus : base!;
   }
 
   void assertTimedDoseConfiguration() {
@@ -477,15 +520,13 @@ final class ProgrammingConfig {
       maxSets: 3,
       range: RepRange(10, 12),
       effort: EffortTarget(7),
-      rest: Duration(seconds: 75),
     ),
-    // "leave 2 reps", 90–150s rest
+    // "leave 2 reps"
     Goal.stronger: RepScheme(
       minSets: 3,
       maxSets: 4,
-      range: RepRange(6, 8),
+      range: RepRange(5, 8),
       effort: EffortTarget(8),
-      rest: Duration(seconds: 120),
     ),
     // RESOLVED (Tomer, 2026-07-26): "Build curves" is the same hypertrophy
     // scheme as "Toned & defined". The distinct quiz label stays for marketing
@@ -495,16 +536,26 @@ final class ProgrammingConfig {
       maxSets: 3,
       range: RepRange(10, 12),
       effort: EffortTarget(7),
-      rest: Duration(seconds: 75),
     ),
-    // "comfortable, never near failure", 60s rest
+    // "comfortable, never near failure"
     Goal.feelHealthier: RepScheme(
       minSets: 2,
       maxSets: 3,
       range: RepRange(10, 12),
       effort: EffortTarget(6),
-      rest: Duration(seconds: 60),
     ),
+  };
+
+  // §2 rest (Tomer, certified trainer, 2026-09-26): the base, by the kind of
+  // movement the rest follows. Rep range adds to it; goal does not.
+  static const Map<RestKind, Duration> _defaultRestByKind = {
+    RestKind.compoundLower: Duration(seconds: 120),
+    RestKind.compoundUpper: Duration(seconds: 90),
+    RestKind.isolationLower: Duration(seconds: 75),
+    RestKind.isolationUpper: Duration(seconds: 75),
+    RestKind.unilateralCompound: Duration(seconds: 90),
+    RestKind.unilateralIsolation: Duration(seconds: 60),
+    RestKind.core: Duration(seconds: 60),
   };
 
   static const Map<EffortLevel, int> _defaultReportedRpe = {
